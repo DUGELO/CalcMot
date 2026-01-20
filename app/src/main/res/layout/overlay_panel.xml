@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/overlay_root"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="#E6000000"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:gravity="center_horizontal"
+    android:layout_margin="8dp"
+    android:elevation="8dp">
+
+    <TextView
+        android:id="@+id/txtValor"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="💰 R$ 0,00"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/txtDistanciaTempo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="📏 0,0 km | ⏱ 0 min"
+        android:textColor="#DDDDDD"
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/txtCalculos"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="⚡ R$/km: 0.00 | R$/h: 0.00"
+        android:textColor="#00FF00"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/txtNota"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="⭐ —"
+        android:textColor="#FFD700"
+        android:textSize="14sp" />
+</LinearLayout>
