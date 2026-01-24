@@ -3,6 +3,7 @@ package com.example.calcmot.ocr
 import android.graphics.Bitmap
 import android.util.Log
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.tasks.await
@@ -22,5 +23,10 @@ object TextRecognizerHelper {
             Log.e("OCR", "Erro no ML Kit", e)
             null
         }
+    }
+
+    suspend fun extractTextElements(bitmap: Bitmap): Text {
+        val image = InputImage.fromBitmap(bitmap, 0)
+        return recognizer.process(image).await()
     }
 }

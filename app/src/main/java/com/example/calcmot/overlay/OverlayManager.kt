@@ -8,7 +8,13 @@ import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
-import androidx.lifecycle.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
@@ -17,13 +23,12 @@ import com.example.calcmot.model.TripData
 import com.example.calcmot.ui.theme.MetricaTheme
 import android.util.Log
 
-// Agora implementa a interface IOverlayManager
 open class OverlayManager(private val context: Context) : IOverlayManager {
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var composeView: ComposeView? = null
     private val tripDataState = mutableStateOf<TripData?>(null)
-    private var lifecycleOwner: OverlayLifecycleOwner? = null
+    private var lifecycleOwner: CustomLifecycleOwner? = null
 
     @SuppressLint("ClickableViewAccessibility")
     override fun showOverlay(data: TripData) {
@@ -31,10 +36,10 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             tripDataState.value = data
 
             if (composeView == null) {
-                lifecycleOwner = OverlayLifecycleOwner()
-                lifecycleOwner?.onCreate()
+                lifecycleOwner = CustomLifecycleOwner()
+                lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
                 createComposeView()
-                lifecycleOwner?.onResume()
+                lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
 
             composeView?.visibility = View.VISIBLE
@@ -55,7 +60,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     override fun removeOverlay() {
         composeView?.let {
             if (it.parent != null) windowManager.removeView(it)
-            lifecycleOwner?.onDestroy()
+            lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         }
         composeView = null
         lifecycleOwner = null
@@ -63,9 +68,10 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
 
     private fun createComposeView() {
         composeView = ComposeView(context).apply {
-            val lifecycle = lifecycleOwner!!
-            setViewTreeLifecycleOwner(lifecycle)
-            setViewTreeSavedStateRegistryOwner(lifecycle)
+            val owner = lifecycleOwner!!
+            setViewTreeLifecycleOwner(owner)
+            setViewTreeViewModelStoreOwner(owner)
+            setViewTreeSavedStateRegistryOwner(owner)
 
             setContent {
                 MetricaTheme {
@@ -91,26 +97,25 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     }
 }
 
-private class OverlayLifecycleOwner : SavedStateRegistryOwner {
+private class CustomLifecycleOwner : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
     private val lifecycleRegistry = LifecycleRegistry(this)
+    private val _viewModelStore = ViewModelStore()
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
 
     override val lifecycle: Lifecycle
         get() = lifecycleRegistry
 
+    override val viewModelStore: ViewModelStore
+        get() = _viewModelStore
+
     override val savedStateRegistry: SavedStateRegistry
         get() = savedStateRegistryController.savedStateRegistry
 
-    fun onCreate() {
+    init {
         savedStateRegistryController.performRestore(null)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
     }
 
-    fun onResume() {
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-    }
-
-    fun onDestroy() {
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+    fun handleLifecycleEvent(event: Lifecycle.Event) {
+        lifecycleRegistry.handleLifecycleEvent(event)
     }
 }
