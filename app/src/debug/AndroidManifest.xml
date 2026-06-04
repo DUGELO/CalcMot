@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <application>
+        <receiver
+            android:name=".debug.UiAutomatorProbeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="br.com.calcmot.DEBUG_UIAUTOMATOR_PROBE" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".debug.UiAutomatorOfferReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="br.com.calcmot.DEBUG_UIAUTOMATOR_OFFER" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

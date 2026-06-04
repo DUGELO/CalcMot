@@ -1,0 +1,191 @@
+package br.com.calcmot.ui
+
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTextInput
+import androidx.test.platform.app.InstrumentationRegistry
+import br.com.calcmot.AppPermissionState
+import br.com.calcmot.AppSettings
+import br.com.calcmot.OverlayCustomPosition
+import br.com.calcmot.OverlayPositionPreference
+import br.com.calcmot.finance.FinanceRepository
+import br.com.calcmot.ui.theme.MetricaTheme
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.After
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+
+class HomeScreenTest {
+
+    @get:Rule
+    val composeRule = createComposeRule()
+
+    @Before
+    fun resetSettings() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        AppSettings.setMonitoringEnabled(context, true)
+        AppSettings.setOverlayPosition(context, OverlayPositionPreference.HIGH)
+        context.getSharedPreferences("calcmot_finance", 0).edit().clear().commit()
+    }
+
+    @After
+    fun restoreMonitoringForManualFieldTests() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        AppSettings.setMonitoringEnabled(context, true)
+    }
+
+    @Test
+    fun readyStateShowsSimpleHomeAndOverlayPreview() {
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
+
+        composeRule.onNodeWithTag(UiTestTags.HOME_SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithText("Pronto").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Roots vistos").assertCountEquals(0)
+        composeRule.onNodeWithTag(UiTestTags.MONITORING_SWITCH).assertIsOn()
+        composeRule.onNodeWithTag(UiTestTags.OPEN_DRIVER_APP_BUTTON).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.OVERLAY_PREVIEW)
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("BOA").assertIsDisplayed()
+        composeRule.onNodeWithText("R$ 2,50/km").assertIsDisplayed()
+        composeRule.onNodeWithText("R$ 41,86/h").assertIsDisplayed()
+        composeRule.onNodeWithText("43 min").assertIsDisplayed()
+    }
+
+    @Test
+    fun drawerNavigatesToFinance() {
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
+
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_FINANCE_ITEM).performClick()
+        composeRule.onNodeWithTag(UiTestTags.FINANCE_SCREEN).assertIsDisplayed()
+    }
+
+    @Test
+    fun drawerNavigatesToPrivacy() {
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
+
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_PRIVACY_ITEM).performClick()
+        composeRule.onNodeWithTag(UiTestTags.PRIVACY_POLICY_SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithText("eduardoangelo20001@gmail.com", substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun drawerNavigatesToDiagnostics() {
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
+
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_DIAGNOSTICS_ITEM).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DIAGNOSTICS_SCREEN).assertIsDisplayed()
+    }
+
+    @Test
+    fun financeCreatesAndDeletesEntry() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
+
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_FINANCE_ITEM).performClick()
+        composeRule.onNodeWithTag(UiTestTags.FINANCE_AMOUNT_INPUT).performTextInput("123,45")
+        composeRule.onNodeWithTag(UiTestTags.FINANCE_DESCRIPTION_INPUT).performTextInput("Pedágio")
+        composeRule.onNodeWithTag(UiTestTags.FINANCE_ADD_BUTTON)
+            .performScrollTo()
+            .performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(1, FinanceRepository(context).getEntries().size)
+        }
+
+        composeRule.onNodeWithTag(UiTestTags.FINANCE_SCREEN)
+            .performScrollToNode(hasText("Pedágio"))
+        composeRule.onNodeWithText("Pedágio").assertIsDisplayed()
+
+        composeRule.onNodeWithTag(UiTestTags.FINANCE_SCREEN)
+            .performScrollToNode(hasText("Excluir"))
+        composeRule.onNodeWithText("Excluir").performClick()
+        composeRule.runOnIdle {
+            assertEquals(0, FinanceRepository(context).getEntries().size)
+        }
+        composeRule.onNodeWithText("Nenhum lançamento ainda.")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun monitoringTogglePersistsPausedState() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
+
+        composeRule.onNodeWithTag(UiTestTags.MONITORING_SWITCH).performClick()
+
+        composeRule.runOnIdle {
+            assertFalse(AppSettings.isMonitoringEnabled(context))
+        }
+        composeRule.onNodeWithText("Pausado").assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.MONITORING_SWITCH).assertIsOff()
+    }
+
+    @Test
+    fun pendingPermissionDisablesMonitoringAndShowsAction() {
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = false))
+
+        composeRule.onNodeWithText("Falta ativar").assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.MONITORING_SWITCH).assertIsNotEnabled()
+        composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertIsDisplayed()
+    }
+
+    @Test
+    fun overlayPositionSelectionPersistsAndClearsCustomPosition() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        AppSettings.setCustomOverlayPosition(context, OverlayCustomPosition(x = 10, y = 20))
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
+
+        composeRule.onNodeWithTag(UiTestTags.OVERLAY_POSITION_MEDIUM)
+            .performScrollTo()
+            .performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(OverlayPositionPreference.MEDIUM, AppSettings.getOverlayPosition(context))
+            assertNull(AppSettings.getCustomOverlayPosition(context))
+        }
+        composeRule.onNodeWithTag(UiTestTags.OVERLAY_POSITION_MEDIUM).assertIsSelected()
+
+        composeRule.onNodeWithTag(UiTestTags.OVERLAY_POSITION_LOW)
+            .performScrollTo()
+            .performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(OverlayPositionPreference.LOW, AppSettings.getOverlayPosition(context))
+        }
+        composeRule.onNodeWithTag(UiTestTags.OVERLAY_POSITION_LOW).assertIsSelected()
+    }
+
+    private fun renderHome(permissionState: AppPermissionState) {
+        composeRule.setContent {
+            MetricaTheme {
+                HomeScreen(
+                    permissionState = permissionState,
+                    onPermissionsRefresh = {}
+                )
+            }
+        }
+    }
+}

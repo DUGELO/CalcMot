@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">CalcMot</string>
+    <string name="accessibility_service_summary">Calcula métricas de ofertas para motoristas de app.</string>
+    <string name="accessibility_service_description">O CalcMot lê cards de oferta visíveis no app de motorista para calcular R$/km, R$/h e tempo total. O processamento é local, o app não controla a tela e não aceita ou recusa corridas automaticamente.</string>
+    <string name="support_email">eduardoangelo20001@gmail.com</string>
 </resources>

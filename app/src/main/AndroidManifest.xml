@@ -2,8 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <queries>
+        <package android:name="com.ubercab.driver" />
+    </queries>
 
     <application
         android:allowBackup="true"
@@ -38,14 +39,6 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
-
-        <receiver
-            android:name=".debug.DebugReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.example.myapplication.ACTION_PROCESS_TEXT" />
-            </intent-filter>
-        </receiver>
 
     </application>
 
