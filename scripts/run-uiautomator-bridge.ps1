@@ -9,7 +9,8 @@ param(
     [switch]$OracleOnly,
     [bool]$ClearDeviceLearningBeforeRun = $true,
     [switch]$NoClearLogcat,
-    [int]$UiAutomatorDumpTimeoutSeconds = 8
+    [int]$UiAutomatorDumpTimeoutSeconds = 8,
+    [int]$ResourceSampleIntervalSeconds = 5
 )
 
 $ErrorActionPreference = "Stop"
@@ -150,7 +151,7 @@ function Read-UiAutomatorDump {
     } -ArgumentList $AdbPath
 
     if (-not (Wait-Job $job -Timeout $TimeoutSeconds)) {
-        Stop-Job $job -Force | Out-Null
+        Stop-Job $job | Out-Null
         Remove-Job $job | Out-Null
         return ""
     }
@@ -599,6 +600,71 @@ function Get-CounterDelta {
     return (Get-Counter -Counters $After -Name $Name) - (Get-Counter -Counters $Before -Name $Name)
 }
 
+function Get-CalcMotResourceSample {
+    param(
+        [string]$AdbPath,
+        [string]$PackageName
+    )
+
+    $sampledAt = Get-Date
+    $memRaw = (& $AdbPath shell dumpsys meminfo $PackageName 2>$null | Out-String)
+    $cpuRaw = (& $AdbPath shell dumpsys cpuinfo 2>$null | Out-String)
+    $topRaw = (& $AdbPath shell top -b -n 1 2>$null | Out-String)
+
+    $pssKb = $null
+    $rssKb = $null
+    $nativeHeapKb = $null
+    $cpuPercent = $null
+
+    if ($memRaw -match "(?m)^\s*TOTAL\s+(\d+)") {
+        $pssKb = [int]$Matches[1]
+    }
+    if ($memRaw -match "TOTAL RSS:\s+(\d+)KB") {
+        $rssKb = [int]$Matches[1]
+    }
+    if ($memRaw -match "(?m)^\s*Native Heap\s+(\d+)") {
+        $nativeHeapKb = [int]$Matches[1]
+    }
+    $escapedPackage = [regex]::Escape($PackageName)
+    if ($cpuRaw -match "(?m)^\s*(\d+(?:\.\d+)?)%\s+\d+/$escapedPackage\b") {
+        $cpuPercent = [double]$Matches[1]
+    }
+    if ($null -eq $cpuPercent -and $topRaw -match "(?m)^\s*\d+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+(\d+(?:\.\d+)?)\s+\d+(?:\.\d+)?\s+\S+\s+$escapedPackage\s*$") {
+        $cpuPercent = [double]$Matches[1]
+    }
+
+    return [pscustomobject][ordered]@{
+        timestamp = $sampledAt.ToString("yyyyMMdd-HHmmss-fff")
+        timestamp_ms = ([DateTimeOffset]$sampledAt).ToUnixTimeMilliseconds()
+        cpu_percent = $cpuPercent
+        pss_kb = $pssKb
+        rss_kb = $rssKb
+        native_heap_pss_kb = $nativeHeapKb
+    }
+}
+
+function Measure-NullableAverage {
+    param(
+        [object[]]$Samples,
+        [string]$Property
+    )
+
+    $values = @($Samples | ForEach-Object { $_.$Property } | Where-Object { $null -ne $_ })
+    if ($values.Count -eq 0) { return $null }
+    return [Math]::Round(($values | Measure-Object -Average).Average, 2)
+}
+
+function Measure-NullableMaximum {
+    param(
+        [object[]]$Samples,
+        [string]$Property
+    )
+
+    $values = @($Samples | ForEach-Object { $_.$Property } | Where-Object { $null -ne $_ })
+    if ($values.Count -eq 0) { return $null }
+    return ($values | Measure-Object -Maximum).Maximum
+}
+
 $adb = Join-Path $env:LOCALAPPDATA "Android\Sdk\platform-tools\adb.exe"
 if (-not (Test-Path -LiteralPath $adb)) {
     throw "ADB not found at $adb"
@@ -640,9 +706,15 @@ $firstSeenAt = @{}
 $latencySamples = [System.Collections.Generic.List[double]]::new()
 $events = [System.Collections.Generic.List[object]]::new()
 $fixtures = [System.Collections.Generic.List[object]]::new()
+$resourceSamples = [System.Collections.Generic.List[object]]::new()
+$nextResourceSampleAt = Get-Date
 
 while ((Get-Date) -lt $endAt) {
     $now = Get-Date
+    if ($now -ge $nextResourceSampleAt) {
+        $resourceSamples.Add((Get-CalcMotResourceSample -AdbPath $adb -PackageName $PackageName))
+        $nextResourceSampleAt = $now.AddSeconds($ResourceSampleIntervalSeconds)
+    }
     $stamp = $now.ToString("yyyyMMdd-HHmmss-fff")
     $timestampMs = ([DateTimeOffset]$now).ToUnixTimeMilliseconds()
     $localXml = Join-Path $dumpDir "$stamp.xml"
@@ -805,6 +877,15 @@ $productionEventsPath = Join-Path $sessionDir "production-events.json"
 $productionEvents | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $productionEventsPath -Encoding UTF8
 $backlogPath = Join-Path $sessionDir "learning-backlog.json"
 $learningItems | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $backlogPath -Encoding UTF8
+$resourceSamplesPath = Join-Path $sessionDir "resource-samples.json"
+$resourceSamples | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $resourceSamplesPath -Encoding UTF8
+
+$avgCpuPercent = Measure-NullableAverage -Samples @($resourceSamples) -Property "cpu_percent"
+$maxCpuPercent = Measure-NullableMaximum -Samples @($resourceSamples) -Property "cpu_percent"
+$avgPssKb = Measure-NullableAverage -Samples @($resourceSamples) -Property "pss_kb"
+$maxPssKb = Measure-NullableMaximum -Samples @($resourceSamples) -Property "pss_kb"
+$avgRssKb = Measure-NullableAverage -Samples @($resourceSamples) -Property "rss_kb"
+$maxRssKb = Measure-NullableMaximum -Samples @($resourceSamples) -Property "rss_kb"
 
 $report = [ordered]@{
     session = $session
@@ -831,6 +912,13 @@ $report = [ordered]@{
     beta_ready_min_85 = $betaReadyMin85
     debug_bridge_complete_cards = $uiautomatorLabComplete
     submitted_uiautomator_cards = $submittedFingerprints.Count
+    resource_sample_count = $resourceSamples.Count
+    resource_cpu_avg_percent = $avgCpuPercent
+    resource_cpu_max_percent = $maxCpuPercent
+    resource_pss_avg_kb = $avgPssKb
+    resource_pss_max_kb = $maxPssKb
+    resource_rss_avg_kb = $avgRssKb
+    resource_rss_max_kb = $maxRssKb
     learning_categories = $categoryCounts
     dump_count = (Get-ChildItem -LiteralPath $dumpDir -Filter "*.xml").Count
 }
@@ -878,6 +966,13 @@ $backlogPreview = if ($learningItems.Count -gt 0) {
 - beta_overlay_coverage_percent: $betaCoveragePercent
 - beta_ready_min_85: $betaReadyMin85
 - debug_bridge_complete_cards: $uiautomatorLabComplete
+- resource_sample_count: $($resourceSamples.Count)
+- resource_cpu_avg_percent: $avgCpuPercent
+- resource_cpu_max_percent: $maxCpuPercent
+- resource_pss_avg_kb: $avgPssKb
+- resource_pss_max_kb: $maxPssKb
+- resource_rss_avg_kb: $avgRssKb
+- resource_rss_max_kb: $maxRssKb
 
 ## Learning categories
 
@@ -897,6 +992,7 @@ $backlogPreview
 - false_positive_count means production showed an overlay that the oracle did not see as a card.
 - wrong_value_count means production showed an overlay near an oracle card but with a divergent fingerprint.
 - missed_cards means UIAutomator saw a unique complete card that production did not match.
+- resource_cpu_* and resource_*_kb come from Android dumpsys samples during the session.
 
 Use the XML files, screenshots, oracle-events.json, production-events.json, learning-backlog.json and oracle-fixtures.json in this folder to compare exact card timing, false negatives, false positives and wrong values.
 "@ | Set-Content -LiteralPath $reportMd -Encoding UTF8
@@ -914,4 +1010,6 @@ Write-Host "Missed cards: $missedCards"
 Write-Host "False positives: $falsePositiveCount"
 Write-Host "Wrong values: $wrongValueCount"
 Write-Host "Coverage correct percent: $coverageCorrectPercent"
+Write-Host "Resource CPU avg/max percent: $avgCpuPercent / $maxCpuPercent"
+Write-Host "Resource PSS avg/max KB: $avgPssKb / $maxPssKb"
 Write-Host "Beta ready min 85: $betaReadyMin85"

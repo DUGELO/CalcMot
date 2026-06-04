@@ -112,7 +112,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
         retryOnBadToken: Boolean,
         forceApplicationOverlay: Boolean
     ) {
-        val windowType = getWindowType(forceApplicationOverlay || preferDebugApplicationOverlay)
+        val windowType = getWindowType(forceApplicationOverlay)
         try {
             debugOverlayState.value = state
 
@@ -140,6 +140,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             if (retryOnBadToken) {
                 retryAfterBadToken(
                     primaryWindowType = windowType,
+                    allowApplicationOverlayFallback = true,
                     retryAccessibilityOverlay = {
                         showDebugOverlayInternal(
                             state,
@@ -172,7 +173,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
         retryOnBadToken: Boolean,
         forceApplicationOverlay: Boolean
     ) {
-        val windowType = getWindowType(forceApplicationOverlay || preferDebugApplicationOverlay)
+        val windowType = getWindowType(forceApplicationOverlay)
         val fingerprint = data.overlayFingerprint()
         val transition = overlayStateMachine.showRequested(fingerprint)
         try {
@@ -216,6 +217,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             if (retryOnBadToken) {
                 retryAfterBadToken(
                     primaryWindowType = windowType,
+                    allowApplicationOverlayFallback = false,
                     retryAccessibilityOverlay = {
                         showOverlayInternal(
                             data,
@@ -420,6 +422,10 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     }
 
     private fun createOverlayWindowContext(windowType: Int): Context {
+        if (context is AccessibilityService && windowType == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) {
+            return context
+        }
+
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             @Suppress("DEPRECATION")
             val display = baseWindowManager.defaultDisplay
@@ -431,11 +437,13 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
 
     private fun retryAfterBadToken(
         primaryWindowType: Int,
+        allowApplicationOverlayFallback: Boolean,
         retryAccessibilityOverlay: () -> Unit,
         retryApplicationOverlay: () -> Unit
     ) {
         if (
             BuildConfig.DEBUG &&
+            allowApplicationOverlayFallback &&
             primaryWindowType == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY &&
             canUseApplicationOverlayFallback()
         ) {
@@ -452,16 +460,20 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     }
 
     private fun getWindowType(forceApplicationOverlay: Boolean): Int {
-        if (context is AccessibilityService && !forceApplicationOverlay) {
+        if (forceApplicationOverlay || canUseApplicationOverlayFallback()) {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            }
+        }
+
+        if (context is AccessibilityService) {
             return WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
         }
 
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
+        return WindowManager.LayoutParams.TYPE_APPLICATION
     }
 
     private companion object {

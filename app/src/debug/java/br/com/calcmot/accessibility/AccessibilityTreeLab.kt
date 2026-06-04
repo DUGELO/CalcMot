@@ -15,14 +15,22 @@ import java.util.concurrent.atomic.AtomicInteger
 class AccessibilityTreeLab(context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sequence = AtomicInteger(0)
-    private val sessionDir = File(
-        context.applicationContext.filesDir,
-        "accessibility-lab/session-${System.currentTimeMillis()}"
-    ).apply {
-        mkdirs()
+    private val enabled = context.applicationContext
+        .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .getBoolean(KEY_RAW_TREE_SNAPSHOTS_ENABLED, false)
+    private val sessionDir = if (enabled) {
+        File(
+            context.applicationContext.filesDir,
+            "accessibility-lab/session-${System.currentTimeMillis()}"
+        ).apply {
+            mkdirs()
+        }
+    } else {
+        null
     }
 
     fun record(snapshot: AccessibilityTreeSnapshot, inspection: TreeOfferInspection) {
+        val targetDir = sessionDir ?: return
         val nextSequence = sequence.incrementAndGet()
         if (nextSequence > MAX_SNAPSHOTS_PER_SESSION) return
 
@@ -31,8 +39,8 @@ class AccessibilityTreeLab(context: Context) {
                 nextSequence,
                 snapshot.sourceName.sanitizeFileName()
             )
-            sessionDir.mkdirs()
-            File(sessionDir, fileName).writeText(snapshot.toJson(inspection), Charsets.UTF_8)
+            targetDir.mkdirs()
+            File(targetDir, fileName).writeText(snapshot.toJson(inspection), Charsets.UTF_8)
         }
     }
 
@@ -308,6 +316,8 @@ class AccessibilityTreeLab(context: Context) {
     }
 
     private companion object {
+        const val PREFS_NAME = "calcmot_lab"
+        const val KEY_RAW_TREE_SNAPSHOTS_ENABLED = "raw_tree_snapshots_enabled"
         const val MAX_SNAPSHOTS_PER_SESSION = 2_000
     }
 }

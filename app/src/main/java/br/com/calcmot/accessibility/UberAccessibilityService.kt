@@ -35,18 +35,40 @@ import br.com.calcmot.processor.TreeOfferInspection
 import br.com.calcmot.processor.TreeRejectionReason
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.util.concurrent.Executors
 
 class UberAccessibilityService : AccessibilityService() {
 
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var captureDispatcher = newCaptureDispatcher()
+    private var serviceScope = CoroutineScope(SupervisorJob() + captureDispatcher)
     private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    private fun newCaptureDispatcher(): ExecutorCoroutineDispatcher {
+        return Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "CalcMot-Capture").apply {
+                isDaemon = true
+                priority = Thread.NORM_PRIORITY - 1
+            }
+        }.asCoroutineDispatcher()
+    }
+
+    private fun ensureServiceScopeActive() {
+        if (serviceScope.isActive) return
+        captureDispatcher.close()
+        captureDispatcher = newCaptureDispatcher()
+        serviceScope = CoroutineScope(SupervisorJob() + captureDispatcher)
+    }
+
     internal var overlayManager: IOverlayManager? = null
     private val captureCoordinator = CaptureCoordinator(
         requiredMatchingFrames = 2,
@@ -70,11 +92,12 @@ class UberAccessibilityService : AccessibilityService() {
     private val accessibilityTreeLab by lazy { AccessibilityTreeLab(this) }
     private val captureLearningLab by lazy { CaptureLearningLab(this) }
     private val shellOfferHandler: (ShellOfferFrame) -> Unit = { frame ->
-        handleShellOfferFrame(frame)
+        serviceScope.launch { handleShellOfferFrame(frame) }
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        ensureServiceScopeActive()
         configureRuntimeAccessibilityInfo()
         overlayManager?.removeOverlay()
         overlayManager = OverlayManager(this).also { manager ->
@@ -106,11 +129,7 @@ class UberAccessibilityService : AccessibilityService() {
         val currentInfo = serviceInfo ?: return
         currentInfo.eventTypes =
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
-                AccessibilityEvent.TYPE_WINDOWS_CHANGED or
-                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
-                AccessibilityEvent.TYPE_VIEW_SCROLLED or
-                AccessibilityEvent.TYPE_VIEW_SELECTED or
-                AccessibilityEvent.TYPE_VIEW_FOCUSED
+                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
         currentInfo.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
         currentInfo.notificationTimeout = 0L
         currentInfo.flags = currentInfo.flags or
@@ -134,6 +153,7 @@ class UberAccessibilityService : AccessibilityService() {
         if (event?.packageName != UBER_DRIVER_PACKAGE) return
         if (!event.isRelevantUberEvent()) return
 
+        val eventCopy = AccessibilityEvent.obtain(event)
         AppDiagnostics.recordEvent(this, event.eventType)
         val eventAtMillis = System.currentTimeMillis()
         if (AccessibilityDebugConfig.ENABLE_DEBUG_OVERLAY_HEARTBEAT) {
@@ -154,47 +174,29 @@ class UberAccessibilityService : AccessibilityService() {
         if (!AppSettings.isMonitoringEnabled(this)) {
             AppDiagnostics.recordStage(this, AppDiagnostics.Stage.MONITORING_DISABLED)
             cancelCapturePipeline()
-            captureCoordinator.reset()
             cancelOverlayExpiry()
-            mainScope.launch { overlayManager?.hideOverlay() }
+            serviceScope.launch {
+                captureCoordinator.reset()
+                mainScope.launch { overlayManager?.hideOverlay() }
+                eventCopy.recycle()
+            }
             return
         }
 
         val captureSession = beginOrCoalesceCaptureSession(eventAtMillis)
         val generation = captureSession.generation
         AppDiagnostics.recordStage(this, AppDiagnostics.Stage.TREE_SCAN_SCHEDULED)
-        extendAccessibilityPolling(eventAtMillis)
-        val immediateTreeCandidate = extractCandidateFromAccessibilityTree(
-            eventAtMillis = eventAtMillis,
-            logRejectedTree = false,
-            generationId = generation,
-            delayMs = 0L
-        )
-        if (immediateTreeCandidate != null && handleCandidate(
-                candidate = immediateTreeCandidate.candidate,
-                source = OfferCaptureSource.ACCESSIBILITY_TREE,
-                label = "accessibility-immediate-root",
-                trustedSingleFrame = immediateTreeCandidate.trustedSingleFrame
-            )
-        ) {
-            return
-        }
-        if (handleEventPayloadCandidate(event, eventAtMillis)) {
-            return
-        }
-        if (handleEventSourceCandidate(event.source, eventAtMillis)) {
-            return
-        }
-
         if (!captureSession.shouldStartBurst) {
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "Coalesced Uber event into active scan session generation=$generation")
-            }
+            eventCopy.recycle()
             return
         }
 
-        capturePipelineJob = mainScope.launch {
-            runCapturePipeline(eventAtMillis, generation)
+        capturePipelineJob = serviceScope.launch {
+            try {
+                runCapturePipeline(eventCopy, eventAtMillis, generation)
+            } finally {
+                eventCopy.recycle()
+            }
         }
     }
 
@@ -226,6 +228,8 @@ class UberAccessibilityService : AccessibilityService() {
         captureGeneration += 1
         activeScanSessionGeneration = 0L
         activeScanSessionStartedAtMillis = 0L
+        accessibilityPollingJob?.cancel()
+        accessibilityPollingJob = null
         capturePipelineJob?.cancel()
         capturePipelineJob = null
     }
@@ -234,8 +238,13 @@ class UberAccessibilityService : AccessibilityService() {
         return generation == captureGeneration
     }
 
-    private suspend fun runCapturePipeline(eventAtMillis: Long, generation: Long) {
+    private suspend fun runCapturePipeline(
+        event: AccessibilityEvent,
+        eventAtMillis: Long,
+        generation: Long
+    ) {
         coroutineScope {
+            if (handleEventPayloadCandidate(event, eventAtMillis)) return@coroutineScope
             val handledByTree = handleAccessibilityCandidateBurst(eventAtMillis, generation)
             if (!handledByTree && isCurrentGeneration(generation)) {
                 rejectCurrentFrame(
@@ -294,12 +303,12 @@ class UberAccessibilityService : AccessibilityService() {
         accessibilityPollingEventAtMillis = eventAtMillis
         if (accessibilityPollingJob?.isActive == true) return
 
-        accessibilityPollingJob = mainScope.launch {
+        accessibilityPollingJob = serviceScope.launch {
             while (System.currentTimeMillis() <= accessibilityPollingUntil) {
                 if (!AppSettings.isMonitoringEnabled(this@UberAccessibilityService)) {
                     captureCoordinator.reset()
                     cancelOverlayExpiry()
-                    overlayManager?.hideOverlay()
+                    mainScope.launch { overlayManager?.hideOverlay() }
                     return@launch
                 }
 
@@ -324,43 +333,28 @@ class UberAccessibilityService : AccessibilityService() {
     private fun startContinuousAccessibilityPolling() {
         if (continuousAccessibilityPollingJob?.isActive == true) return
 
-        continuousAccessibilityPollingJob = mainScope.launch {
+        continuousAccessibilityPollingJob = serviceScope.launch {
             while (true) {
-                delay(CONTINUOUS_ACCESSIBILITY_POLL_INTERVAL_MS)
+                delay(ACCESSIBILITY_HEARTBEAT_INTERVAL_MS)
 
                 if (!AppSettings.isMonitoringEnabled(this@UberAccessibilityService)) {
                     captureCoordinator.reset()
                     cancelOverlayExpiry()
-                    overlayManager?.hideOverlay()
+                    mainScope.launch { overlayManager?.hideOverlay() }
                     continue
                 }
 
-                if (!hasUberRootAvailable()) continue
-
-                val scanAtMillis = System.currentTimeMillis()
-                val treeCandidate = extractCandidateFromAccessibilityTree(
-                    eventAtMillis = scanAtMillis,
-                    logRejectedTree = false,
-                    generationId = captureGeneration,
-                    delayMs = 0L
-                )
-                if (treeCandidate != null) {
-                    handleCandidate(
-                        candidate = treeCandidate.candidate,
-                        source = OfferCaptureSource.ACCESSIBILITY_TREE,
-                        label = "accessibility-continuous-poll",
-                        trustedSingleFrame = treeCandidate.trustedSingleFrame
-                    )
-                }
+                captureCoordinator.expireOverlayIfStale()
+                    ?.let { applyCaptureDecision(it, "overlay-heartbeat-ttl") }
             }
         }
     }
 
     private fun hasUberRootAvailable(): Boolean {
-        if (rootInActiveWindow != null) return true
+        if (rootInActiveWindow?.containsPackageName(UBER_DRIVER_PACKAGE) == true) return true
 
         return allInteractiveWindowsForScan().any { windowSource ->
-            windowSource.root != null
+            windowSource.root?.containsPackageName(UBER_DRIVER_PACKAGE) == true
         }
     }
 
@@ -562,6 +556,7 @@ class UberAccessibilityService : AccessibilityService() {
 
     private fun removeOverlayWindowsBeforeScanIfNeeded(): Boolean {
         if (!AccessibilityDebugConfig.ENABLE_ZERO_OVERLAY_DURING_SCAN) return false
+        if (overlayManager?.isVisible == true) return false
         val removed = overlayManager?.removeOverlayWindowsForScan() == true
         if (removed && BuildConfig.DEBUG) {
             Log.i(TAG, "Removed CalcMot overlay windows before accessibility scan")
@@ -572,9 +567,10 @@ class UberAccessibilityService : AccessibilityService() {
     private fun accessibilityRootSources(): List<AccessibilityRootSource> {
         val currentWindows = allInteractiveWindowsForScan()
         val windowRoots = currentWindows
+            .filter { it.isActive || it.isFocused }
             .mapIndexedNotNull { index, windowSource ->
                 val root = windowSource.root ?: return@mapIndexedNotNull null
-                val packageHint = if (root.containsPackageName(UBER_DRIVER_PACKAGE)) {
+                val packageHint = if (root.packageName?.toString() == UBER_DRIVER_PACKAGE) {
                     "uber"
                 } else {
                     "unverified"
@@ -589,7 +585,7 @@ class UberAccessibilityService : AccessibilityService() {
 
         val activeRoots = activeWindowRootsForScan()
             .map { activeRoot ->
-                val packageHint = if (activeRoot.root.containsPackageName(UBER_DRIVER_PACKAGE)) {
+                val packageHint = if (activeRoot.root.packageName?.toString() == UBER_DRIVER_PACKAGE) {
                     "uber"
                 } else {
                     "unverified"
@@ -692,6 +688,8 @@ class UberAccessibilityService : AccessibilityService() {
             identityKey = "$displayLabel|$index|$type|$layer|$resolvedDisplayId|" +
                 "${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}",
             layer = layer,
+            isActive = isActive,
+            isFocused = isFocused,
             root = resolvedRoot
         )
     }
@@ -949,7 +947,6 @@ class UberAccessibilityService : AccessibilityService() {
         generationId: Long,
         sourceKind: AccessibilitySnapshotSourceKind
     ): Int {
-        runCatching { node.refresh() }
         val bounds = Rect()
         node.getBoundsInScreen(bounds)
         val screenBounds = ScreenBounds(
@@ -1253,13 +1250,15 @@ class UberAccessibilityService : AccessibilityService() {
     }
 
     private fun handleOverlayDismissedByUser() {
-        val decision = captureCoordinator.dismissCurrentOverlayByUser()
-        applyCaptureDecision(decision, "overlay-double-tap")
+        serviceScope.launch {
+            val decision = captureCoordinator.dismissCurrentOverlayByUser()
+            applyCaptureDecision(decision, "overlay-double-tap")
+        }
     }
 
     private fun scheduleOverlayExpiry(expectedFingerprint: String) {
         overlayExpiryJob?.cancel()
-        overlayExpiryJob = mainScope.launch {
+        overlayExpiryJob = serviceScope.launch {
             delay(OVERLAY_TTL_MS)
             val decision = captureCoordinator.expireOverlayIfStale() ?: return@launch
             if (decision.overlayFingerprint == null || decision.overlayFingerprint == expectedFingerprint) {
@@ -1354,7 +1353,7 @@ class UberAccessibilityService : AccessibilityService() {
                 AppDiagnostics.recordStage(this, AppDiagnostics.Stage.FRAME_REJECTED)
                 captureLearningLab.recordOverlayHidden(
                     status = when (label) {
-                        "overlay-ttl" -> "overlay_expired"
+                        "overlay-ttl", "overlay-heartbeat-ttl" -> "overlay_expired"
                         "overlay-double-tap" -> "overlay_hidden_user"
                         else -> "overlay_hidden_invalid_frame"
                     },
@@ -1365,7 +1364,7 @@ class UberAccessibilityService : AccessibilityService() {
                 if (BuildConfig.DEBUG) Log.d(TAG, "Frame rejected [$label]: ${decision.reason}")
                 cancelOverlayExpiry()
                 mainScope.launch {
-                    if (label == "overlay-ttl") {
+                    if (label == "overlay-ttl" || label == "overlay-heartbeat-ttl") {
                         overlayManager?.expireOverlay(decision.overlayFingerprint)
                     } else {
                         overlayManager?.hideOverlay()
@@ -1388,6 +1387,7 @@ class UberAccessibilityService : AccessibilityService() {
         overlayManager?.removeOverlay()
         serviceScope.cancel()
         mainScope.cancel()
+        captureDispatcher.close()
     }
 
     override fun onInterrupt() {}
@@ -1427,12 +1427,7 @@ class UberAccessibilityService : AccessibilityService() {
     private fun AccessibilityEvent.isRelevantUberEvent(): Boolean {
         return when (eventType) {
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_SCROLLED,
-            AccessibilityEvent.TYPE_WINDOWS_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_FOCUSED -> true
-            AccessibilityEvent.TYPE_ANNOUNCEMENT -> true
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> true
             else -> false
         }
     }
@@ -1456,16 +1451,16 @@ class UberAccessibilityService : AccessibilityService() {
         const val UBER_DRIVER_PACKAGE = "com.ubercab.driver"
         const val MAX_ACCESSIBILITY_LOG_REASONS = 40
         const val EVENT_SOURCE_PARENT_ATTEMPTS = 8
-        const val CONTINUOUS_ACCESSIBILITY_POLL_INTERVAL_MS = 350L
-        const val ACCESSIBILITY_POLL_WINDOW_MS = 8_000L
-        const val ACCESSIBILITY_POLL_INTERVAL_MS = 160L
+        const val ACCESSIBILITY_HEARTBEAT_INTERVAL_MS = 1_000L
+        const val ACCESSIBILITY_POLL_WINDOW_MS = 2_500L
+        const val ACCESSIBILITY_POLL_INTERVAL_MS = 250L
         const val REQUIRED_INVALID_FRAMES_TO_RESET = 2
         const val OVERLAY_TTL_MS = 1_200L
         const val ACCESSIBILITY_SCAN_SESSION_COALESCE_MS = 2_500L
         const val MAX_EXTRAS_TEXT_VALUES = 24
         const val MAX_EXTRAS_VALUE_LENGTH = 160
         const val MAX_ACCESSIBILITY_TREE_DEPTH = 80
-        const val MAX_ACCESSIBILITY_TREE_NODES = 5_000
+        const val MAX_ACCESSIBILITY_TREE_NODES = 2_000
         const val PACKAGE_SCAN_NODE_LIMIT = 5_000
         val ACCESSIBILITY_BURST_DELAYS_MS = longArrayOf(120L, 240L, 420L, 700L, 1_000L, 1_500L, 2_200L)
     }
@@ -1491,6 +1486,8 @@ class UberAccessibilityService : AccessibilityService() {
         val debugName: String,
         val identityKey: String,
         val layer: Int,
+        val isActive: Boolean,
+        val isFocused: Boolean,
         val root: AccessibilityNodeInfo?
     )
 

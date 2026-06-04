@@ -84,8 +84,11 @@ class ReleaseReadinessTest {
         assertTrue(service.contains("FLAG_RETRIEVE_INTERACTIVE_WINDOWS"))
         assertTrue(service.contains("FLAG_INCLUDE_NOT_IMPORTANT_VIEWS"))
         assertTrue(service.contains("removeOverlayWindowsForScan"))
+        assertTrue(service.contains("overlayManager?.isVisible == true"))
         assertTrue(service.contains("ACCESSIBILITY_SCAN_SESSION_COALESCE_MS"))
         assertTrue(service.contains("120L, 240L, 420L, 700L, 1_000L, 1_500L, 2_200L"))
+        assertTrue(service.contains("ACCESSIBILITY_HEARTBEAT_INTERVAL_MS = 1_000L"))
+        assertFalse(service.contains("accessibility-continuous-poll"))
         assertTrue(debugToggles.contains("ENABLE_ZERO_OVERLAY_DURING_SCAN"))
         assertTrue(debugToggles.contains("const val ENABLE_ZERO_OVERLAY_DURING_SCAN: Boolean = true"))
     }
@@ -149,6 +152,15 @@ class ReleaseReadinessTest {
             "beta_overlay_coverage_percent",
             "beta_ready_min_85"
         )
+        val resourceFields = listOf(
+            "resource_sample_count",
+            "resource_cpu_avg_percent",
+            "resource_cpu_max_percent",
+            "resource_pss_avg_kb",
+            "resource_pss_max_kb",
+            "resource_rss_avg_kb",
+            "resource_rss_max_kb"
+        )
         val oracleOnlyFields = listOf(
             "accessibility_service_enabled",
             "ocr_enabled",
@@ -164,6 +176,11 @@ class ReleaseReadinessTest {
             assertTrue("capture report should include $field", captureScript.contains(field))
             assertTrue("lab doc should explain $field", labDoc.contains(field))
         }
+        resourceFields.forEach { field ->
+            assertTrue("bridge report should include $field", bridgeScript.contains(field))
+        }
+        assertTrue(bridgeScript.contains("Get-CalcMotResourceSample"))
+        assertTrue(bridgeScript.contains("ResourceSampleIntervalSeconds"))
         oracleOnlyFields.forEach { field ->
             assertTrue("bridge report should include $field", bridgeScript.contains(field))
             assertTrue("lab doc should explain $field", labDoc.contains(field))

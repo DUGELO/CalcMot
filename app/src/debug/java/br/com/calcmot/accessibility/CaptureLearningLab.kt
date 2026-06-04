@@ -73,6 +73,13 @@ class CaptureLearningLab(context: Context) {
         snapshot: AccessibilityTreeSnapshot,
         inspection: TreeOfferInspection
     ) {
+        if (!inspection.isCompleteOffer &&
+            !inspection.hasPrice &&
+            !inspection.hasActionButton &&
+            inspection.timeDistanceBlockCount == 0
+        ) {
+            return
+        }
         val next = sequence.incrementAndGet()
         if (next > MAX_EVENTS_PER_SESSION) return
         val targetDir = sessionDir ?: return
@@ -184,6 +191,6 @@ class CaptureLearningLab(context: Context) {
     }
 
     private companion object {
-        const val MAX_EVENTS_PER_SESSION = 5_000
+        const val MAX_EVENTS_PER_SESSION = 1_000
     }
 }
