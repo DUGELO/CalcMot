@@ -17,6 +17,8 @@ import br.com.calcmot.model.OfferCaptureRejectionReason
 import br.com.calcmot.model.OfferCaptureSource
 import br.com.calcmot.model.OfferCandidate
 import br.com.calcmot.model.TripData
+import br.com.calcmot.model.isImmediateInvalidContext
+import br.com.calcmot.model.isInvalidContext
 import br.com.calcmot.overlay.IOverlayManager
 import br.com.calcmot.overlay.OverlayManager
 import br.com.calcmot.processor.AccessibilityTreeSnapshot
@@ -33,6 +35,7 @@ import br.com.calcmot.processor.ScreenBounds
 import br.com.calcmot.processor.TextNormalizer
 import br.com.calcmot.processor.TreeOfferInspection
 import br.com.calcmot.processor.TreeRejectionReason
+import br.com.calcmot.processor.overlayFingerprint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -91,24 +94,37 @@ class UberAccessibilityService : AccessibilityService() {
     private var activeScanSessionGeneration = 0L
     @Volatile
     private var activeScanSessionStartedAtMillis = 0L
+    @Volatile
+    private var lastWatchdogScanAtMillis = 0L
     private var lastParsedOfferAudit: ParsedOfferAudit? = null
+    private val postReconnectCandidateGuard = PostReconnectCandidateGuard()
     private val accessibilityTreeLab by lazy { AccessibilityTreeLab(this) }
     private val captureLearningLab by lazy { CaptureLearningLab(this) }
     private val shellOfferHandler: (ShellOfferFrame) -> Unit = { frame ->
-        serviceScope.launch { handleShellOfferFrame(frame) }
+        if (BuildConfig.DEBUG) {
+            serviceScope.launch { handleShellOfferFrame(frame) }
+        }
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         ensureServiceScopeActive()
         configureRuntimeAccessibilityInfo()
+        val reconnectBaselineFingerprint = captureCoordinator.currentOverlayFingerprint()
+        cancelCapturePipeline()
+        cancelOverlayExpiry()
+        captureCoordinator.reset()
+        lastParsedOfferAudit = null
+        postReconnectCandidateGuard.onServiceConnected(reconnectBaselineFingerprint)
         overlayManager?.removeOverlay()
         overlayManager = OverlayManager(this).also { manager ->
             manager.setOnUserDismissed {
                 handleOverlayDismissedByUser()
             }
         }
-        ShellOfferBridge.register(shellOfferHandler)
+        if (BuildConfig.DEBUG) {
+            ShellOfferBridge.register(shellOfferHandler)
+        }
         startContinuousAccessibilityPolling()
         if (AccessibilityDebugConfig.ENABLE_DEBUG_OVERLAY_HEARTBEAT) {
             showDebugHeartbeat(
@@ -132,7 +148,8 @@ class UberAccessibilityService : AccessibilityService() {
         val currentInfo = serviceInfo ?: return
         currentInfo.eventTypes =
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
-                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
+                AccessibilityEvent.TYPE_WINDOWS_CHANGED
         currentInfo.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
         currentInfo.notificationTimeout = 0L
         currentInfo.flags = currentInfo.flags or
@@ -153,7 +170,12 @@ class UberAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.packageName != UBER_DRIVER_PACKAGE) return
+        if (event == null) return
+        val eventPackage = event.packageName?.toString()
+        val isUberPackageEvent = eventPackage == UBER_DRIVER_PACKAGE
+        val isUberWindowEvent = event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED &&
+            hasUberRootAvailable()
+        if (!isUberPackageEvent && !isUberWindowEvent) return
         if (!event.isRelevantUberEvent()) return
 
         val eventCopy = AccessibilityEvent.obtain(event)
@@ -263,16 +285,14 @@ class UberAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun handleEventPayloadCandidate(event: AccessibilityEvent, eventAtMillis: Long): Boolean {
+    private suspend fun handleEventPayloadCandidate(event: AccessibilityEvent, eventAtMillis: Long): Boolean {
         val snapshot = event.toAccessibilitySnapshot(eventAtMillis)
         if (snapshot.lines.isEmpty()) return false
 
-        val treeCandidate = extractCandidateFromSnapshot(snapshot)
-        return treeCandidate != null && handleCandidate(
-            candidate = treeCandidate.candidate,
-            source = OfferCaptureSource.ACCESSIBILITY_TREE,
-            label = "event-payload",
-            trustedSingleFrame = treeCandidate.trustedSingleFrame
+        val scanResult = extractCandidateFromSnapshot(snapshot)
+        return scanResult != null && handleAccessibilityScanResult(
+            scanResult = scanResult,
+            label = "event-payload"
         )
     }
 
@@ -287,14 +307,14 @@ class UberAccessibilityService : AccessibilityService() {
                 generationId = captureGeneration,
                 sourceKind = AccessibilitySnapshotSourceKind.EVENT_SOURCE
             )
-            val treeCandidate = extractCandidateFromSnapshot(snapshot)
-            if (treeCandidate != null) {
-                return handleCandidate(
-                    candidate = treeCandidate.candidate,
-                    source = OfferCaptureSource.ACCESSIBILITY_TREE,
-                    label = "event-source",
-                    trustedSingleFrame = treeCandidate.trustedSingleFrame
-                )
+            val scanResult = extractCandidateFromSnapshot(snapshot)
+            if (scanResult != null) {
+                return runBlocking {
+                    handleAccessibilityScanResult(
+                        scanResult = scanResult,
+                        label = "event-source"
+                    )
+                }
             }
             node = node.parent ?: return false
         }
@@ -315,17 +335,16 @@ class UberAccessibilityService : AccessibilityService() {
                     return@launch
                 }
 
-                val treeCandidate = extractCandidateFromAccessibilityTree(
+                val scanResult = extractCandidateFromAccessibilityTree(
                     eventAtMillis = accessibilityPollingEventAtMillis,
                     logRejectedTree = false
                 )
-                if (treeCandidate != null) {
-                    handleCandidate(
-                        candidate = treeCandidate.candidate,
-                        source = OfferCaptureSource.ACCESSIBILITY_TREE,
-                        label = "accessibility-poll",
-                        trustedSingleFrame = treeCandidate.trustedSingleFrame
+                if (scanResult != null) {
+                    handleAccessibilityScanResult(
+                        scanResult = scanResult,
+                        label = "accessibility-poll"
                     )
+                    if (scanResult is AccessibilityScanResult.InvalidContext) return@launch
                 }
 
                 delay(ACCESSIBILITY_POLL_INTERVAL_MS)
@@ -349,8 +368,31 @@ class UberAccessibilityService : AccessibilityService() {
 
                 captureCoordinator.expireOverlayIfStale()
                     ?.let { applyCaptureDecision(it, "overlay-heartbeat-ttl") }
+
+                runFocusedUberWatchdogScanIfNeeded()
             }
         }
+    }
+
+    private suspend fun runFocusedUberWatchdogScanIfNeeded() {
+        val now = System.currentTimeMillis()
+        if (overlayManager?.isVisible != true) return
+        if (now - lastWatchdogScanAtMillis < ACCESSIBILITY_WATCHDOG_SCAN_INTERVAL_MS) return
+        if (capturePipelineJob?.isActive == true || accessibilityPollingJob?.isActive == true) return
+        if (!hasUberRootAvailable()) return
+
+        lastWatchdogScanAtMillis = now
+        val scanResult = extractCandidateFromAccessibilityTree(
+            eventAtMillis = now,
+            logRejectedTree = false,
+            generationId = captureGeneration,
+            delayMs = 0L
+        ) ?: return
+
+        handleAccessibilityScanResult(
+            scanResult = scanResult,
+            label = "accessibility-watchdog"
+        )
     }
 
     private fun hasUberRootAvailable(): Boolean {
@@ -378,13 +420,33 @@ class UberAccessibilityService : AccessibilityService() {
             delay(targetDelay - previousDelay)
             previousDelay = targetDelay
 
-            val treeCandidate = extractCandidateFromAccessibilityTree(
+            val scanResult = extractCandidateFromAccessibilityTree(
                 eventAtMillis = eventAtMillis,
                 logRejectedTree = attempt == delays.lastIndex,
                 generationId = generation,
                 delayMs = targetDelay
             )
-            if (treeCandidate != null) {
+            if (scanResult != null) {
+                if (scanResult is AccessibilityScanResult.InvalidContext) {
+                    val isWeakInvalidContext = !scanResult.reason.isImmediateInvalidContext()
+                    if (isWeakInvalidContext && attempt == 0) {
+                        if (BuildConfig.DEBUG) {
+                            Log.i(
+                                TAG,
+                                "Weak invalid context observed; waiting one more burst attempt " +
+                                    "reason=${scanResult.reason} generation=$generation delay=${targetDelay}ms"
+                            )
+                        }
+                        return@forEachIndexed
+                    }
+                    handleAccessibilityScanResult(
+                        scanResult = scanResult,
+                        label = "accessibility-burst"
+                    )
+                    return true
+                }
+
+                val treeCandidate = (scanResult as AccessibilityScanResult.Candidate).value
                 foundCandidate = true
                 if (BuildConfig.DEBUG) {
                     Log.i(
@@ -393,13 +455,7 @@ class UberAccessibilityService : AccessibilityService() {
                             "delay=${targetDelay}ms attempt=${attempt + 1}/${delays.size}"
                     )
                 }
-                if (handleCandidate(
-                        candidate = treeCandidate.candidate,
-                        source = OfferCaptureSource.ACCESSIBILITY_TREE,
-                        label = "accessibility-burst",
-                        trustedSingleFrame = treeCandidate.trustedSingleFrame
-                    )
-                ) {
+                if (handleAccessibilityScanResult(scanResult, "accessibility-burst")) {
                     return true
                 }
             }
@@ -413,7 +469,7 @@ class UberAccessibilityService : AccessibilityService() {
         logRejectedTree: Boolean = true,
         generationId: Long = captureGeneration,
         delayMs: Long = (System.currentTimeMillis() - eventAtMillis).coerceAtLeast(0L)
-    ): AccessibilityCandidate? {
+    ): AccessibilityScanResult? {
         AppDiagnostics.recordStage(this, AppDiagnostics.Stage.TREE_SCAN_RUNNING)
         val calcMotOverlayRemovedForScan = removeOverlayWindowsBeforeScanIfNeeded()
         val rootNull = rootInActiveWindow == null
@@ -468,6 +524,7 @@ class UberAccessibilityService : AccessibilityService() {
         }
 
         val rejectedReasons = mutableListOf<String>()
+        var weakInvalidContextReason: OfferCaptureRejectionReason? = null
         val snapshots = roots.map { rootSource ->
             rootSource.root.toAccessibilitySnapshot(
                 sourceName = rootSource.name,
@@ -498,7 +555,18 @@ class UberAccessibilityService : AccessibilityService() {
                         "delay=${delayMs}ms"
                 )
             }
+            inspection.strongInvalidContextCaptureReason()?.let { reason ->
+                return AccessibilityScanResult.InvalidContext(reason)
+            }
+            inspection.weakInvalidContextCaptureReason()?.let { reason ->
+                weakInvalidContextReason = weakInvalidContextReason ?: reason
+            }
             if (candidate != null) {
+                val trustedSingleFrame = inspection.canBypassStabilityGate()
+                if (shouldIgnorePostReconnectCandidate(candidate, trustedSingleFrame, snapshot.sourceName)) {
+                    rejectedReasons += "${snapshot.sourceName}:POST_RECONNECT_STALE_CANDIDATE"
+                    return@forEach
+                }
                 recordSuspectValueChangeIfNeeded(
                     candidate = candidate,
                     source = OfferCaptureSource.ACCESSIBILITY_TREE,
@@ -518,13 +586,26 @@ class UberAccessibilityService : AccessibilityService() {
                     bestDelayMs = delayMs
                 )
                 recordCaptureSuccess(OfferCaptureSource.ACCESSIBILITY_TREE, candidate)
-                return AccessibilityCandidate(
-                    candidate = candidate,
-                    trustedSingleFrame = inspection.canBypassStabilityGate()
+                return AccessibilityScanResult.Candidate(
+                    AccessibilityCandidate(
+                        candidate = candidate,
+                        trustedSingleFrame = trustedSingleFrame
+                    )
                 )
             }
             recordTreeCaptureRejectionIfUseful(inspection)
             rejectedReasons += "${snapshot.sourceName}:${inspection.rejectionReason}"
+        }
+
+        weakInvalidContextReason?.let { reason ->
+            if (BuildConfig.DEBUG) {
+                Log.i(
+                    TAG,
+                    "TREE_SCAN_STOP_WEAK_INVALID_CONTEXT: " +
+                        "reason=$reason generation=$generationId delay=${delayMs}ms"
+                )
+            }
+            return AccessibilityScanResult.InvalidContext(reason)
         }
 
         val currentBestSnapshot = snapshotsToInspect.maxWithOrNull(
@@ -590,7 +671,6 @@ class UberAccessibilityService : AccessibilityService() {
     private fun accessibilityRootSources(): List<AccessibilityRootSource> {
         val currentWindows = allInteractiveWindowsForScan()
         val windowRoots = currentWindows
-            .filter { it.isActive || it.isFocused }
             .mapIndexedNotNull { index, windowSource ->
                 val root = windowSource.root ?: return@mapIndexedNotNull null
                 val packageHint = if (root.packageName?.toString() == UBER_DRIVER_PACKAGE) {
@@ -767,7 +847,7 @@ class UberAccessibilityService : AccessibilityService() {
         )
     }
 
-    private fun extractCandidateFromSnapshot(snapshot: AccessibilityTreeSnapshot): AccessibilityCandidate? {
+    private fun extractCandidateFromSnapshot(snapshot: AccessibilityTreeSnapshot): AccessibilityScanResult? {
         val inspection = OfferTreeExtractor.inspect(snapshot)
         val candidate = inspection.offerText?.let(OfferParser::parse)
 
@@ -785,7 +865,20 @@ class UberAccessibilityService : AccessibilityService() {
         accessibilityTreeLab.record(snapshot, inspection)
         captureLearningLab.recordTreeInspection(snapshot, inspection)
 
+        (inspection.strongInvalidContextCaptureReason() ?: inspection.weakInvalidContextCaptureReason())?.let { reason ->
+            return AccessibilityScanResult.InvalidContext(reason)
+        }
+
         if (candidate != null) {
+            val typeLabel = if (inspection.isRadar) "ACTIONABLE_RADAR_CARD" else "ACTIONABLE_MAIN_CARD"
+            if (BuildConfig.DEBUG) {
+                Log.w(TAG, "OFFER_DETECTED: type=$typeLabel fingerprint=${candidate.fingerprint}")
+            }
+            val trustedSingleFrame = inspection.canBypassStabilityGate()
+            if (shouldIgnorePostReconnectCandidate(candidate, trustedSingleFrame, snapshot.sourceName)) {
+                recordTreeCaptureRejectionIfUseful(inspection)
+                return null
+            }
             recordSuspectValueChangeIfNeeded(
                 candidate = candidate,
                 source = OfferCaptureSource.ACCESSIBILITY_TREE,
@@ -800,19 +893,45 @@ class UberAccessibilityService : AccessibilityService() {
             Log.i(TAG, "Accessibility candidate parsed from ${snapshot.sourceName}: ${candidate.fingerprint}")
         }
         return candidate?.let {
-            AccessibilityCandidate(
-                candidate = it,
-                trustedSingleFrame = inspection.canBypassStabilityGate()
+            AccessibilityScanResult.Candidate(
+                AccessibilityCandidate(
+                    candidate = it,
+                    trustedSingleFrame = inspection.canBypassStabilityGate()
+                )
             )
         }
     }
 
     private fun TreeOfferInspection.canBypassStabilityGate(): Boolean {
-        return isCompleteOffer &&
-            hasPrice &&
-            hasActionButton &&
-            timeDistanceBlockCount == 2 &&
-            offerText != null
+        return isCompleteOffer && hasActionButton
+    }
+
+    private fun shouldIgnorePostReconnectCandidate(
+        candidate: OfferCandidate,
+        trustedSingleFrame: Boolean,
+        snapshotName: String
+    ): Boolean {
+        if (!trustedSingleFrame) return false
+        val overlayFingerprint = candidate.overlayFingerprint()
+        val shouldIgnore = postReconnectCandidateGuard.shouldIgnore(overlayFingerprint)
+        if (shouldIgnore && BuildConfig.DEBUG) {
+            Log.w(
+                TAG,
+                "POST_RECONNECT_STALE_CANDIDATE_IGNORED: " +
+                    "snapshot=$snapshotName fingerprint=$overlayFingerprint raw=${candidate.fingerprint}"
+            )
+        }
+        return shouldIgnore
+    }
+
+    private fun TreeOfferInspection.strongInvalidContextCaptureReason(): OfferCaptureRejectionReason? {
+        val reason = rejectionReason?.toCaptureRejectionReason() ?: return null
+        return reason.takeIf { it.isImmediateInvalidContext() }
+    }
+
+    private fun TreeOfferInspection.weakInvalidContextCaptureReason(): OfferCaptureRejectionReason? {
+        val reason = rejectionReason?.toCaptureRejectionReason() ?: return null
+        return reason.takeIf { it.isInvalidContext() && !it.isImmediateInvalidContext() }
     }
 
     private fun recordSuspectValueChangeIfNeeded(
@@ -1237,12 +1356,22 @@ class UberAccessibilityService : AccessibilityService() {
         )
     }
 
+    private var noPriceThrottleCount = 0
+
     private fun recordTreeCaptureRejectionIfUseful(inspection: TreeOfferInspection) {
         if (inspection.lineCount <= 0) return
         if (!inspection.hasPrice && !inspection.hasActionButton && inspection.timeDistanceBlockCount == 0) return
 
         val reason = inspection.rejectionReason?.toCaptureRejectionReason()
             ?: OfferCaptureRejectionReason.UNKNOWN
+
+        if (reason == OfferCaptureRejectionReason.NO_PRICE) {
+            noPriceThrottleCount++
+            if (noPriceThrottleCount % 10 != 1) return
+        } else {
+            noPriceThrottleCount = 0
+        }
+
         recordCaptureRejection(OfferCaptureSource.ACCESSIBILITY_TREE, reason)
     }
 
@@ -1259,6 +1388,10 @@ class UberAccessibilityService : AccessibilityService() {
                 OfferCaptureRejectionReason.INCOMPLETE_TIME_DISTANCE_BLOCKS
             }
             TreeRejectionReason.PARSER_REJECTED -> OfferCaptureRejectionReason.PARSER_REJECTED
+            TreeRejectionReason.INVALID_CONTEXT_STILL_THERE -> OfferCaptureRejectionReason.INVALID_CONTEXT_STILL_THERE
+            TreeRejectionReason.INVALID_CONTEXT_REQUEST_UNAVAILABLE -> OfferCaptureRejectionReason.INVALID_CONTEXT_REQUEST_UNAVAILABLE
+            TreeRejectionReason.INVALID_CONTEXT_NO_REQUEST -> OfferCaptureRejectionReason.INVALID_CONTEXT_NO_REQUEST
+            TreeRejectionReason.INVALID_CONTEXT_OFFLINE -> OfferCaptureRejectionReason.INVALID_CONTEXT_OFFLINE
         }
     }
 
@@ -1280,6 +1413,77 @@ class UberAccessibilityService : AccessibilityService() {
             )
         }
         return applyCaptureDecision(decision, label)
+    }
+
+    private suspend fun handleAccessibilityScanResult(
+        scanResult: AccessibilityScanResult,
+        label: String
+    ): Boolean {
+        return when (scanResult) {
+            is AccessibilityScanResult.Candidate -> {
+                handleCandidate(
+                    candidate = scanResult.value.candidate,
+                    source = OfferCaptureSource.ACCESSIBILITY_TREE,
+                    label = label,
+                    trustedSingleFrame = scanResult.value.trustedSingleFrame
+                )
+            }
+
+            is AccessibilityScanResult.InvalidContext -> {
+                if (scanResult.reason.isImmediateInvalidContext()) {
+                    forceHideOverlayForInvalidContext(
+                        reason = scanResult.reason,
+                        label = label
+                    )
+                } else {
+                    applyCaptureDecision(
+                        decision = captureCoordinator.rejectFrame(
+                            source = OfferCaptureSource.ACCESSIBILITY_TREE,
+                            reason = scanResult.reason
+                        ),
+                        label = label
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun forceHideOverlayForInvalidContext(
+        reason: OfferCaptureRejectionReason,
+        label: String
+    ): Boolean {
+        val decision = captureCoordinator.rejectFrame(
+            source = OfferCaptureSource.ACCESSIBILITY_TREE,
+            reason = reason
+        ) as CaptureDecision.HideOverlay
+
+        cancelOverlayExpiry()
+        accessibilityPollingUntil = 0L
+        activeScanSessionGeneration = 0L
+        activeScanSessionStartedAtMillis = 0L
+        captureGeneration += 1
+        lastParsedOfferAudit = null
+        AppDiagnostics.recordStage(this, AppDiagnostics.Stage.FRAME_REJECTED)
+        captureLearningLab.recordOverlayHidden(
+            status = "overlay_force_hidden_invalid_context",
+            source = decision.source,
+            fingerprint = decision.overlayFingerprint,
+            reason = decision.reason
+        )
+
+        if (BuildConfig.DEBUG) {
+            Log.w(
+                TAG,
+                "OVERLAY_FORCE_HIDDEN_INVALID_CONTEXT: " +
+                    "reason=$reason label=$label fingerprint=${decision.overlayFingerprint}"
+            )
+        }
+
+        withContext(Dispatchers.Main.immediate) {
+            overlayManager?.hideOverlay()
+        }
+
+        return true
     }
 
     private fun handleShellOfferFrame(frame: ShellOfferFrame) {
@@ -1415,6 +1619,10 @@ class UberAccessibilityService : AccessibilityService() {
 
             is CaptureDecision.RenewCurrentOverlay -> {
                 if (BuildConfig.DEBUG) {
+                    Log.w(
+                        TAG,
+                        "OVERLAY_TTL_RENEWED: fingerprint=${decision.overlayFingerprint}"
+                    )
                     Log.i(
                         TAG,
                         "OVERLAY_ALREADY_VISIBLE_RENEWED: source=${decision.source} " +
@@ -1448,6 +1656,10 @@ class UberAccessibilityService : AccessibilityService() {
                     reason = decision.reason
                 )
                 if (BuildConfig.DEBUG) {
+                    Log.w(
+                        TAG,
+                        "OVERLAY_KEEPALIVE_SAME_ACTIONABLE_CARD: reason=${decision.reason} streak=${decision.invalidFrameStreak}"
+                    )
                     Log.d(
                         TAG,
                         "Frame rejected but waiting for confirmation " +
@@ -1469,7 +1681,14 @@ class UberAccessibilityService : AccessibilityService() {
                     fingerprint = decision.overlayFingerprint,
                     reason = decision.reason
                 )
-                if (BuildConfig.DEBUG) Log.d(TAG, "Frame rejected [$label]: ${decision.reason}")
+                if (BuildConfig.DEBUG) {
+                    if (decision.reason.isImmediateInvalidContext()) {
+                        Log.w(TAG, "OVERLAY_FORCE_HIDDEN_INVALID_CONTEXT: reason=${decision.reason} fingerprint=${decision.overlayFingerprint}")
+                    } else if (label == "overlay-ttl") {
+                        Log.w(TAG, "OVERLAY_EXPIRED_NO_ACTIONABLE_CARD: fingerprint=${decision.overlayFingerprint}")
+                    }
+                    Log.d(TAG, "Frame rejected [$label]: ${decision.reason}")
+                }
                 cancelOverlayExpiry()
                 mainScope.launch {
                     if (label == "overlay-ttl" || label == "overlay-heartbeat-ttl") {
@@ -1485,7 +1704,9 @@ class UberAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        ShellOfferBridge.unregister(shellOfferHandler)
+        if (BuildConfig.DEBUG) {
+            ShellOfferBridge.unregister(shellOfferHandler)
+        }
         continuousAccessibilityPollingJob?.cancel()
         accessibilityPollingJob?.cancel()
         capturePipelineJob?.cancel()
@@ -1535,6 +1756,7 @@ class UberAccessibilityService : AccessibilityService() {
     private fun AccessibilityEvent.isRelevantUberEvent(): Boolean {
         return when (eventType) {
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> true
             else -> false
         }
@@ -1560,6 +1782,7 @@ class UberAccessibilityService : AccessibilityService() {
         const val MAX_ACCESSIBILITY_LOG_REASONS = 40
         const val EVENT_SOURCE_PARENT_ATTEMPTS = 8
         const val ACCESSIBILITY_HEARTBEAT_INTERVAL_MS = 1_000L
+        const val ACCESSIBILITY_WATCHDOG_SCAN_INTERVAL_MS = 2_000L
         const val ACCESSIBILITY_POLL_WINDOW_MS = 2_500L
         const val ACCESSIBILITY_POLL_INTERVAL_MS = 250L
         const val REQUIRED_INVALID_FRAMES_TO_RESET = 2
@@ -1584,6 +1807,11 @@ class UberAccessibilityService : AccessibilityService() {
         val candidate: OfferCandidate,
         val trustedSingleFrame: Boolean
     )
+
+    private sealed interface AccessibilityScanResult {
+        data class Candidate(val value: AccessibilityCandidate) : AccessibilityScanResult
+        data class InvalidContext(val reason: OfferCaptureRejectionReason) : AccessibilityScanResult
+    }
 
     private data class ParsedOfferAudit(
         val candidate: OfferCandidate,

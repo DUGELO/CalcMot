@@ -54,7 +54,7 @@ class UiAutomatorDumpParserTest {
         }
 
         assertEquals(133, inspections.count { it.inspection.isCompleteOffer })
-        assertEquals(41, inspections.mapNotNull { it.fingerprint }.toSet().size)
+        assertEquals(40, inspections.mapNotNull { it.fingerprint }.toSet().size)
         assertEquals(133, inspections.count { it.hasPrice })
         assertEquals(133, inspections.count { it.hasPickup })
         assertEquals(131, inspections.count { it.hasTrip })

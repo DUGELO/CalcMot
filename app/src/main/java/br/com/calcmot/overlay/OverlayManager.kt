@@ -15,6 +15,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.view.ViewTreeObserver
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
@@ -33,6 +34,8 @@ import br.com.calcmot.AppDiagnostics
 import br.com.calcmot.BuildConfig
 import br.com.calcmot.OverlayCustomPosition
 import br.com.calcmot.accessibility.AccessibilityDebugOverlayState
+import br.com.calcmot.model.FinancialImpactCalculator
+import br.com.calcmot.model.OfferFinancialImpact
 import br.com.calcmot.model.ProfitabilityCalculator
 import br.com.calcmot.model.ProfitabilityResult
 import br.com.calcmot.model.TripData
@@ -54,6 +57,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     private var debugWindowManager: WindowManager? = null
     private val tripDataState = mutableStateOf<TripData?>(null)
     private val profitabilityState = mutableStateOf<ProfitabilityResult?>(null)
+    private val financialImpactState = mutableStateOf<OfferFinancialImpact?>(null)
     private val debugOverlayState = mutableStateOf<AccessibilityDebugOverlayState?>(null)
     private val overlayStateMachine = OverlayStateMachine()
     private var lifecycleOwner: CustomLifecycleOwner? = null
@@ -148,7 +152,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             }
         } catch (e: WindowManager.BadTokenException) {
             resetDebugOverlayView()
-            Log.e("OverlayManager", "Erro showDebugOverlay: token invalido", e)
+            Log.w("OverlayManager", "OVERLAY_TOKEN_RECOVERING_DEBUG")
             if (retryOnBadToken) {
                 retryAfterBadToken(
                     primaryWindowType = windowType,
@@ -186,14 +190,41 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
         forceApplicationOverlay: Boolean
     ) {
         val windowType = getWindowType(forceApplicationOverlay)
-        val fingerprint = data.overlayFingerprint()
-        val transition = overlayStateMachine.showRequested(fingerprint)
+        val newFingerprint = data.overlayFingerprint()
+        val oldFingerprint = overlayStateMachine.currentFingerprint()
+        val transition = overlayStateMachine.showRequested(newFingerprint)
+        val requestedAt = System.currentTimeMillis()
+
+        Log.w("OverlayManager", "OVERLAY_SHOW_REQUESTED fingerprint=$newFingerprint")
+
+        val hasAttachedOverlay = composeView?.parent != null
+        if (
+            transition == OverlayTransition.AttachOrReplace &&
+            !hasAttachedOverlay &&
+            (composeView != null || debugComposeView != null)
+        ) {
+            Log.w("OverlayManager", "OVERLAY_STALE_VIEW_REMOVED_BEFORE_NEW old=$oldFingerprint new=$newFingerprint")
+            resetOverlayView()
+            resetDebugOverlayView()
+        } else if (transition == OverlayTransition.AttachOrReplace && hasAttachedOverlay) {
+            Log.w("OverlayManager", "OVERLAY_REPLACED_IN_PLACE old=$oldFingerprint new=$newFingerprint")
+            resetDebugOverlayView()
+        }
+
         try {
             tripDataState.value = data
             profitabilityState.value = ProfitabilityCalculator.calculate(
                 tripData = data,
                 settings = AppSettings.getProfitabilitySettings(context)
             )
+            financialImpactState.value = if (AppSettings.isFinancialImpactEnabled(context)) {
+                FinancialImpactCalculator.calculate(
+                    tripData = data,
+                    goal = AppSettings.getDriverGoal(context)
+                )
+            } else {
+                null
+            }
 
             if (composeView == null) {
                 lifecycleOwner = CustomLifecycleOwner()
@@ -205,17 +236,24 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
                 lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
 
+            composeView?.registerVisibleTelemetry(newFingerprint, requestedAt)
             composeView?.visibility = View.VISIBLE
 
             if (composeView?.parent == null) {
                 val params = getLayoutParams(windowType)
                 currentLayoutParams = params
                 requireNotNull(overlayWindowManager).addView(composeView, params)
-                overlayStateMachine.markShown(fingerprint)
+                Log.w("OverlayManager", "OVERLAY_VIEW_ADDED fingerprint=$newFingerprint")
+                overlayStateMachine.markShown(newFingerprint)
+                if (transition == OverlayTransition.AttachOrReplace && oldFingerprint != null) {
+                    Log.w("OverlayManager", "OVERLAY_REPLACED_OLD_FINGERPRINT old=$oldFingerprint new=$newFingerprint")
+                }
             } else if (transition == OverlayTransition.UpdateInPlace) {
                 if (BuildConfig.DEBUG) {
-                    Log.d("OverlayManager", "Overlay updated in-place: $fingerprint")
+                    Log.d("OverlayManager", "Overlay updated in-place: $newFingerprint")
                 }
+            } else if (transition == OverlayTransition.AttachOrReplace) {
+                overlayStateMachine.markShown(newFingerprint)
             }
             AppDiagnostics.recordStage(context, AppDiagnostics.Stage.OVERLAY_SHOWN)
             if (BuildConfig.DEBUG) {
@@ -223,13 +261,13 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             }
         } catch (e: WindowManager.BadTokenException) {
             AppDiagnostics.recordStage(context, AppDiagnostics.Stage.OVERLAY_ERROR)
-            overlayStateMachine.markTokenRecovering(fingerprint)
+            overlayStateMachine.markTokenRecovering(newFingerprint)
             resetOverlayView()
-            Log.e("OverlayManager", "Erro showOverlay: token invalido", e)
+            Log.w("OverlayManager", "OVERLAY_TOKEN_RECOVERING fingerprint=$newFingerprint")
             if (retryOnBadToken) {
                 retryAfterBadToken(
                     primaryWindowType = windowType,
-                    allowApplicationOverlayFallback = false,
+                    allowApplicationOverlayFallback = true,
                     retryAccessibilityOverlay = {
                         showOverlayInternal(
                             data,
@@ -306,6 +344,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
         overlayWindowContext = null
         overlayWindowManager = null
         currentLayoutParams = null
+        financialImpactState.value = null
 
         if (viewToRemove != null || ownerToDestroy != null) {
             viewToRemove?.let {
@@ -371,6 +410,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             setViewTreeLifecycleOwner(owner)
             setViewTreeViewModelStoreOwner(owner)
             setViewTreeSavedStateRegistryOwner(owner)
+
             setOnTouchListener { _, event ->
                 handleTouch(event)
             }
@@ -380,12 +420,26 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
                     tripDataState.value?.let {
                         OverlayView(
                             tripData = it,
-                            profitability = profitabilityState.value
+                            profitability = profitabilityState.value,
+                            financialImpact = financialImpactState.value
                         )
                     }
                 }
             }
         }
+    }
+
+    private fun ComposeView.registerVisibleTelemetry(fingerprint: String, requestedAt: Long) {
+        viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                viewTreeObserver.removeOnPreDrawListener(this)
+                val drawnAt = System.currentTimeMillis()
+                Log.w("OverlayManager", "OVERLAY_FIRST_DRAWN fingerprint=$fingerprint")
+                val latency = drawnAt - requestedAt
+                Log.w("OverlayManager", "OVERLAY_VISIBLE_TO_USER fingerprint=$fingerprint visibleLatencyMs=$latency")
+                return true
+            }
+        })
     }
 
     private fun createDebugComposeView(windowContext: Context) {
@@ -526,6 +580,10 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     }
 
     private fun getWindowType(forceApplicationOverlay: Boolean): Int {
+        if (!forceApplicationOverlay && context is AccessibilityService) {
+            return WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+        }
+
         if (forceApplicationOverlay || canUseApplicationOverlayFallback()) {
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY

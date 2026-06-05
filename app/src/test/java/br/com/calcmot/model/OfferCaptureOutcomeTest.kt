@@ -57,4 +57,28 @@ class OfferCaptureOutcomeTest {
         assertNull(OfferCaptureSource.fromId("unknown_source"))
         assertNull(OfferCaptureRejectionReason.fromId("unknown_reason"))
     }
+
+    @Test
+    fun `invalid contexts are classified as strong or weak overlay blockers`() {
+        val strongInvalidContexts = listOf(
+            OfferCaptureRejectionReason.INVALID_CONTEXT_STILL_THERE,
+            OfferCaptureRejectionReason.INVALID_CONTEXT_REQUEST_UNAVAILABLE
+        )
+        val weakInvalidContexts = listOf(
+            OfferCaptureRejectionReason.INVALID_CONTEXT_NO_REQUEST,
+            OfferCaptureRejectionReason.INVALID_CONTEXT_OFFLINE
+        )
+
+        strongInvalidContexts.forEach { reason ->
+            assertTrue("$reason should be invalid context", reason.isInvalidContext())
+            assertTrue("$reason should hide overlay immediately", reason.isImmediateInvalidContext())
+        }
+        weakInvalidContexts.forEach { reason ->
+            assertTrue("$reason should be invalid context", reason.isInvalidContext())
+            assertFalse("$reason should not force-hide overlay immediately", reason.isImmediateInvalidContext())
+        }
+
+        assertFalse(OfferCaptureRejectionReason.NOT_CARD_LIKE.isInvalidContext())
+        assertFalse(OfferCaptureRejectionReason.NOT_CARD_LIKE.isImmediateInvalidContext())
+    }
 }

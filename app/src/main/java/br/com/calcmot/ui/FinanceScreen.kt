@@ -14,6 +14,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -22,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +35,8 @@ import br.com.calcmot.finance.FinanceEntryType
 import br.com.calcmot.finance.FinanceFormatter
 import br.com.calcmot.finance.FinanceRepository
 import br.com.calcmot.finance.toFinanceSummary
+import br.com.calcmot.model.DriverGoal
+import br.com.calcmot.model.GoalMode
 import br.com.calcmot.model.ProfitabilitySettings
 import java.util.Locale
 
@@ -48,6 +52,21 @@ fun FinanceScreen() {
     var profitabilitySettings by remember {
         mutableStateOf(AppSettings.getProfitabilitySettings(context))
     }
+    var financialImpactEnabled by remember {
+        mutableStateOf(AppSettings.isFinancialImpactEnabled(context))
+    }
+    var driverGoal by remember {
+        mutableStateOf(AppSettings.getDriverGoal(context))
+    }
+    var goalKmText by remember {
+        mutableStateOf(driverGoal.minValuePerKm.toInputText())
+    }
+    var goalHourText by remember {
+        mutableStateOf(driverGoal.minValuePerHour.toInputText())
+    }
+    var goalMode by remember { mutableStateOf(driverGoal.mode) }
+    var goalErrorText by remember { mutableStateOf<String?>(null) }
+    var goalSavedText by remember { mutableStateOf<String?>(null) }
     var efficiencyText by remember {
         mutableStateOf(profitabilitySettings.vehicleEfficiencyKmPerUnit.toInputText(blankWhenZero = true))
     }
@@ -97,6 +116,60 @@ fun FinanceScreen() {
                 costs = summary.costsCents,
                 net = summary.netCents,
                 count = summary.entryCount
+            )
+        }
+
+        item {
+            DriverGoalSettingsCard(
+                enabled = financialImpactEnabled,
+                goalKmText = goalKmText,
+                goalHourText = goalHourText,
+                goalMode = goalMode,
+                errorText = goalErrorText,
+                savedText = goalSavedText,
+                onEnabledChange = {
+                    financialImpactEnabled = it
+                    AppSettings.setFinancialImpactEnabled(context, it)
+                    goalSavedText = if (it) {
+                        "Impacto financeiro ligado para o aviso."
+                    } else {
+                        "Impacto financeiro desligado."
+                    }
+                    goalErrorText = null
+                },
+                onGoalKmChange = {
+                    goalKmText = it
+                    goalErrorText = null
+                    goalSavedText = null
+                },
+                onGoalHourChange = {
+                    goalHourText = it
+                    goalErrorText = null
+                    goalSavedText = null
+                },
+                onGoalModeChange = {
+                    goalMode = it
+                    goalErrorText = null
+                    goalSavedText = null
+                },
+                onSave = {
+                    val parsed = parseDriverGoal(
+                        goalKmText = goalKmText,
+                        goalHourText = goalHourText,
+                        goalMode = goalMode
+                    )
+                    if (parsed == null) {
+                        goalErrorText = "Use metas maiores que zero."
+                        goalSavedText = null
+                    } else {
+                        AppSettings.setDriverGoal(context, parsed)
+                        driverGoal = parsed
+                        goalKmText = parsed.minValuePerKm.toInputText()
+                        goalHourText = parsed.minValuePerHour.toInputText()
+                        goalErrorText = null
+                        goalSavedText = "Metas salvas para o aviso."
+                    }
+                }
             )
         }
 
@@ -208,6 +281,116 @@ fun FinanceScreen() {
                     entry = entry,
                     onDelete = { entries = repository.deleteEntry(entry.id) }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DriverGoalSettingsCard(
+    enabled: Boolean,
+    goalKmText: String,
+    goalHourText: String,
+    goalMode: GoalMode,
+    errorText: String?,
+    savedText: String?,
+    onEnabledChange: (Boolean) -> Unit,
+    onGoalKmChange: (String) -> Unit,
+    onGoalHourChange: (String) -> Unit,
+    onGoalModeChange: (GoalMode) -> Unit,
+    onSave: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Impacto no aviso",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Mostra quanto a oferta esta acima ou abaixo da sua meta.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+                Switch(
+                    modifier = Modifier.testTag(UiTestTags.FINANCIAL_IMPACT_SWITCH),
+                    checked = enabled,
+                    onCheckedChange = onEnabledChange
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(UiTestTags.DRIVER_GOAL_KM_INPUT),
+                    value = goalKmText,
+                    onValueChange = onGoalKmChange,
+                    label = { Text("Meta R$/km") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(UiTestTags.DRIVER_GOAL_HOUR_INPUT),
+                    value = goalHourText,
+                    onValueChange = onGoalHourChange,
+                    label = { Text("Meta R$/h") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GoalMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = goalMode == mode,
+                        onClick = { onGoalModeChange(mode) },
+                        label = { Text(mode.label()) }
+                    )
+                }
+            }
+
+            errorText?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            savedText?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Button(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(UiTestTags.DRIVER_GOAL_SAVE_BUTTON),
+                onClick = onSave
+            ) {
+                Text("Salvar metas")
             }
         }
     }
@@ -419,6 +602,20 @@ private fun parseProfitabilitySettings(
     return settings
 }
 
+private fun parseDriverGoal(
+    goalKmText: String,
+    goalHourText: String,
+    goalMode: GoalMode
+): DriverGoal? {
+    val minKm = parseDecimal(goalKmText)?.takeIf { it > 0.0 } ?: return null
+    val minHour = parseDecimal(goalHourText)?.takeIf { it > 0.0 } ?: return null
+    return DriverGoal(
+        minValuePerKm = minKm,
+        minValuePerHour = minHour,
+        mode = goalMode
+    ).normalized()
+}
+
 private fun parseDecimal(rawValue: String): Double? {
     val cleaned = rawValue
         .trim()
@@ -443,6 +640,14 @@ private fun Double.toInputText(blankWhenZero: Boolean = false): String {
 
 private fun formatMoneyPerKm(value: Double): String {
     return String.format(Locale.forLanguageTag("pt-BR"), "R$ %.2f/km", value)
+}
+
+private fun GoalMode.label(): String {
+    return when (this) {
+        GoalMode.BALANCED -> "Equilibrado"
+        GoalMode.PRIORITIZE_KM -> "Prioriza km"
+        GoalMode.PRIORITIZE_HOUR -> "Prioriza hora"
+    }
 }
 
 @Composable

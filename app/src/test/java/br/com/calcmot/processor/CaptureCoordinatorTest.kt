@@ -61,6 +61,40 @@ class CaptureCoordinatorTest {
     }
 
     @Test
+    fun `trusted different candidate does not replace visible overlay on first frame`() {
+        val coordinator = CaptureCoordinator(requiredMatchingFrames = 2)
+        val firstOffer = offer(price = 10.0)
+        val secondOffer = offer(price = 12.0)
+
+        coordinator.acceptCandidate(
+            source = OfferCaptureSource.ACCESSIBILITY_TREE,
+            candidate = firstOffer,
+            trustedSingleFrame = true
+        )
+        val firstDifferentFrame = coordinator.acceptCandidate(
+            source = OfferCaptureSource.ACCESSIBILITY_TREE,
+            candidate = secondOffer,
+            trustedSingleFrame = true
+        )
+        val confirmedDifferentFrame = coordinator.acceptCandidate(
+            source = OfferCaptureSource.ACCESSIBILITY_TREE,
+            candidate = secondOffer,
+            trustedSingleFrame = true
+        )
+
+        assertTrue(firstDifferentFrame is CaptureDecision.HideStaleOverlay)
+        assertEquals(
+            secondOffer.overlayFingerprint(),
+            (firstDifferentFrame as CaptureDecision.HideStaleOverlay).overlayFingerprint
+        )
+        assertTrue(confirmedDifferentFrame is CaptureDecision.ShowOverlay)
+        assertEquals(
+            secondOffer.overlayFingerprint(),
+            (confirmedDifferentFrame as CaptureDecision.ShowOverlay).overlayFingerprint
+        )
+    }
+
+    @Test
     fun `route change does not flicker when offer fingerprint is the same`() {
         val coordinator = CaptureCoordinator(requiredMatchingFrames = 2)
         val candidate = offer(price = 10.0)
@@ -103,6 +137,66 @@ class CaptureCoordinatorTest {
 
         assertTrue(firstInvalid is CaptureDecision.KeepCurrentOverlay)
         assertTrue(secondInvalid is CaptureDecision.HideOverlay)
+    }
+
+    @Test
+    fun `strong invalid context hides overlay immediately without waiting for second frame`() {
+        val coordinator = CaptureCoordinator(requiredMatchingFrames = 2, requiredInvalidFramesToReset = 2)
+        val candidate = offer(price = 10.0)
+
+        coordinator.acceptCandidate(OfferCaptureSource.ACCESSIBILITY_TREE, candidate, trustedSingleFrame = true)
+        val invalidContext = coordinator.rejectFrame(
+            OfferCaptureSource.ACCESSIBILITY_TREE,
+            OfferCaptureRejectionReason.INVALID_CONTEXT_STILL_THERE
+        )
+        val nextSameCandidate = coordinator.acceptCandidate(
+            OfferCaptureSource.ACCESSIBILITY_TREE,
+            candidate,
+            trustedSingleFrame = true
+        )
+
+        assertTrue(invalidContext is CaptureDecision.HideOverlay)
+        assertEquals(
+            OfferCaptureRejectionReason.INVALID_CONTEXT_STILL_THERE,
+            (invalidContext as CaptureDecision.HideOverlay).reason
+        )
+        assertTrue(nextSameCandidate is CaptureDecision.ShowOverlay)
+    }
+
+    @Test
+    fun `only strong invalid contexts hide overlay immediately without waiting for second frame`() {
+        val strongInvalidContexts = listOf(
+            OfferCaptureRejectionReason.INVALID_CONTEXT_STILL_THERE,
+            OfferCaptureRejectionReason.INVALID_CONTEXT_REQUEST_UNAVAILABLE
+        )
+        val weakInvalidContexts = listOf(
+            OfferCaptureRejectionReason.INVALID_CONTEXT_NO_REQUEST,
+            OfferCaptureRejectionReason.INVALID_CONTEXT_OFFLINE
+        )
+
+        strongInvalidContexts.forEach { reason ->
+            val coordinator = CaptureCoordinator(requiredMatchingFrames = 2, requiredInvalidFramesToReset = 2)
+            val candidate = offer(price = 10.0)
+            coordinator.acceptCandidate(OfferCaptureSource.ACCESSIBILITY_TREE, candidate, trustedSingleFrame = true)
+
+            val decision = coordinator.rejectFrame(OfferCaptureSource.ACCESSIBILITY_TREE, reason)
+
+            assertTrue("$reason must hide immediately", decision is CaptureDecision.HideOverlay)
+            assertEquals(reason, (decision as CaptureDecision.HideOverlay).reason)
+        }
+        weakInvalidContexts.forEach { reason ->
+            val coordinator = CaptureCoordinator(requiredMatchingFrames = 2, requiredInvalidFramesToReset = 2)
+            val candidate = offer(price = 10.0)
+            coordinator.acceptCandidate(OfferCaptureSource.ACCESSIBILITY_TREE, candidate, trustedSingleFrame = true)
+
+            val decision = coordinator.rejectFrame(OfferCaptureSource.ACCESSIBILITY_TREE, reason)
+            val repeatedDecision = coordinator.rejectFrame(OfferCaptureSource.ACCESSIBILITY_TREE, reason)
+
+            assertTrue("$reason must not hide immediately", decision is CaptureDecision.KeepCurrentOverlay)
+            assertEquals(reason, (decision as CaptureDecision.KeepCurrentOverlay).reason)
+            assertTrue("$reason must not hide actionable overlay on repeat", repeatedDecision is CaptureDecision.KeepCurrentOverlay)
+            assertEquals(reason, (repeatedDecision as CaptureDecision.KeepCurrentOverlay).reason)
+        }
     }
 
     @Test

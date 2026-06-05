@@ -1,6 +1,8 @@
 package br.com.calcmot
 
 import android.content.Context
+import br.com.calcmot.model.DriverGoal
+import br.com.calcmot.model.GoalMode
 import br.com.calcmot.model.ProfitabilitySettings
 
 object AppSettings {
@@ -16,6 +18,10 @@ object AppSettings {
     private const val KEY_GOOD_NET_PER_KM = "good_net_per_km"
     private const val KEY_MEDIUM_NET_PER_KM = "medium_net_per_km"
     private const val KEY_MINIMUM_NET_PER_HOUR = "minimum_net_per_hour"
+    private const val KEY_SHOW_FINANCIAL_IMPACT_ON_OVERLAY = "show_financial_impact_on_overlay"
+    private const val KEY_DRIVER_GOAL_MIN_VALUE_PER_KM = "driver_goal_min_value_per_km"
+    private const val KEY_DRIVER_GOAL_MIN_VALUE_PER_HOUR = "driver_goal_min_value_per_hour"
+    private const val KEY_DRIVER_GOAL_MODE = "driver_goal_mode"
 
     fun isMonitoringEnabled(context: Context): Boolean {
         return context.applicationContext
@@ -112,6 +118,49 @@ object AppSettings {
             .putFloat(KEY_GOOD_NET_PER_KM, normalized.goodNetPerKm.toFloat())
             .putFloat(KEY_MEDIUM_NET_PER_KM, normalized.mediumNetPerKm.toFloat())
             .putFloat(KEY_MINIMUM_NET_PER_HOUR, normalized.minimumNetPerHour.toFloat())
+            .apply()
+    }
+
+    fun isFinancialImpactEnabled(context: Context): Boolean {
+        return context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_SHOW_FINANCIAL_IMPACT_ON_OVERLAY, false)
+    }
+
+    fun setFinancialImpactEnabled(context: Context, enabled: Boolean) {
+        context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_SHOW_FINANCIAL_IMPACT_ON_OVERLAY, enabled)
+            .apply()
+    }
+
+    fun getDriverGoal(context: Context): DriverGoal {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val mode = GoalMode.entries.firstOrNull {
+            it.name == prefs.getString(KEY_DRIVER_GOAL_MODE, GoalMode.BALANCED.name)
+        } ?: GoalMode.BALANCED
+        return DriverGoal(
+            minValuePerKm = prefs.getFloat(
+                KEY_DRIVER_GOAL_MIN_VALUE_PER_KM,
+                DriverGoal.DEFAULT_MIN_VALUE_PER_KM.toFloat()
+            ).toDouble(),
+            minValuePerHour = prefs.getFloat(
+                KEY_DRIVER_GOAL_MIN_VALUE_PER_HOUR,
+                DriverGoal.DEFAULT_MIN_VALUE_PER_HOUR.toFloat()
+            ).toDouble(),
+            mode = mode
+        ).normalized()
+    }
+
+    fun setDriverGoal(context: Context, goal: DriverGoal) {
+        val normalized = goal.normalized()
+        context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putFloat(KEY_DRIVER_GOAL_MIN_VALUE_PER_KM, normalized.minValuePerKm.toFloat())
+            .putFloat(KEY_DRIVER_GOAL_MIN_VALUE_PER_HOUR, normalized.minValuePerHour.toFloat())
+            .putString(KEY_DRIVER_GOAL_MODE, normalized.mode.name)
             .apply()
     }
 }

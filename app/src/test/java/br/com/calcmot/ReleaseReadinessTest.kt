@@ -88,9 +88,25 @@ class ReleaseReadinessTest {
         assertTrue(service.contains("ACCESSIBILITY_SCAN_SESSION_COALESCE_MS"))
         assertTrue(service.contains("120L, 240L, 420L, 700L, 1_000L, 1_500L, 2_200L"))
         assertTrue(service.contains("ACCESSIBILITY_HEARTBEAT_INTERVAL_MS = 1_000L"))
+        assertTrue(service.contains("private fun TreeOfferInspection.canBypassStabilityGate(): Boolean {\n        return isCompleteOffer && hasActionButton\n    }"))
         assertFalse(service.contains("accessibility-continuous-poll"))
+        assertTrue(service.contains("if (BuildConfig.DEBUG) {\n            ShellOfferBridge.register(shellOfferHandler)"))
+        assertTrue(service.contains("if (BuildConfig.DEBUG) {\n            ShellOfferBridge.unregister(shellOfferHandler)"))
         assertTrue(debugToggles.contains("ENABLE_ZERO_OVERLAY_DURING_SCAN"))
         assertTrue(debugToggles.contains("const val ENABLE_ZERO_OVERLAY_DURING_SCAN: Boolean = true"))
+    }
+
+    @Test
+    fun `overlay token recovery does not dump bad token stack to logcat`() {
+        val overlay = projectFile("app/src/main/java/br/com/calcmot/overlay/OverlayManager.kt")
+            .readText()
+
+        assertTrue(overlay.contains("OVERLAY_TOKEN_RECOVERING fingerprint="))
+        assertTrue(overlay.contains("OVERLAY_REPLACED_IN_PLACE"))
+        assertTrue(overlay.contains("allowApplicationOverlayFallback = true"))
+        assertTrue(overlay.contains("context is AccessibilityService"))
+        assertFalse(overlay.contains("Erro showOverlay: token invalido\", e"))
+        assertFalse(overlay.contains("Erro showDebugOverlay: token invalido\", e"))
     }
 
     @Test

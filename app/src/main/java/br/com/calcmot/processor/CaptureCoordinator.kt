@@ -4,6 +4,8 @@ import br.com.calcmot.model.OfferCandidate
 import br.com.calcmot.model.OfferCaptureRejectionReason
 import br.com.calcmot.model.OfferCaptureSource
 import br.com.calcmot.model.TripData
+import br.com.calcmot.model.isImmediateInvalidContext
+import br.com.calcmot.model.isInvalidContext
 import java.util.Locale
 
 class CaptureCoordinator(
@@ -47,7 +49,7 @@ class CaptureCoordinator(
             )
         }
 
-        if (trustedSingleFrame) {
+        if (trustedSingleFrame && currentOverlayFingerprint == null) {
             val tripData = candidate.toTripData()
             if (tripData != null) {
                 stabilityGate.accept(candidate)
@@ -113,6 +115,19 @@ class CaptureCoordinator(
         source: OfferCaptureSource,
         reason: OfferCaptureRejectionReason
     ): CaptureDecision {
+        if (reason.isImmediateInvalidContext()) {
+            resetState(clearSuppression = false)
+            return CaptureDecision.HideOverlay(source = source, reason = reason)
+        }
+        if (reason.isInvalidContext() && currentOverlayFingerprint != null) {
+            return CaptureDecision.KeepCurrentOverlay(
+                source = source,
+                reason = reason,
+                invalidFrameStreak = invalidFrameStreak,
+                requiredInvalidFramesToReset = requiredInvalidFramesToReset
+            )
+        }
+
         invalidFrameStreak++
         if (invalidFrameStreak < requiredInvalidFramesToReset) {
             return CaptureDecision.KeepCurrentOverlay(
@@ -153,6 +168,8 @@ class CaptureCoordinator(
             reason = OfferCaptureRejectionReason.INVALID_FRAME
         )
     }
+
+    fun currentOverlayFingerprint(): String? = currentOverlayFingerprint
 
     fun reset(): CaptureDecision.HideOverlay {
         resetState(clearSuppression = true)

@@ -13,100 +13,59 @@ object OfferTreeExtractor {
             return snapshot.inspection(lines, rejectionReason = TreeRejectionReason.EMPTY_TREE)
         }
 
-        val buttonLine = lines.lastOrNull { it.looksLikeActionButton() }
+        // Strong invalid states must beat stale card text that can remain in the tree briefly.
+        // Weak ambient states are kept as rejection reasons only when no complete card is present.
+        val allText = lines.joinToString(" ") { it.text }
+        val invalidReason = detectInvalidContext(allText)
+        if (invalidReason?.isImmediateInvalidContext() == true) {
+            return snapshot.inspection(lines, rejectionReason = invalidReason)
+        }
+
+        val actionButtons = lines.filter { it.looksLikeActionButton() }
         val tripBlocks = extractTripBlocks(lines, snapshot.screenHeight)
         val priceLines = lines.filter { it.looksLikeOfferFareLine(snapshot.screenHeight) }
 
         if (priceLines.isEmpty()) {
             return snapshot.inspection(
                 lines = lines,
-                hasActionButton = buttonLine != null,
+                hasActionButton = actionButtons.isNotEmpty(),
                 timeDistanceBlockCount = tripBlocks.size,
-                rejectionReason = TreeRejectionReason.NO_PRICE
+                rejectionReason = invalidReason ?: TreeRejectionReason.NO_PRICE
             )
         }
 
-        val priceLine = selectPrimaryPriceLine(priceLines, tripBlocks)
-        if (priceLine == null) {
-            return snapshot.inspection(
-                lines = lines,
-                hasPrice = true,
-                hasActionButton = buttonLine != null,
-                timeDistanceBlockCount = tripBlocks.size,
-                rejectionReason = TreeRejectionReason.INCOMPLETE_TIME_DISTANCE_BLOCKS
-            )
-        }
-
-        if (buttonLine != null && priceLine.bounds.centerY >= buttonLine.bounds.centerY) {
-            return snapshot.inspection(
-                lines = lines,
-                hasPrice = true,
-                hasActionButton = true,
-                timeDistanceBlockCount = tripBlocks.size,
-                rejectionReason = TreeRejectionReason.PRICE_AFTER_BUTTON
-            )
-        }
-
-        val cardBottom = buttonLine?.bounds?.centerY ?: snapshot.screenHeight
-        val cardTripBlocks = tripBlocks
-            .filter {
-                it.bounds.centerY > priceLine.bounds.centerY &&
-                    it.bounds.centerY < cardBottom
+        val bestOffer = priceLines
+            .mapNotNull { priceLine ->
+                buildCandidateOffer(
+                    lines = lines,
+                    screenHeight = snapshot.screenHeight,
+                    priceLine = priceLine,
+                    tripBlocks = tripBlocks,
+                    actionButtons = actionButtons
+                )
             }
-            .take(REQUIRED_TRIP_BLOCKS)
+            .maxWithOrNull(
+                compareBy<TreeOfferCandidate> { it.hasActionButton }
+                    .thenBy { it.priceLine.bounds.centerY }
+                    .thenBy { it.cardBottom }
+            )
 
-        val cardLines = lines.filter {
-            it.bounds.centerY >= priceLine.bounds.centerY &&
-                it.bounds.centerY <= (buttonLine?.bounds?.centerY ?: cardTripBlocks.lastOrNull()?.bounds?.bottom ?: cardBottom)
-        }
-        if (cardLines.size < MIN_CARD_LINES_WITHOUT_BUTTON || mapNoiseDominates(cardLines)) {
+        if (bestOffer == null) {
             return snapshot.inspection(
                 lines = lines,
                 hasPrice = true,
-                hasActionButton = buttonLine != null,
+                hasActionButton = actionButtons.isNotEmpty(),
                 timeDistanceBlockCount = tripBlocks.size,
-                rejectionReason = TreeRejectionReason.NOT_CARD_LIKE
-            )
-        }
-
-        if (cardTripBlocks.size != REQUIRED_TRIP_BLOCKS) {
-            return snapshot.inspection(
-                lines = lines,
-                hasPrice = true,
-                hasActionButton = buttonLine != null,
-                timeDistanceBlockCount = cardTripBlocks.size,
-                rejectionReason = TreeRejectionReason.INCOMPLETE_TIME_DISTANCE_BLOCKS
-            )
-        }
-
-        val orderedBlocks = cardTripBlocks.sortedBy { it.bounds.centerY }
-        if (!isVerticalOrderValid(priceLine, orderedBlocks[0], orderedBlocks[1], buttonLine)) {
-            return snapshot.inspection(
-                lines = lines,
-                hasPrice = true,
-                hasActionButton = buttonLine != null,
-                timeDistanceBlockCount = cardTripBlocks.size,
-                rejectionReason = TreeRejectionReason.INVALID_VERTICAL_ORDER
-            )
-        }
-
-        val offerText = buildOfferText(priceLine, orderedBlocks)
-        if (OfferParser.parse(offerText) == null) {
-            return snapshot.inspection(
-                lines = lines,
-                hasPrice = true,
-                hasActionButton = buttonLine != null,
-                timeDistanceBlockCount = cardTripBlocks.size,
-                rejectionReason = TreeRejectionReason.PARSER_REJECTED
+                rejectionReason = invalidReason ?: TreeRejectionReason.INCOMPLETE_TIME_DISTANCE_BLOCKS
             )
         }
 
         return snapshot.inspection(
             lines = lines,
             hasPrice = true,
-            hasActionButton = buttonLine != null,
-            timeDistanceBlockCount = cardTripBlocks.size,
-            offerText = offerText
+            hasActionButton = bestOffer.hasActionButton,
+            timeDistanceBlockCount = bestOffer.tripBlocks.size,
+            offerText = bestOffer.offerText
         )
     }
 
@@ -119,6 +78,8 @@ object OfferTreeExtractor {
         rejectionReason: TreeRejectionReason? = null
     ): TreeOfferInspection {
         val fieldCandidates = extractFieldCandidates(lines, screenHeight)
+        val allText = lines.joinToString(" ") { it.text }
+        val isRadar = TextNormalizer.searchKey(allText).contains("radar")
         return TreeOfferInspection(
             sourceName = sourceName,
             elapsedSinceEventMs = elapsedSinceEventMs,
@@ -128,6 +89,7 @@ object OfferTreeExtractor {
             hasActionButton = hasActionButton,
             timeDistanceBlockCount = timeDistanceBlockCount,
             isCompleteOffer = offerText != null,
+            isRadar = isRadar,
             offerText = offerText,
             rejectionReason = rejectionReason,
             fieldCandidates = fieldCandidates,
@@ -236,6 +198,26 @@ object OfferTreeExtractor {
             }
     }
 
+    private fun detectInvalidContext(allText: String): TreeRejectionReason? {
+        val search = TextNormalizer.searchKey(allText)
+        return when {
+            search.contains("voce ainda esta ai") -> TreeRejectionReason.INVALID_CONTEXT_STILL_THERE
+            search.contains("solicitacao nao esta mais disponivel") ||
+                search.contains("nao esta mais disponivel") ||
+                search.contains("encontramos outro motorista") -> TreeRejectionReason.INVALID_CONTEXT_REQUEST_UNAVAILABLE
+            search.contains("nenhuma solicitacao no momento") ||
+                search.contains("procurando viagens") -> TreeRejectionReason.INVALID_CONTEXT_NO_REQUEST
+            search.contains("voce esta offline") ||
+                search.contains("ficar offline") -> TreeRejectionReason.INVALID_CONTEXT_OFFLINE
+            else -> null
+        }
+    }
+
+    private fun TreeRejectionReason.isImmediateInvalidContext(): Boolean {
+        return this == TreeRejectionReason.INVALID_CONTEXT_STILL_THERE ||
+            this == TreeRejectionReason.INVALID_CONTEXT_REQUEST_UNAVAILABLE
+    }
+
     private fun AccessibleLine.isSameVisualRow(other: AccessibleLine): Boolean {
         val centerDelta = kotlin.math.abs(bounds.centerY - other.bounds.centerY)
         val verticalOverlap = minOf(bounds.bottom, other.bounds.bottom) - maxOf(bounds.top, other.bounds.top)
@@ -329,23 +311,115 @@ object OfferTreeExtractor {
         return basicOrderValid
     }
 
-    private fun selectPrimaryPriceLine(
-        priceLines: List<AccessibleLine>,
-        tripBlocks: List<TreeTripBlock>
-    ): AccessibleLine? {
-        return priceLines.firstOrNull { priceLine ->
-            tripBlocks.count { block -> block.bounds.centerY > priceLine.bounds.centerY } >= REQUIRED_TRIP_BLOCKS
+    private fun selectCardTripBlocks(tripBlocks: List<TreeTripBlock>): List<TreeTripBlock> {
+        val orderedBlocks = tripBlocks.sortedBy { it.bounds.centerY }
+        if (orderedBlocks.size < REQUIRED_TRIP_BLOCKS) return emptyList()
+
+        for (pickupIndex in 0 until orderedBlocks.lastIndex) {
+            val pickupBlock = orderedBlocks[pickupIndex]
+            if (pickupBlock.pickupOfferLine() == null) continue
+
+            for (tripIndex in pickupIndex + 1 until orderedBlocks.size) {
+                val tripBlock = orderedBlocks[tripIndex]
+                if (tripBlock.tripOfferLine() == null) continue
+                return listOf(pickupBlock, tripBlock)
+            }
         }
+
+        return emptyList()
+    }
+
+    private fun TreeTripBlock.looksLikePickupDistanceBlock(): Boolean {
+        return pickupOfferLine() != null
+    }
+
+    private fun TreeTripBlock.looksLikeTripDistanceBlock(): Boolean {
+        return tripOfferLine() != null
+    }
+
+    private fun TreeTripBlock.pickupOfferLine(): String? {
+        val match = pickupOfferLineRegex.find(normalize(text)) ?: return null
+        return "${match.groupValues[1]} (${match.groupValues[2]}) de distancia"
+    }
+
+    private fun TreeTripBlock.tripOfferLine(): String? {
+        val match = tripOfferLineRegex.find(normalize(text)) ?: return null
+        return "Viagem de ${match.groupValues[1]} (${match.groupValues[2]})"
     }
 
     private fun buildOfferText(
         priceLine: AccessibleLine,
         orderedBlocks: List<TreeTripBlock>
     ): String {
+        val pickupLine = orderedBlocks.getOrNull(0)?.pickupOfferLine()
+        val tripLine = orderedBlocks.getOrNull(1)?.tripOfferLine()
         return buildList {
             add(priceLine.text)
-            orderedBlocks.take(REQUIRED_TRIP_BLOCKS).forEach { add(it.text) }
+            pickupLine?.let { add(it) }
+            tripLine?.let { add(it) }
         }.joinToString(separator = "\n")
+    }
+
+    private fun buildCandidateOffer(
+        lines: List<AccessibleLine>,
+        screenHeight: Int,
+        priceLine: AccessibleLine,
+        tripBlocks: List<TreeTripBlock>,
+        actionButtons: List<AccessibleLine>
+    ): TreeOfferCandidate? {
+        val candidateButtons = actionButtons
+            .filter { it.bounds.centerY > priceLine.bounds.centerY }
+            .sortedBy { it.bounds.centerY }
+        (candidateButtons + listOf<AccessibleLine?>(null)).forEach { buttonLine ->
+            buildCandidateOfferWithButton(
+                lines = lines,
+                screenHeight = screenHeight,
+                priceLine = priceLine,
+                tripBlocks = tripBlocks,
+                buttonLine = buttonLine
+            )?.let { return it }
+        }
+        return null
+    }
+
+    private fun buildCandidateOfferWithButton(
+        lines: List<AccessibleLine>,
+        screenHeight: Int,
+        priceLine: AccessibleLine,
+        tripBlocks: List<TreeTripBlock>,
+        buttonLine: AccessibleLine?
+    ): TreeOfferCandidate? {
+        val cardBottom = buttonLine?.bounds?.centerY ?: screenHeight
+        if (buttonLine != null && priceLine.bounds.centerY >= buttonLine.bounds.centerY) return null
+
+        val candidateTripBlocks = tripBlocks
+            .filter {
+                it.bounds.centerY > priceLine.bounds.centerY &&
+                    it.bounds.centerY < cardBottom
+            }
+        val cardTripBlocks = selectCardTripBlocks(candidateTripBlocks)
+        if (cardTripBlocks.size != REQUIRED_TRIP_BLOCKS) return null
+
+        val orderedBlocks = cardTripBlocks.sortedBy { it.bounds.centerY }
+        if (!isVerticalOrderValid(priceLine, orderedBlocks[0], orderedBlocks[1], buttonLine)) return null
+
+        val linesBottom = buttonLine?.bounds?.centerY ?: orderedBlocks.last().bounds.bottom
+        val cardLines = lines.filter {
+            it.bounds.centerY >= priceLine.bounds.centerY &&
+                it.bounds.centerY <= linesBottom
+        }
+        if (cardLines.size < MIN_CARD_LINES_WITHOUT_BUTTON || mapNoiseDominates(cardLines)) return null
+
+        val offerText = buildOfferText(priceLine, orderedBlocks)
+        if (OfferParser.parse(offerText) == null) return null
+
+        return TreeOfferCandidate(
+            priceLine = priceLine,
+            tripBlocks = orderedBlocks,
+            buttonLine = buttonLine,
+            cardBottom = cardBottom,
+            offerText = offerText
+        )
     }
 
     private fun mapNoiseDominates(lines: List<AccessibleLine>): Boolean {
@@ -486,7 +560,23 @@ object OfferTreeExtractor {
         val bounds: ScreenBounds
     )
 
+    private data class TreeOfferCandidate(
+        val priceLine: AccessibleLine,
+        val tripBlocks: List<TreeTripBlock>,
+        val buttonLine: AccessibleLine?,
+        val cardBottom: Int,
+        val offerText: String
+    ) {
+        val hasActionButton: Boolean
+            get() = buttonLine != null
+    }
+
     private val distanceRegex = Regex("""\b[0-9]+(?:[.,][0-9]+)?\s*km\b""")
+    private val durationTextPattern =
+        """[0-9]{1,3}\s*(?:h|hora(?:s)?|min|minuto(?:s)?)(?:\s*e\s*[0-9]{1,3}\s*(?:min|minuto(?:s)?))?|[0-9]{1,2}h\s*[0-9]{1,2}"""
+    private val distanceTextPattern = """[0-9]+(?:[.,][0-9]+)?\s*km"""
+    private val pickupOfferLineRegex = Regex("""\b($durationTextPattern)\s*\(?\s*($distanceTextPattern)\s*\)?\s*de\s+distancia\b""")
+    private val tripOfferLineRegex = Regex("""\bviagem\s+de\s+($durationTextPattern)\s*\(?\s*($distanceTextPattern)\s*\)?""")
     private val durationMarkerRegex = Regex("""\b[0-9]{1,3}\s*(?:h|hora(?:s)?|min|minuto(?:s)?)\b|[0-9]{1,2}h\s*[0-9]{1,2}""")
     private val roadNumberRegex = Regex("""^\d{2,4}$""")
     private val primaryFareSplitRegex = Regex("""(?i)(\+?\s*R\$\s*[0-9]+(?:[.,][0-9]{1,2})?)""")
@@ -516,6 +606,7 @@ data class TreeOfferInspection(
     val hasActionButton: Boolean,
     val timeDistanceBlockCount: Int,
     val isCompleteOffer: Boolean,
+    val isRadar: Boolean = false,
     val offerText: String?,
     val rejectionReason: TreeRejectionReason?,
     val fieldCandidates: List<FieldCandidate> = emptyList(),
@@ -531,5 +622,9 @@ enum class TreeRejectionReason {
     NOT_CARD_LIKE,
     INCOMPLETE_TIME_DISTANCE_BLOCKS,
     INVALID_VERTICAL_ORDER,
-    PARSER_REJECTED
+    PARSER_REJECTED,
+    INVALID_CONTEXT_STILL_THERE,
+    INVALID_CONTEXT_REQUEST_UNAVAILABLE,
+    INVALID_CONTEXT_NO_REQUEST,
+    INVALID_CONTEXT_OFFLINE
 }

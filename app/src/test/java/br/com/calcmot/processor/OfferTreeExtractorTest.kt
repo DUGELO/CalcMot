@@ -112,6 +112,81 @@ class OfferTreeExtractorTest {
     }
 
     @Test
+    fun `weak no request context does not block complete actionable card`() {
+        val snapshot = snapshot(
+            line("Nenhuma solicitação no momento", top = 80),
+            line("R$ 20,16", top = 210, bottom = 300, left = 56, right = 390),
+            line("+R$ 2,04 incluído para prioridade de", top = 500, left = 56, right = 660),
+            line("14 minutos (8.7 km) de distancia", top = 650),
+            line("Viagem de 13 minutos (7.2 km)", top = 800),
+            line("Selecionar", top = 1320, bottom = 1410, left = 56, right = 664)
+        )
+
+        val inspection = OfferTreeExtractor.inspect(snapshot)
+
+        assertTrue(inspection.isCompleteOffer)
+        assertNull(inspection.rejectionReason)
+        val candidate = OfferParser.parse(inspection.offerText!!)
+        assertNotNull(candidate)
+        assertEquals(20.16, candidate!!.price, 0.01)
+    }
+
+    @Test
+    fun `weak searching and offline contexts do not block complete actionable card`() {
+        val weakContexts = listOf(
+            "Procurando viagens",
+            "Voce esta offline",
+            "Ficar offline"
+        )
+
+        weakContexts.forEach { text ->
+            val snapshot = snapshot(
+                line(text, top = 80),
+                line("R$ 20,16", top = 210, bottom = 300, left = 56, right = 390),
+                line("14 minutos (8.7 km) de distancia", top = 650),
+                line("Viagem de 13 minutos (7.2 km)", top = 800),
+                line("Selecionar", top = 1320, bottom = 1410, left = 56, right = 664)
+            )
+
+            val inspection = OfferTreeExtractor.inspect(snapshot)
+
+            assertTrue("$text must allow a complete actionable card", inspection.isCompleteOffer)
+            assertNull("$text must not reject complete card", inspection.rejectionReason)
+            assertNotNull("$text must expose offer text", inspection.offerText)
+        }
+    }
+
+    @Test
+    fun `weak context without complete card remains traceable as rejection`() {
+        val snapshot = snapshot(
+            line("Procurando viagens", top = 80),
+            line("R$ 20,16", top = 210, bottom = 300, left = 56, right = 390)
+        )
+
+        val inspection = OfferTreeExtractor.inspect(snapshot)
+
+        assertFalse(inspection.isCompleteOffer)
+        assertEquals(TreeRejectionReason.INVALID_CONTEXT_NO_REQUEST, inspection.rejectionReason)
+        assertNull(inspection.offerText)
+    }
+
+    @Test
+    fun `strong unavailable popup blocks stale card text immediately`() {
+        val snapshot = snapshot(
+            line("Esta solicitação não está mais disponível", top = 220, left = 56, right = 664),
+            line("R$ 20,16", top = 310, bottom = 390, left = 56, right = 390),
+            line("14 minutos (8.7 km) de distancia", top = 650),
+            line("Viagem de 13 minutos (7.2 km)", top = 800),
+            line("Selecionar", top = 1320, bottom = 1410, left = 56, right = 664)
+        )
+
+        val inspection = OfferTreeExtractor.inspect(snapshot)
+
+        assertFalse(inspection.isCompleteOffer)
+        assertEquals(TreeRejectionReason.INVALID_CONTEXT_REQUEST_UNAVAILABLE, inspection.rejectionReason)
+    }
+
+    @Test
     fun `fragmented accessibility tree groups time and distance into trip blocks`() {
         val snapshot = snapshot(
             line("UberX", top = 120, left = 56, right = 208),
@@ -206,6 +281,77 @@ class OfferTreeExtractorTest {
 
         assertFalse(inspection.isCompleteOffer)
         assertNull(inspection.offerText)
+    }
+
+    @Test
+    fun `time km without pickup distance context is rejected as map noise`() {
+        val snapshot = snapshot(
+            line("UberX", top = 120),
+            line("R$ 15,04", top = 210, bottom = 300, left = 56, right = 354),
+            line("3 minutos (1.2 km)", top = 650),
+            line("Viagem de 15 minutos (10.8 km)", top = 800),
+            line("Aceitar", top = 1320, bottom = 1410, left = 56, right = 664)
+        )
+
+        val inspection = OfferTreeExtractor.inspect(snapshot)
+
+        assertFalse(inspection.isCompleteOffer)
+        assertEquals(TreeRejectionReason.INCOMPLETE_TIME_DISTANCE_BLOCKS, inspection.rejectionReason)
+    }
+
+    @Test
+    fun `map marker eta inside card block does not override real pickup and trip times`() {
+        val snapshot = snapshot(
+            line("R$ 30,76", top = 210, bottom = 300, left = 56, right = 354),
+            line(
+                "Exclusivo 1-14 min com.ubercab.driver:id/map_marker_title " +
+                    "R$ 30,76 4,91 (854) 4 minutos (1.4 km) de distancia",
+                top = 650,
+                bottom = 720
+            ),
+            line(
+                "Rua Trinta e Dois com.ubercab.driver:id/map_marker 1-7 min " +
+                    "Viagem de 31 minutos (26.6 km)",
+                top = 800,
+                bottom = 870
+            ),
+            line("Selecionar", top = 1320, bottom = 1410, left = 56, right = 664)
+        )
+
+        val inspection = OfferTreeExtractor.inspect(snapshot)
+        val candidate = OfferParser.parse(inspection.offerText!!)
+
+        assertTrue(inspection.isCompleteOffer)
+        assertNotNull(candidate)
+        assertEquals(30.76, candidate!!.price, 0.01)
+        assertEquals(28.0, candidate.totalDistanceKm, 0.01)
+        assertEquals(35, candidate.totalTimeMin)
+    }
+
+    @Test
+    fun `transition tree with stale and active cards chooses active lower card`() {
+        val snapshot = snapshot(
+            line("UberX", top = 610, left = 112, right = 208),
+            line("R$ 12,47", top = 668, bottom = 766, left = 56, right = 350),
+            line("5 minutos (2.1 km) de distancia", top = 798, left = 112, right = 520),
+            line("Viagem de 17 minutos (5.0 km)", top = 882, left = 112, right = 510),
+            line("Selecionar", top = 1010, bottom = 1108, left = 56, right = 664),
+            line("UberX", top = 873, left = 112, right = 208),
+            line("R$ 8,25", top = 931, bottom = 1029, left = 56, right = 310),
+            line("+R$ 1,25 incluido", top = 1029, bottom = 1087, left = 327, right = 556),
+            line("7 minutos (2.7 km) de distancia", top = 1131, left = 112, right = 518),
+            line("Viagem de 5 minutos (2.4 km)", top = 1215, left = 112, right = 501),
+            line("Selecionar", top = 1362, bottom = 1460, left = 56, right = 664)
+        )
+
+        val inspection = OfferTreeExtractor.inspect(snapshot)
+        val candidate = OfferParser.parse(inspection.offerText!!)
+
+        assertTrue(inspection.isCompleteOffer)
+        assertNotNull(candidate)
+        assertEquals(8.25, candidate!!.price, 0.01)
+        assertEquals(5.1, candidate.totalDistanceKm, 0.01)
+        assertEquals(12, candidate.totalTimeMin)
     }
 
     @Test

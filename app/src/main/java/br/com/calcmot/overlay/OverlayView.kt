@@ -22,6 +22,7 @@ import br.com.calcmot.model.ProfitabilityQuality
 import br.com.calcmot.model.ProfitabilityResult
 import br.com.calcmot.model.ProfitabilitySettings
 import br.com.calcmot.model.TripData
+import br.com.calcmot.model.OfferFinancialImpact
 import br.com.calcmot.ui.theme.SemanticAttention
 import br.com.calcmot.ui.theme.SemanticBad
 import br.com.calcmot.ui.theme.SemanticGood
@@ -30,7 +31,8 @@ import java.util.Locale
 @Composable
 fun OverlayView(
     tripData: TripData,
-    profitability: ProfitabilityResult? = null
+    profitability: ProfitabilityResult? = null,
+    financialImpact: OfferFinancialImpact? = null
 ) {
     val result = profitability ?: ProfitabilityCalculator.calculate(tripData, ProfitabilitySettings())
     val quality = getTripQuality(result)
@@ -69,6 +71,38 @@ fun OverlayView(
                 color = foreground
             )
         }
+        financialImpact?.let {
+            FinancialImpactBlock(
+                impact = it,
+                foreground = foreground
+            )
+        }
+    }
+}
+
+@Composable
+private fun FinancialImpactBlock(
+    impact: OfferFinancialImpact,
+    foreground: Color
+) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(foreground.copy(alpha = 0.12f))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = impact.message,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = foreground
+        )
+        Text(
+            text = impact.subtext,
+            style = MaterialTheme.typography.labelMedium,
+            color = foreground.copy(alpha = 0.9f)
+        )
     }
 }
 

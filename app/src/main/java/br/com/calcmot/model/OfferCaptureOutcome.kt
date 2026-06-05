@@ -20,6 +20,10 @@ enum class OfferCaptureRejectionReason(val id: String) {
     INVALID_VERTICAL_ORDER("invalid_vertical_order"),
     NOT_CARD_LIKE("not_card_like"),
     PARSER_REJECTED("parser_rejected"),
+    INVALID_CONTEXT_STILL_THERE("invalid_context_still_there"),
+    INVALID_CONTEXT_REQUEST_UNAVAILABLE("invalid_context_request_unavailable"),
+    INVALID_CONTEXT_NO_REQUEST("invalid_context_no_request"),
+    INVALID_CONTEXT_OFFLINE("invalid_context_offline"),
     UNKNOWN("unknown");
 
     companion object {
@@ -27,6 +31,18 @@ enum class OfferCaptureRejectionReason(val id: String) {
             return entries.firstOrNull { it.id == id }
         }
     }
+}
+
+fun OfferCaptureRejectionReason.isInvalidContext(): Boolean {
+    return this == OfferCaptureRejectionReason.INVALID_CONTEXT_STILL_THERE ||
+        this == OfferCaptureRejectionReason.INVALID_CONTEXT_REQUEST_UNAVAILABLE ||
+        this == OfferCaptureRejectionReason.INVALID_CONTEXT_NO_REQUEST ||
+        this == OfferCaptureRejectionReason.INVALID_CONTEXT_OFFLINE
+}
+
+fun OfferCaptureRejectionReason.isImmediateInvalidContext(): Boolean {
+    return this == OfferCaptureRejectionReason.INVALID_CONTEXT_STILL_THERE ||
+        this == OfferCaptureRejectionReason.INVALID_CONTEXT_REQUEST_UNAVAILABLE
 }
 
 data class OfferCaptureOutcome(

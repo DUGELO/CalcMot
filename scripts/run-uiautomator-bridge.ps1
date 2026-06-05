@@ -1,5 +1,6 @@
 param(
     [int]$DurationSeconds = 900,
+    [int]$MaxUniqueCards = 0,
     [int]$IntervalMilliseconds = 900,
     [string]$PackageName = "br.com.calcmot",
     [string]$DriverPackageName = "com.ubercab.driver",
@@ -697,6 +698,7 @@ if (-not (Test-CalcMotMonitoringEnabled -AdbPath $adb -PackageName $PackageName)
     Write-Warning "CalcMot esta PAUSADO no aparelho. Abra o app e ligue Monitoramento antes da sessao para validar overlay real."
 }
 $endAt = (Get-Date).AddSeconds($DurationSeconds)
+$stopReason = "duration_elapsed"
 $lastFingerprint = $null
 $validFrames = 0
 $invalidFrames = 0
@@ -785,6 +787,12 @@ while ((Get-Date) -lt $endAt) {
             card_bounds = $evidence.bounds
             semantic_lines = $evidence.lines
         })
+
+        if ($MaxUniqueCards -gt 0 -and $uniqueOfferFingerprints.Count -ge $MaxUniqueCards) {
+            $stopReason = "max_unique_cards"
+            Write-Host "[$stamp] Max unique cards reached: $($uniqueOfferFingerprints.Count)/$MaxUniqueCards"
+            break
+        }
     } else {
         $invalidFrames++
         if ($lastFingerprint -ne $null) {
@@ -893,6 +901,8 @@ $report = [ordered]@{
     ocr_enabled = $false
     accessibility_service_enabled = $accessibilityEnabled
     duration_seconds = $DurationSeconds
+    max_unique_cards = $MaxUniqueCards
+    stop_reason = $stopReason
     interval_milliseconds = $IntervalMilliseconds
     uiautomator_dump_timeout_seconds = $UiAutomatorDumpTimeoutSeconds
     valid_frames = $validFrames
@@ -950,6 +960,8 @@ $backlogPreview = if ($learningItems.Count -gt 0) {
 - OCR enabled: False
 - Accessibility service enabled: $accessibilityEnabled
 - Duration seconds: $DurationSeconds
+- Max unique cards: $MaxUniqueCards
+- Stop reason: $stopReason
 - UIAutomator dump timeout seconds: $UiAutomatorDumpTimeoutSeconds
 - Valid frames: $validFrames
 - Invalid frames: $invalidFrames

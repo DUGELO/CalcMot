@@ -52,6 +52,7 @@ import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
 import br.com.calcmot.BuildConfig
 import br.com.calcmot.OverlayPositionPreference
+import br.com.calcmot.model.FinancialImpactCalculator
 import br.com.calcmot.model.ProfitabilityCalculator
 import br.com.calcmot.model.TripData
 import br.com.calcmot.overlay.OverlayView
@@ -406,6 +407,16 @@ private fun OverlayPreviewCard() {
             settings = AppSettings.getProfitabilitySettings(context)
         )
     }
+    val financialImpact = remember {
+        if (AppSettings.isFinancialImpactEnabled(context)) {
+            FinancialImpactCalculator.calculate(
+                tripData = sampleTripData,
+                goal = AppSettings.getDriverGoal(context)
+            )
+        } else {
+            null
+        }
+    }
 
     Card(
         modifier = Modifier.testTag(UiTestTags.OVERLAY_PREVIEW),
@@ -434,7 +445,8 @@ private fun OverlayPreviewCard() {
             ) {
                 OverlayView(
                     tripData = sampleTripData,
-                    profitability = profitability
+                    profitability = profitability,
+                    financialImpact = financialImpact
                 )
             }
         }
