@@ -44,13 +44,20 @@ class CaptureCoordinatorTest {
         val coordinator = CaptureCoordinator(requiredMatchingFrames = 2)
         val candidate = offer(price = 10.0)
 
-        val decision = coordinator.acceptCandidate(
+        val first = coordinator.acceptCandidate(
+            source = OfferCaptureSource.ACCESSIBILITY_TREE,
+            candidate = candidate,
+            trustedSingleFrame = true
+        )
+        val second = coordinator.acceptCandidate(
             source = OfferCaptureSource.ACCESSIBILITY_TREE,
             candidate = candidate,
             trustedSingleFrame = true
         )
 
-        assertTrue(decision is CaptureDecision.ShowOverlay)
+        assertTrue(first is CaptureDecision.ShowOverlay)
+        assertTrue(second is CaptureDecision.RenewCurrentOverlay)
+        assertEquals(candidate.overlayFingerprint(), (second as CaptureDecision.RenewCurrentOverlay).overlayFingerprint)
     }
 
     @Test
@@ -105,8 +112,9 @@ class CaptureCoordinatorTest {
 
         val decision = coordinator.acceptStableTrip(OfferCaptureSource.UIAUTOMATOR_LAB, trip)
 
+        assertTrue(decision is CaptureDecision.ShowOverlay)
         assertEquals(OfferCaptureSource.UIAUTOMATOR_LAB, decision.source)
-        assertEquals(trip.overlayFingerprint(), decision.overlayFingerprint)
+        assertEquals(trip.overlayFingerprint(), (decision as CaptureDecision.ShowOverlay).overlayFingerprint)
     }
 
     @Test
@@ -131,9 +139,14 @@ class CaptureCoordinatorTest {
 
         coordinator.acceptCandidate(OfferCaptureSource.ACCESSIBILITY_TREE, candidate, trustedSingleFrame = true)
         now += 1_000
-        coordinator.acceptCandidate(OfferCaptureSource.ACCESSIBILITY_TREE, candidate, trustedSingleFrame = true)
+        val renewed = coordinator.acceptCandidate(
+            OfferCaptureSource.ACCESSIBILITY_TREE,
+            candidate,
+            trustedSingleFrame = true
+        )
         now += 1_000
 
+        assertTrue(renewed is CaptureDecision.RenewCurrentOverlay)
         assertEquals(null, coordinator.expireOverlayIfStale())
     }
 

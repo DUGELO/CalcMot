@@ -11,7 +11,6 @@ class OfferStabilityGate(
 
     fun accept(candidate: OfferCandidate?): TripData? {
         if (candidate == null) {
-            reset()
             return null
         }
 

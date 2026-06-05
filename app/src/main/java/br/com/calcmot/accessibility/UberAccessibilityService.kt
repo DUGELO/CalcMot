@@ -45,7 +45,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
+import kotlin.math.abs
 
 class UberAccessibilityService : AccessibilityService() {
 
@@ -89,6 +91,7 @@ class UberAccessibilityService : AccessibilityService() {
     private var activeScanSessionGeneration = 0L
     @Volatile
     private var activeScanSessionStartedAtMillis = 0L
+    private var lastParsedOfferAudit: ParsedOfferAudit? = null
     private val accessibilityTreeLab by lazy { AccessibilityTreeLab(this) }
     private val captureLearningLab by lazy { CaptureLearningLab(this) }
     private val shellOfferHandler: (ShellOfferFrame) -> Unit = { frame ->
@@ -405,7 +408,7 @@ class UberAccessibilityService : AccessibilityService() {
         return foundCandidate
     }
 
-    private fun extractCandidateFromAccessibilityTree(
+    private suspend fun extractCandidateFromAccessibilityTree(
         eventAtMillis: Long,
         logRejectedTree: Boolean = true,
         generationId: Long = captureGeneration,
@@ -485,7 +488,23 @@ class UberAccessibilityService : AccessibilityService() {
             captureLearningLab.recordTreeInspection(snapshot, inspection)
 
             val candidate = inspection.offerText?.let(OfferParser::parse)
+            if (BuildConfig.DEBUG) {
+                Log.w(
+                    TAG,
+                    "CARD_PATH: source=${snapshot.sourceName} " +
+                        "complete=${inspection.isCompleteOffer} " +
+                        "candidate=${candidate != null} " +
+                        "reason=${inspection.rejectionReason} " +
+                        "delay=${delayMs}ms"
+                )
+            }
             if (candidate != null) {
+                recordSuspectValueChangeIfNeeded(
+                    candidate = candidate,
+                    source = OfferCaptureSource.ACCESSIBILITY_TREE,
+                    offerText = inspection.offerText,
+                    snapshotName = snapshot.sourceName
+                )
                 showDebugHeartbeat(
                     uberForeground = true,
                     lastEventType = "scan_delay_${delayMs}ms",
@@ -501,7 +520,7 @@ class UberAccessibilityService : AccessibilityService() {
                 recordCaptureSuccess(OfferCaptureSource.ACCESSIBILITY_TREE, candidate)
                 return AccessibilityCandidate(
                     candidate = candidate,
-                    trustedSingleFrame = inspection.hasActionButton
+                    trustedSingleFrame = inspection.canBypassStabilityGate()
                 )
             }
             recordTreeCaptureRejectionIfUseful(inspection)
@@ -554,10 +573,14 @@ class UberAccessibilityService : AccessibilityService() {
         return null
     }
 
-    private fun removeOverlayWindowsBeforeScanIfNeeded(): Boolean {
+    private suspend fun removeOverlayWindowsBeforeScanIfNeeded(): Boolean {
         if (!AccessibilityDebugConfig.ENABLE_ZERO_OVERLAY_DURING_SCAN) return false
         if (overlayManager?.isVisible == true) return false
-        val removed = overlayManager?.removeOverlayWindowsForScan() == true
+        
+        val removed = withContext(Dispatchers.Main.immediate) {
+            overlayManager?.removeOverlayWindowsForScan() == true
+        }
+
         if (removed && BuildConfig.DEBUG) {
             Log.i(TAG, "Removed CalcMot overlay windows before accessibility scan")
         }
@@ -746,12 +769,29 @@ class UberAccessibilityService : AccessibilityService() {
 
     private fun extractCandidateFromSnapshot(snapshot: AccessibilityTreeSnapshot): AccessibilityCandidate? {
         val inspection = OfferTreeExtractor.inspect(snapshot)
+        val candidate = inspection.offerText?.let(OfferParser::parse)
+
+        if (BuildConfig.DEBUG) {
+            Log.w(
+                TAG,
+                "CARD_PATH: source=${snapshot.sourceName} (snapshot) " +
+                    "complete=${inspection.isCompleteOffer} " +
+                    "candidate=${candidate != null} " +
+                    "reason=${inspection.rejectionReason}"
+            )
+        }
+
         AppDiagnostics.recordTreeInspection(this, snapshot, inspection)
         accessibilityTreeLab.record(snapshot, inspection)
         captureLearningLab.recordTreeInspection(snapshot, inspection)
 
-        val candidate = inspection.offerText?.let(OfferParser::parse)
         if (candidate != null) {
+            recordSuspectValueChangeIfNeeded(
+                candidate = candidate,
+                source = OfferCaptureSource.ACCESSIBILITY_TREE,
+                offerText = inspection.offerText,
+                snapshotName = snapshot.sourceName
+            )
             recordCaptureSuccess(OfferCaptureSource.ACCESSIBILITY_TREE, candidate)
         } else {
             recordTreeCaptureRejectionIfUseful(inspection)
@@ -762,9 +802,57 @@ class UberAccessibilityService : AccessibilityService() {
         return candidate?.let {
             AccessibilityCandidate(
                 candidate = it,
-                trustedSingleFrame = inspection.hasActionButton
+                trustedSingleFrame = inspection.canBypassStabilityGate()
             )
         }
+    }
+
+    private fun TreeOfferInspection.canBypassStabilityGate(): Boolean {
+        return isCompleteOffer &&
+            hasPrice &&
+            hasActionButton &&
+            timeDistanceBlockCount == 2 &&
+            offerText != null
+    }
+
+    private fun recordSuspectValueChangeIfNeeded(
+        candidate: OfferCandidate,
+        source: OfferCaptureSource,
+        offerText: String?,
+        snapshotName: String
+    ) {
+        val previous = lastParsedOfferAudit
+        val now = System.currentTimeMillis()
+        if (
+            previous != null &&
+            now - previous.seenAtMillis <= SUSPECT_VALUE_CHANGE_WINDOW_MS &&
+            abs(previous.candidate.price - candidate.price) <= SUSPECT_VALUE_EPSILON &&
+            abs(previous.candidate.pickupDistanceKm - candidate.pickupDistanceKm) <= SUSPECT_VALUE_EPSILON &&
+            abs(previous.candidate.tripDistanceKm - candidate.tripDistanceKm) <= SUSPECT_VALUE_EPSILON &&
+            (
+                previous.candidate.pickupTimeMin != candidate.pickupTimeMin ||
+                    previous.candidate.tripTimeMin != candidate.tripTimeMin
+                )
+        ) {
+            Log.w(
+                TAG,
+                "SUSPECT_VALUE_CHANGE: " +
+                    "oldFingerprint=${previous.candidate.fingerprint} " +
+                    "newFingerprint=${candidate.fingerprint} " +
+                    "source=$source " +
+                    "oldSnapshot=${previous.snapshotName} " +
+                    "newSnapshot=$snapshotName " +
+                    "oldOfferText=${previous.offerText} " +
+                    "newOfferText=$offerText"
+            )
+        }
+
+        lastParsedOfferAudit = ParsedOfferAudit(
+            candidate = candidate,
+            offerText = offerText,
+            snapshotName = snapshotName,
+            seenAtMillis = now
+        )
     }
 
     private fun emptyAccessibilitySnapshot(
@@ -1185,6 +1273,12 @@ class UberAccessibilityService : AccessibilityService() {
             candidate = candidate,
             trustedSingleFrame = trustedSingleFrame
         )
+        if (trustedSingleFrame && decision is CaptureDecision.ShowOverlay && BuildConfig.DEBUG) {
+            Log.w(
+                TAG,
+                "OVERLAY_BYPASS_ACTIVATED: source=$source fingerprint=${candidate.fingerprint}"
+            )
+        }
         return applyCaptureDecision(decision, label)
     }
 
@@ -1311,9 +1405,23 @@ class UberAccessibilityService : AccessibilityService() {
                 AppDiagnostics.recordStage(this, AppDiagnostics.Stage.STABLE_OFFER)
                 captureLearningLab.recordOverlay(decision.source, decision.tripData)
                 if (BuildConfig.DEBUG) {
+                    Log.w(TAG, "OVERLAY_NEW_FINGERPRINT_SHOWN: fingerprint=${decision.overlayFingerprint}")
                     Log.w(TAG, "Stable offer confirmed [$label]: ${decision.tripData}")
                 }
                 showOverlay(decision.tripData)
+                scheduleOverlayExpiry(decision.overlayFingerprint)
+                true
+            }
+
+            is CaptureDecision.RenewCurrentOverlay -> {
+                if (BuildConfig.DEBUG) {
+                    Log.i(
+                        TAG,
+                        "OVERLAY_ALREADY_VISIBLE_RENEWED: source=${decision.source} " +
+                            "fingerprint=${decision.overlayFingerprint}"
+                    )
+                    Log.d(TAG, "OVERLAY_DUPLICATE_SKIPPED: fingerprint=${decision.overlayFingerprint}")
+                }
                 scheduleOverlayExpiry(decision.overlayFingerprint)
                 true
             }
@@ -1455,13 +1563,15 @@ class UberAccessibilityService : AccessibilityService() {
         const val ACCESSIBILITY_POLL_WINDOW_MS = 2_500L
         const val ACCESSIBILITY_POLL_INTERVAL_MS = 250L
         const val REQUIRED_INVALID_FRAMES_TO_RESET = 2
-        const val OVERLAY_TTL_MS = 1_200L
+        const val OVERLAY_TTL_MS = 5_000L
         const val ACCESSIBILITY_SCAN_SESSION_COALESCE_MS = 2_500L
         const val MAX_EXTRAS_TEXT_VALUES = 24
         const val MAX_EXTRAS_VALUE_LENGTH = 160
         const val MAX_ACCESSIBILITY_TREE_DEPTH = 80
         const val MAX_ACCESSIBILITY_TREE_NODES = 2_000
         const val PACKAGE_SCAN_NODE_LIMIT = 5_000
+        const val SUSPECT_VALUE_CHANGE_WINDOW_MS = 15_000L
+        const val SUSPECT_VALUE_EPSILON = 0.05
         val ACCESSIBILITY_BURST_DELAYS_MS = longArrayOf(120L, 240L, 420L, 700L, 1_000L, 1_500L, 2_200L)
     }
 
@@ -1473,6 +1583,13 @@ class UberAccessibilityService : AccessibilityService() {
     private data class AccessibilityCandidate(
         val candidate: OfferCandidate,
         val trustedSingleFrame: Boolean
+    )
+
+    private data class ParsedOfferAudit(
+        val candidate: OfferCandidate,
+        val offerText: String?,
+        val snapshotName: String,
+        val seenAtMillis: Long
     )
 
     private data class AccessibilityRootSource(

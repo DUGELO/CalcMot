@@ -32,14 +32,24 @@ class OfferStabilityGateTest {
     }
 
     @Test
-    fun `invalid frame resets previous stable offer`() {
+    fun `null frame does not reset matching count`() {
+        val gate = OfferStabilityGate(requiredMatchingFrames = 2)
+        val candidate = candidate()
+
+        assertNull(gate.accept(candidate))
+        assertNull(gate.accept(null))
+        assertNotNull(gate.accept(candidate))
+    }
+
+    @Test
+    fun `null frame does not reset previous stable offer`() {
         val gate = OfferStabilityGate(requiredMatchingFrames = 2)
         val candidate = candidate()
 
         assertNull(gate.accept(candidate))
         assertNotNull(gate.accept(candidate))
         assertNull(gate.accept(null))
-        assertNull(gate.accept(candidate))
+        // Since it was already stable (matchingFrames >= 2), the next same candidate should also be stable
         assertNotNull(gate.accept(candidate))
     }
 

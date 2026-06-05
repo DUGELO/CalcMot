@@ -27,9 +27,21 @@ class UiAutomatorProbeReceiver : BroadcastReceiver() {
                 .redirectErrorStream(true)
                 .start()
 
-            val finished = process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            val finished = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            } else {
+                // For API 24/25, we don't have timeout support in waitFor
+                // Since this is a debug probe on modern devices, we just wait indefinitely or destroy if it takes too long
+                // But as a fallback we'll just wait
+                process.waitFor()
+                true
+            }
             if (!finished) {
-                process.destroyForcibly()
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    process.destroyForcibly()
+                } else {
+                    process.destroy()
+                }
             }
 
             val output = process.inputStream.bufferedReader().use { it.readText() }

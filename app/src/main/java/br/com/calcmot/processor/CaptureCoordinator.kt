@@ -39,6 +39,14 @@ class CaptureCoordinator(
         }
         clearExpiredOrDifferentSuppression(nextOverlayFingerprint, now)
 
+        if (currentOverlayFingerprint == nextOverlayFingerprint) {
+            return CaptureDecision.RenewCurrentOverlay(
+                source = source,
+                candidate = candidate,
+                overlayFingerprint = nextOverlayFingerprint
+            )
+        }
+
         if (trustedSingleFrame) {
             val tripData = candidate.toTripData()
             if (tripData != null) {
@@ -81,11 +89,18 @@ class CaptureCoordinator(
         )
     }
 
-    fun acceptStableTrip(source: OfferCaptureSource, tripData: TripData): CaptureDecision.ShowOverlay {
+    fun acceptStableTrip(source: OfferCaptureSource, tripData: TripData): CaptureDecision {
         val now = clockMillis()
         val overlayFingerprint = tripData.overlayFingerprint()
         invalidFrameStreak = 0
         lastValidCandidateAtMillis = now
+        if (currentOverlayFingerprint == overlayFingerprint) {
+            return CaptureDecision.RenewCurrentOverlay(
+                source = source,
+                candidate = null,
+                overlayFingerprint = overlayFingerprint
+            )
+        }
         currentOverlayFingerprint = overlayFingerprint
         return CaptureDecision.ShowOverlay(
             source = source,
@@ -171,7 +186,7 @@ class CaptureCoordinator(
     }
 
     private companion object {
-        const val DEFAULT_OVERLAY_TTL_MILLIS = 1_200L
+        const val DEFAULT_OVERLAY_TTL_MILLIS = 5_000L
         const val DEFAULT_USER_DISMISS_SUPPRESS_MILLIS = 10_000L
     }
 }
@@ -194,6 +209,12 @@ sealed interface CaptureDecision {
     data class ShowOverlay(
         override val source: OfferCaptureSource,
         val tripData: TripData,
+        val overlayFingerprint: String
+    ) : CaptureDecision
+
+    data class RenewCurrentOverlay(
+        override val source: OfferCaptureSource,
+        val candidate: OfferCandidate?,
         val overlayFingerprint: String
     ) : CaptureDecision
 

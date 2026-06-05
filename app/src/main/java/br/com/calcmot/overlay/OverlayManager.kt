@@ -40,6 +40,8 @@ import br.com.calcmot.processor.overlayFingerprint
 import br.com.calcmot.ui.theme.MetricaTheme
 import android.util.Log
 import kotlin.math.roundToInt
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicReference
 
 open class OverlayManager(private val context: Context) : IOverlayManager {
 
@@ -70,11 +72,11 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
         object : GestureDetector.SimpleOnGestureListener() {
             override fun onDoubleTap(e: MotionEvent): Boolean {
                 val fingerprint = overlayStateMachine.currentFingerprint()
-                composeView?.visibility = View.GONE
                 overlayStateMachine.markDismissed(
                     fingerprint = fingerprint,
                     suppressMillis = USER_DISMISS_SUPPRESS_MILLIS
                 )
+                resetOverlayView()
                 userDismissedCallback?.invoke()
                 return true
             }
@@ -82,29 +84,39 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     )
 
     override val isVisible: Boolean
-        get() = composeView?.visibility == View.VISIBLE && composeView?.parent != null
+        get() = runOnMainBlocking {
+            composeView?.visibility == View.VISIBLE && composeView?.parent != null
+        }
 
     override val visibleBounds: Rect?
         get() {
-            val view = composeView ?: return null
-            if (!isVisible || view.width <= 0 || view.height <= 0) return null
-            val location = IntArray(2)
-            view.getLocationOnScreen(location)
-            return Rect(
-                location[0],
-                location[1],
-                location[0] + view.width,
-                location[1] + view.height
-            )
+            return runOnMainBlocking {
+                val view = composeView ?: return@runOnMainBlocking null
+                if (view.visibility != View.VISIBLE || view.parent == null || view.width <= 0 || view.height <= 0) {
+                    return@runOnMainBlocking null
+                }
+                val location = IntArray(2)
+                view.getLocationOnScreen(location)
+                Rect(
+                    location[0],
+                    location[1],
+                    location[0] + view.width,
+                    location[1] + view.height
+                )
+            }
         }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun showOverlay(data: TripData) {
-        showOverlayInternal(data, retryOnBadToken = true)
+        runOnMainBlocking {
+            showOverlayInternal(data, retryOnBadToken = true)
+        }
     }
 
     override fun showDebugOverlay(state: AccessibilityDebugOverlayState) {
-        showDebugOverlayInternal(state, retryOnBadToken = true, forceApplicationOverlay = false)
+        runOnMainBlocking {
+            showDebugOverlayInternal(state, retryOnBadToken = true, forceApplicationOverlay = false)
+        }
     }
 
     private fun showDebugOverlayInternal(
@@ -241,31 +253,43 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     }
 
     override fun hideOverlay() {
-        composeView?.visibility = View.GONE
-        overlayStateMachine.markHidden()
+        runOnMainBlocking {
+            resetOverlayView()
+            overlayStateMachine.markHidden()
+        }
     }
 
     override fun expireOverlay(fingerprint: String?) {
-        composeView?.visibility = View.GONE
-        overlayStateMachine.markExpired(fingerprint ?: overlayStateMachine.currentFingerprint())
+        runOnMainBlocking {
+            resetOverlayView()
+            overlayStateMachine.markExpired(fingerprint ?: overlayStateMachine.currentFingerprint())
+        }
     }
 
     override fun hideDebugOverlay() {
-        debugComposeView?.visibility = View.GONE
+        runOnMainBlocking {
+            debugComposeView?.visibility = View.GONE
+        }
     }
 
     override fun removeOverlay() {
-        resetOverlayView()
-        resetDebugOverlayView()
-        overlayStateMachine.markHidden()
+        runOnMainBlocking {
+            resetOverlayView()
+            resetDebugOverlayView()
+            overlayStateMachine.markHidden()
+        }
     }
 
     override fun removeOverlayWindowsForScan(): Boolean {
-        val hadOverlayWindow = composeView?.parent != null || debugComposeView?.parent != null
-        if (hadOverlayWindow) {
-            removeOverlay()
+        return runOnMainBlocking {
+            val hadOverlayWindow = composeView?.parent != null || debugComposeView?.parent != null
+            if (hadOverlayWindow) {
+                resetOverlayView()
+                resetDebugOverlayView()
+                overlayStateMachine.markHidden()
+            }
+            hadOverlayWindow
         }
-        return hadOverlayWindow
     }
 
     override fun setOnUserDismissed(callback: (() -> Unit)?) {
@@ -273,30 +297,72 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     }
 
     private fun resetOverlayView() {
-        composeView?.let {
-            if (it.parent != null) {
-                runCatching { (overlayWindowManager ?: baseWindowManager).removeView(it) }
-            }
-            lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-        }
+        val viewToRemove = composeView
+        val ownerToDestroy = lifecycleOwner
+        val manager = overlayWindowManager ?: baseWindowManager
+
         composeView = null
         lifecycleOwner = null
         overlayWindowContext = null
         overlayWindowManager = null
         currentLayoutParams = null
+
+        if (viewToRemove != null || ownerToDestroy != null) {
+            viewToRemove?.let {
+                if (it.parent != null) {
+                    removeWindowView(manager, it, "overlay")
+                }
+            }
+            ownerToDestroy?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        }
     }
 
     private fun resetDebugOverlayView() {
-        debugComposeView?.let {
-            if (it.parent != null) {
-                runCatching { (debugWindowManager ?: baseWindowManager).removeView(it) }
-            }
-            debugLifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-        }
+        val viewToRemove = debugComposeView
+        val ownerToDestroy = debugLifecycleOwner
+        val manager = debugWindowManager ?: baseWindowManager
+
         debugComposeView = null
         debugLifecycleOwner = null
         debugWindowContext = null
         debugWindowManager = null
+
+        if (viewToRemove != null || ownerToDestroy != null) {
+            viewToRemove?.let {
+                if (it.parent != null) {
+                    removeWindowView(manager, it, "debug-overlay")
+                }
+            }
+            ownerToDestroy?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        }
+    }
+
+    private fun removeWindowView(manager: WindowManager, view: View, label: String) {
+        runCatching {
+            manager.removeViewImmediate(view)
+        }.onFailure { error ->
+            Log.w("OverlayManager", "Failed to remove $label window immediately", error)
+            runCatching {
+                manager.removeView(view)
+            }.onFailure { fallbackError ->
+                Log.e("OverlayManager", "Failed to remove $label window", fallbackError)
+            }
+        }
+    }
+
+    private fun <T> runOnMainBlocking(block: () -> T): T {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return block()
+        }
+
+        val latch = CountDownLatch(1)
+        val result = AtomicReference<Result<T>>()
+        mainHandler.post {
+            result.set(runCatching(block))
+            latch.countDown()
+        }
+        latch.await()
+        return result.get().getOrThrow()
     }
 
     private fun createComposeView(windowContext: Context) {
