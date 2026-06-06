@@ -1,31 +1,19 @@
 package br.com.calcmot.overlay
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import br.com.calcmot.model.ProfitabilityCalculator
 import br.com.calcmot.model.ProfitabilityQuality
 import br.com.calcmot.model.ProfitabilityResult
 import br.com.calcmot.model.ProfitabilitySettings
 import br.com.calcmot.model.TripData
 import br.com.calcmot.model.OfferFinancialImpact
-import br.com.calcmot.ui.theme.SemanticAttention
-import br.com.calcmot.ui.theme.SemanticBad
-import br.com.calcmot.ui.theme.SemanticGood
+import br.com.calcmot.overlay.designsystem.CalcMotColors
+import br.com.calcmot.overlay.designsystem.CalcMotOverlayContainer
+import br.com.calcmot.overlay.designsystem.FinancialImpactBlockDS
+import br.com.calcmot.overlay.designsystem.MetricRow
+import br.com.calcmot.overlay.designsystem.OfferQualityBadge
+import br.com.calcmot.overlay.designsystem.OverlayDragHandle
 import java.util.Locale
 
 @Composable
@@ -36,73 +24,29 @@ fun OverlayView(
 ) {
     val result = profitability ?: ProfitabilityCalculator.calculate(tripData, ProfitabilitySettings())
     val quality = getTripQuality(result)
-    val foreground = if (quality == TripQuality.BAD) Color.White else Color.Black
     val perKm = result?.netPerKm ?: tripData.valorPorKm
     val perHour = result?.netPerHour ?: tripData.valorPorHora
 
-    Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(quality.color.copy(alpha = 0.94f))
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Text(
-            text = quality.text,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-            color = foreground
-        )
-        Text(
-            text = brCurrencyPerUnit(perKm, "km"),
-            style = MaterialTheme.typography.displayLarge,
-            color = foreground
-        )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = brCurrencyPerUnit(perHour, "h"),
-                style = MaterialTheme.typography.headlineLarge,
-                color = foreground
-            )
-            Spacer(modifier = Modifier.width(14.dp))
-            Text(
-                text = "${tripData.minutosTotais} min",
-                style = MaterialTheme.typography.headlineLarge,
-                color = foreground
-            )
-        }
-        financialImpact?.let {
-            FinancialImpactBlock(
-                impact = it,
-                foreground = foreground
-            )
-        }
-    }
-}
+    CalcMotOverlayContainer {
+        OverlayDragHandle()
 
-@Composable
-private fun FinancialImpactBlock(
-    impact: OfferFinancialImpact,
-    foreground: Color
-) {
-    Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(foreground.copy(alpha = 0.12f))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        Text(
-            text = impact.message,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-            color = foreground
+        OfferQualityBadge(
+            text = quality.text,
+            color = quality.color
         )
-        Text(
-            text = impact.subtext,
-            style = MaterialTheme.typography.labelMedium,
-            color = foreground.copy(alpha = 0.9f)
+
+        MetricRow(
+            primaryValue = brCurrencyPerUnit(perKm, "km")
         )
+
+        MetricRow(
+            primaryValue = brCurrencyPerUnit(perHour, "h"),
+            secondaryValue = "${tripData.minutosTotais} min"
+        )
+
+        financialImpact?.let {
+            FinancialImpactBlockDS(impact = it)
+        }
     }
 }
 
@@ -111,9 +55,10 @@ private fun brCurrencyPerUnit(value: Double, unit: String): String {
 }
 
 enum class TripQuality(val text: String, val color: Color) {
-    GOOD("BOA", SemanticGood),
-    MEDIUM("MÉDIA", SemanticAttention),
-    BAD("RUIM", SemanticBad)
+    GREAT("ÓTIMA", CalcMotColors.Great),
+    GOOD("BOA", CalcMotColors.Good),
+    MEDIUM("ATENÇÃO", CalcMotColors.Warning),
+    BAD("RUIM", CalcMotColors.Bad)
 }
 
 fun getTripQuality(
@@ -125,6 +70,7 @@ fun getTripQuality(
 
 fun getTripQuality(profitability: ProfitabilityResult?): TripQuality {
     return when (profitability?.quality) {
+        ProfitabilityQuality.GREAT -> TripQuality.GREAT
         ProfitabilityQuality.GOOD -> TripQuality.GOOD
         ProfitabilityQuality.MEDIUM -> TripQuality.MEDIUM
         ProfitabilityQuality.BAD -> TripQuality.BAD

@@ -60,6 +60,44 @@ class ProfitabilityCalculatorTest {
     }
 
     @Test
+    fun `classifies great when metrics are 20 percent above good goals`() {
+        val settings = ProfitabilitySettings(
+            goodNetPerKm = 2.0,
+            minimumNetPerHour = 40.0
+        )
+
+        // Good: 2.0 / 40.0
+        // Great: 2.4 / 48.0 (1.2x)
+
+        assertEquals(
+            ProfitabilityQuality.GREAT,
+            ProfitabilityCalculator.classify(
+                netPerKm = 2.4,
+                netPerHour = 48.0,
+                settings = settings
+            )
+        )
+        
+        assertEquals(
+            ProfitabilityQuality.GOOD,
+            ProfitabilityCalculator.classify(
+                netPerKm = 2.39,
+                netPerHour = 48.0,
+                settings = settings
+            )
+        )
+        
+        assertEquals(
+            ProfitabilityQuality.GOOD,
+            ProfitabilityCalculator.classify(
+                netPerKm = 2.4,
+                netPerHour = 47.99,
+                settings = settings
+            )
+        )
+    }
+
+    @Test
     fun `rejects invalid trip data`() {
         val invalidTrip = TripData(
             valor = 0.0,
