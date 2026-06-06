@@ -1,4 +1,4 @@
-package br.com.calcmot.overlay.designsystem
+package br.com.calcmot.ui.design.overlay
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +19,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import br.com.calcmot.model.OfferFinancialImpact
+import br.com.calcmot.ui.design.tokens.CalcMotColors
+import br.com.calcmot.ui.design.tokens.CalcMotOpacity
+import br.com.calcmot.ui.design.tokens.CalcMotShape
+import br.com.calcmot.ui.design.tokens.CalcMotSpacing
+import br.com.calcmot.ui.design.tokens.CalcMotTypography
 
 @Composable
 fun CalcMotOverlayContainer(
@@ -27,11 +32,11 @@ fun CalcMotOverlayContainer(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(CalcMotShape.OverlayRadius))
+            .clip(RoundedCornerShape(CalcMotShape.Lg))
             .background(CalcMotColors.OverlayBackground.copy(alpha = CalcMotOpacity.OverlayMedium))
-            .padding(CalcMotSpacing.OverlayPadding),
+            .padding(CalcMotSpacing.Sm),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.MetricGap)
+        verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Xs)
     ) {
         content()
     }
@@ -45,7 +50,7 @@ fun OfferQualityBadge(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(CalcMotShape.BadgeRadius))
+            .clip(RoundedCornerShape(CalcMotShape.Pill))
             .background(color)
             .padding(horizontal = 8.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center
@@ -54,7 +59,7 @@ fun OfferQualityBadge(
             text = text,
             style = CalcMotTypography.MetricLabel.copy(
                 fontWeight = FontWeight.Bold,
-                color = if (color == CalcMotColors.Bad) Color.White else Color.Black
+                color = if (color == CalcMotColors.Danger) Color.White else CalcMotColors.TextInverse
             )
         )
     }
@@ -73,14 +78,14 @@ fun MetricRow(
     ) {
         Text(
             text = primaryValue,
-            style = CalcMotTypography.ValuePrimary,
+            style = CalcMotTypography.MetricHero,
             color = CalcMotColors.TextPrimary
         )
         secondaryValue?.let {
             Text(
                 text = it,
                 style = CalcMotTypography.MetricValue,
-                color = CalcMotColors.TextSecondary.copy(alpha = CalcMotOpacity.SecondaryText)
+                color = CalcMotColors.TextSecondary.copy(alpha = CalcMotOpacity.Secondary)
             )
         }
     }
@@ -93,7 +98,7 @@ fun FinancialImpactBlockDS(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(CalcMotShape.SmallRadius))
+            .clip(RoundedCornerShape(CalcMotShape.Sm))
             .background(CalcMotColors.SurfaceElevated.copy(alpha = 0.5f))
             .padding(horizontal = CalcMotSpacing.Sm, vertical = CalcMotSpacing.Xs),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -101,38 +106,13 @@ fun FinancialImpactBlockDS(
     ) {
         Text(
             text = impact.message,
-            style = CalcMotTypography.ImpactMessage,
+            style = CalcMotTypography.Caption.copy(fontWeight = FontWeight.Bold),
             color = CalcMotColors.TextPrimary
         )
         Text(
             text = impact.subtext,
-            style = CalcMotTypography.ImpactSubMessage,
-            color = CalcMotColors.TextSecondary.copy(alpha = CalcMotOpacity.SecondaryText)
-        )
-    }
-}
-
-@Composable
-fun GoalStatusPill(
-    value: Double,
-    modifier: Modifier = Modifier
-) {
-    val isPositive = value >= 0
-    val color = if (isPositive) CalcMotColors.Good else CalcMotColors.Bad
-    val sign = if (isPositive) "+" else ""
-    
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(CalcMotShape.BadgeRadius))
-            .background(color.copy(alpha = 0.2f))
-            .padding(horizontal = 6.dp, vertical = 2.dp)
-    ) {
-        Text(
-            text = String.format(java.util.Locale.US, "%sR$ %.2f", sign, value),
-            style = CalcMotTypography.MetricLabel.copy(
-                color = color,
-                fontWeight = FontWeight.Bold
-            )
+            style = CalcMotTypography.Caption,
+            color = CalcMotColors.TextSecondary.copy(alpha = CalcMotOpacity.Secondary)
         )
     }
 }
@@ -146,6 +126,6 @@ fun OverlayDragHandle(
             .width(32.dp)
             .height(4.dp)
             .clip(RoundedCornerShape(2.dp))
-            .background(CalcMotColors.Divider)
+            .background(CalcMotColors.BorderSubtle)
     )
 }

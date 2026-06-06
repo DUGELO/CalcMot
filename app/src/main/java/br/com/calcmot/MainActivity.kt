@@ -18,16 +18,16 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import br.com.calcmot.accessibility.UberAccessibilityService
-import br.com.calcmot.ui.HomeScreen
-import br.com.calcmot.ui.OnboardingScreen
-import br.com.calcmot.ui.theme.MetricaTheme
+import br.com.calcmot.ui.screens.HomeScreen
+import br.com.calcmot.ui.screens.OnboardingScreen
+import br.com.calcmot.ui.design.theme.CalcMotTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         setContent {
-            MetricaTheme {
+            CalcMotTheme {
                 CalcMotApp()
             }
         }

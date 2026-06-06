@@ -21,7 +21,8 @@ import br.com.calcmot.AppSettings
 import br.com.calcmot.OverlayCustomPosition
 import br.com.calcmot.OverlayPositionPreference
 import br.com.calcmot.finance.FinanceRepository
-import br.com.calcmot.ui.theme.MetricaTheme
+import br.com.calcmot.ui.design.theme.CalcMotTheme
+import br.com.calcmot.ui.screens.HomeScreen
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -180,7 +181,7 @@ class HomeScreenTest {
 
     private fun renderHome(permissionState: AppPermissionState) {
         composeRule.setContent {
-            MetricaTheme {
+            CalcMotTheme {
                 HomeScreen(
                     permissionState = permissionState,
                     onPermissionsRefresh = {}

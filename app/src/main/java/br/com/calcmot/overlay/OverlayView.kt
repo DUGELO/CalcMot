@@ -8,12 +8,12 @@ import br.com.calcmot.model.ProfitabilityResult
 import br.com.calcmot.model.ProfitabilitySettings
 import br.com.calcmot.model.TripData
 import br.com.calcmot.model.OfferFinancialImpact
-import br.com.calcmot.overlay.designsystem.CalcMotColors
-import br.com.calcmot.overlay.designsystem.CalcMotOverlayContainer
-import br.com.calcmot.overlay.designsystem.FinancialImpactBlockDS
-import br.com.calcmot.overlay.designsystem.MetricRow
-import br.com.calcmot.overlay.designsystem.OfferQualityBadge
-import br.com.calcmot.overlay.designsystem.OverlayDragHandle
+import br.com.calcmot.ui.design.overlay.CalcMotOverlayContainer
+import br.com.calcmot.ui.design.overlay.FinancialImpactBlockDS
+import br.com.calcmot.ui.design.overlay.MetricRow
+import br.com.calcmot.ui.design.overlay.OfferQualityBadge
+import br.com.calcmot.ui.design.overlay.OverlayDragHandle
+import br.com.calcmot.ui.design.tokens.CalcMotColors
 import java.util.Locale
 
 @Composable
@@ -56,9 +56,9 @@ private fun brCurrencyPerUnit(value: Double, unit: String): String {
 
 enum class TripQuality(val text: String, val color: Color) {
     GREAT("ÓTIMA", CalcMotColors.Great),
-    GOOD("BOA", CalcMotColors.Good),
+    GOOD("BOA", CalcMotColors.Success),
     MEDIUM("ATENÇÃO", CalcMotColors.Warning),
-    BAD("RUIM", CalcMotColors.Bad)
+    BAD("RUIM", CalcMotColors.Danger)
 }
 
 fun getTripQuality(

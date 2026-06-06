@@ -9,7 +9,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import br.com.calcmot.AppPermissionState
-import br.com.calcmot.ui.theme.MetricaTheme
+import br.com.calcmot.ui.design.theme.CalcMotTheme
+import br.com.calcmot.ui.screens.OnboardingScreen
 import org.junit.Rule
 import org.junit.Test
 
@@ -21,7 +22,7 @@ class OnboardingScreenTest {
     @Test
     fun disclosureAppearsBeforeAccessibilityPermissionAction() {
         composeRule.setContent {
-            MetricaTheme {
+            CalcMotTheme {
                 OnboardingScreen(
                     permissionState = AppPermissionState(hasAccessibilityService = false),
                     onPermissionsRefresh = {}
@@ -47,7 +48,7 @@ class OnboardingScreenTest {
     @Test
     fun activeAccessibilityEnablesCompletion() {
         composeRule.setContent {
-            MetricaTheme {
+            CalcMotTheme {
                 OnboardingScreen(
                     permissionState = AppPermissionState(hasAccessibilityService = true),
                     onPermissionsRefresh = {}
@@ -63,7 +64,7 @@ class OnboardingScreenTest {
     @Test
     fun privacyPolicyOpensInsideOnboarding() {
         composeRule.setContent {
-            MetricaTheme {
+            CalcMotTheme {
                 OnboardingScreen(
                     permissionState = AppPermissionState(hasAccessibilityService = false),
                     onPermissionsRefresh = {}
