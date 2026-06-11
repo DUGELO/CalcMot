@@ -706,8 +706,8 @@ private fun countLabel(count: Int): String {
 private fun GoalMode.label(): String {
     return when (this) {
         GoalMode.BALANCED -> "Equilibrado"
-        GoalMode.PRIORITIZE_KM -> "Prioriza km"
-        GoalMode.PRIORITIZE_HOUR -> "Prioriza hora"
+        GoalMode.PRIORITIZE_KM -> "Por km"
+        GoalMode.PRIORITIZE_HOUR -> "Por hora"
     }
 }
 
