@@ -6,6 +6,12 @@ import org.junit.Test
 class ProfitabilityCalculatorTest {
 
     @Test
+    fun `default overlay thresholds are realistic for common UberX screening`() {
+        assertEquals(1.75, ProfitabilitySettings.DEFAULT_GOOD_NET_PER_KM, 0.001)
+        assertEquals(1.40, ProfitabilitySettings.DEFAULT_MEDIUM_NET_PER_KM, 0.001)
+    }
+
+    @Test
     fun `calculates operating cost and net profitability`() {
         val trip = TripData(
             valor = 30.0,

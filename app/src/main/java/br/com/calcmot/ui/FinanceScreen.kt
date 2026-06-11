@@ -68,6 +68,7 @@ fun FinanceScreen() {
     var goalMode by remember { mutableStateOf(driverGoal.mode) }
     var goalErrorText by remember { mutableStateOf<String?>(null) }
     var goalSavedText by remember { mutableStateOf<String?>(null) }
+    var advancedCostsExpanded by remember { mutableStateOf(false) }
     var efficiencyText by remember {
         mutableStateOf(profitabilitySettings.vehicleEfficiencyKmPerUnit.toInputText(blankWhenZero = true))
     }
@@ -98,47 +99,8 @@ fun FinanceScreen() {
     ) {
         item {
             CalcMotSectionHeader(
-                title = "Finanças",
-                subtitle = "Metas, custos e lançamentos do seu dia de trabalho."
-            )
-        }
-
-        item {
-            FinanceSummaryCard(
-                earnings = summary.earningsCents,
-                costs = summary.costsCents,
-                net = summary.netCents,
-                count = summary.entryCount
-            )
-        }
-
-        item {
-            FinanceFormCard(
-                selectedType = selectedType,
-                amountText = amountText,
-                descriptionText = descriptionText,
-                errorText = errorText,
-                onTypeChange = { selectedType = it },
-                onAmountChange = {
-                    amountText = it
-                    errorText = null
-                },
-                onDescriptionChange = { descriptionText = it },
-                onAdd = {
-                    val amountCents = FinanceFormatter.parseMoneyToCents(amountText)
-                    if (amountCents == null) {
-                        errorText = "Digite um valor válido."
-                    } else {
-                        entries = repository.addEntry(
-                            type = selectedType,
-                            amountCents = amountCents,
-                            description = descriptionText
-                        )
-                        amountText = ""
-                        descriptionText = ""
-                        errorText = null
-                    }
-                }
+                title = "Metas",
+                subtitle = "Defina o que vale a pena antes de sair para o corre."
             )
         }
 
@@ -206,6 +168,7 @@ fun FinanceScreen() {
         item {
             ProfitabilitySettingsCard(
                 settings = profitabilitySettings,
+                expanded = advancedCostsExpanded,
                 efficiencyText = efficiencyText,
                 inputPriceText = inputPriceText,
                 maintenanceText = maintenanceText,
@@ -244,6 +207,9 @@ fun FinanceScreen() {
                     profitabilityErrorText = null
                     profitabilitySavedText = null
                 },
+                onToggleExpanded = {
+                    advancedCostsExpanded = !advancedCostsExpanded
+                },
                 onSave = {
                     val parsed = parseProfitabilitySettings(
                         efficiencyText = efficiencyText,
@@ -261,6 +227,45 @@ fun FinanceScreen() {
                         profitabilitySettings = parsed
                         profitabilityErrorText = null
                         profitabilitySavedText = "Custos salvos. O aviso agora usa lucro líquido."
+                    }
+                }
+            )
+        }
+
+        item {
+            FinanceSummaryCard(
+                earnings = summary.earningsCents,
+                costs = summary.costsCents,
+                net = summary.netCents,
+                count = summary.entryCount
+            )
+        }
+
+        item {
+            FinanceFormCard(
+                selectedType = selectedType,
+                amountText = amountText,
+                descriptionText = descriptionText,
+                errorText = errorText,
+                onTypeChange = { selectedType = it },
+                onAmountChange = {
+                    amountText = it
+                    errorText = null
+                },
+                onDescriptionChange = { descriptionText = it },
+                onAdd = {
+                    val amountCents = FinanceFormatter.parseMoneyToCents(amountText)
+                    if (amountCents == null) {
+                        errorText = "Digite um valor válido."
+                    } else {
+                        entries = repository.addEntry(
+                            type = selectedType,
+                            amountCents = amountCents,
+                            description = descriptionText
+                        )
+                        amountText = ""
+                        descriptionText = ""
+                        errorText = null
                     }
                 }
             )
@@ -312,6 +317,12 @@ private fun DriverGoalSettingsCard(
                 checked = enabled,
                 onCheckedChange = onEnabledChange,
                 switchModifier = Modifier.testTag(UiTestTags.FINANCIAL_IMPACT_SWITCH)
+            )
+
+            Text(
+                text = "Use sua meta para o CalcMot dizer se a oferta ficou acima ou abaixo do que você quer ganhar.",
+                style = CalcMotTypography.Body,
+                color = CalcMotColors.TextSecondary
             )
 
             Text(text = "Escolha uma meta rápida", style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
@@ -378,6 +389,7 @@ private fun DriverGoalSettingsCard(
 @Composable
 private fun ProfitabilitySettingsCard(
     settings: ProfitabilitySettings,
+    expanded: Boolean,
     efficiencyText: String,
     inputPriceText: String,
     maintenanceText: String,
@@ -392,6 +404,7 @@ private fun ProfitabilitySettingsCard(
     onGoodKmChange: (String) -> Unit,
     onMediumKmChange: (String) -> Unit,
     onHourChange: (String) -> Unit,
+    onToggleExpanded: () -> Unit,
     onSave: () -> Unit
 ) {
     CalcMotCard {
@@ -401,87 +414,98 @@ private fun ProfitabilitySettingsCard(
                 .padding(CalcMotSpacing.CardPadding),
             verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
         ) {
-            Text(text = "Custos do carro", style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
+            Text(text = "Lucro líquido no overlay", style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
             Text(
-                text = "Preencha uma vez para o aviso mostrar lucro líquido, já descontando o custo do carro.",
+                text = "Essa régua classifica BOA, ATENÇÃO ou RUIM depois de descontar os custos do carro.",
                 style = CalcMotTypography.Body,
                 color = CalcMotColors.TextSecondary
             )
-            FinancialImpactSummaryCard(
-                title = "Custo atual",
-                body = "${formatMoneyPerKm(settings.operatingCostPerKm)} descontado de cada oferta.",
-                positive = true
+            Text(
+                text = "Custo atual: ${formatMoneyPerKm(settings.operatingCostPerKm)} descontado de cada oferta.",
+                style = CalcMotTypography.BodyStrong,
+                color = CalcMotColors.TextPrimary
             )
-            CalcMotNumberField(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(UiTestTags.PROFIT_EFFICIENCY_INPUT),
-                value = efficiencyText,
-                onValueChange = onEfficiencyChange,
-                label = "Rendimento do carro",
-                placeholder = "Ex: 10 km/l"
-            )
-            CalcMotNumberField(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(UiTestTags.PROFIT_INPUT_PRICE_INPUT),
-                value = inputPriceText,
-                onValueChange = onInputPriceChange,
-                label = "Preço do combustível",
-                placeholder = "Ex: 5,89"
-            )
-            CalcMotNumberField(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(UiTestTags.PROFIT_MAINTENANCE_INPUT),
-                value = maintenanceText,
-                onValueChange = onMaintenanceChange,
-                label = "Manutenção por km",
-                placeholder = "Ex: 0,35"
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)
-            ) {
-                CalcMotNumberField(
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag(UiTestTags.PROFIT_GOOD_KM_INPUT),
-                    value = goodKmText,
-                    onValueChange = onGoodKmChange,
-                    label = "Boa R$/km"
-                )
-                CalcMotNumberField(
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag(UiTestTags.PROFIT_MEDIUM_KM_INPUT),
-                    value = mediumKmText,
-                    onValueChange = onMediumKmChange,
-                    label = "Atenção R$/km"
-                )
-            }
-            CalcMotNumberField(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(UiTestTags.PROFIT_HOUR_INPUT),
-                value = hourText,
-                onValueChange = onHourChange,
-                label = "Quero ganhar por hora líquido",
-                placeholder = "Opcional"
-            )
-            errorText?.let {
-                Text(text = it, style = CalcMotTypography.Caption, color = CalcMotColors.Danger)
-            }
-            savedText?.let {
-                Text(text = it, style = CalcMotTypography.Caption, color = CalcMotColors.BrandAccent)
-            }
             CalcMotButton(
-                text = "Salvar conta",
+                text = if (expanded) "Ocultar custos avançados" else "Ajustar custos avançados",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag(UiTestTags.PROFIT_SAVE_BUTTON),
-                onClick = onSave
+                    .testTag(UiTestTags.PROFIT_ADVANCED_TOGGLE),
+                onClick = onToggleExpanded,
+                variant = CalcMotButtonVariant.SECONDARY
             )
+
+            if (expanded) {
+                CalcMotNumberField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(UiTestTags.PROFIT_EFFICIENCY_INPUT),
+                    value = efficiencyText,
+                    onValueChange = onEfficiencyChange,
+                    label = "Rendimento do carro",
+                    placeholder = "Ex: 10 km/l"
+                )
+                CalcMotNumberField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(UiTestTags.PROFIT_INPUT_PRICE_INPUT),
+                    value = inputPriceText,
+                    onValueChange = onInputPriceChange,
+                    label = "Preço do combustível",
+                    placeholder = "Ex: 5,89"
+                )
+                CalcMotNumberField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(UiTestTags.PROFIT_MAINTENANCE_INPUT),
+                    value = maintenanceText,
+                    onValueChange = onMaintenanceChange,
+                    label = "Manutenção por km",
+                    placeholder = "Ex: 0,35"
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)
+                ) {
+                    CalcMotNumberField(
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag(UiTestTags.PROFIT_GOOD_KM_INPUT),
+                        value = goodKmText,
+                        onValueChange = onGoodKmChange,
+                        label = "Boa R$/km"
+                    )
+                    CalcMotNumberField(
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag(UiTestTags.PROFIT_MEDIUM_KM_INPUT),
+                        value = mediumKmText,
+                        onValueChange = onMediumKmChange,
+                        label = "Atenção R$/km"
+                    )
+                }
+                CalcMotNumberField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(UiTestTags.PROFIT_HOUR_INPUT),
+                    value = hourText,
+                    onValueChange = onHourChange,
+                    label = "Quero ganhar por hora líquido",
+                    placeholder = "Opcional"
+                )
+                errorText?.let {
+                    Text(text = it, style = CalcMotTypography.Caption, color = CalcMotColors.Danger)
+                }
+                savedText?.let {
+                    Text(text = it, style = CalcMotTypography.Caption, color = CalcMotColors.BrandAccent)
+                }
+                CalcMotButton(
+                    text = "Salvar conta",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(UiTestTags.PROFIT_SAVE_BUTTON),
+                    onClick = onSave
+                )
+            }
         }
     }
 }
@@ -674,7 +698,7 @@ private enum class GoalPreset(
     val hour: Double,
     val mode: GoalMode
 ) {
-    CONSERVADOR("Conservador", 1.50, 45.0, GoalMode.BALANCED),
-    EQUILIBRADO("Equilibrado", 1.70, 50.0, GoalMode.BALANCED),
-    EXIGENTE("Exigente", 2.10, 65.0, GoalMode.BALANCED)
+    CONSERVADOR("Começando", 1.35, 30.0, GoalMode.BALANCED),
+    EQUILIBRADO("Equilibrado", 1.50, 35.0, GoalMode.BALANCED),
+    EXIGENTE("Exigente", 1.70, 42.0, GoalMode.BALANCED)
 }

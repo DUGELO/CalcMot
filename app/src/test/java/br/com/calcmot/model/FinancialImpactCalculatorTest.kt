@@ -7,6 +7,12 @@ import org.junit.Test
 class FinancialImpactCalculatorTest {
 
     @Test
+    fun `default goal is calibrated for common UberX screening`() {
+        assertEquals(1.50, DriverGoal.DEFAULT_MIN_VALUE_PER_KM, 0.001)
+        assertEquals(35.0, DriverGoal.DEFAULT_MIN_VALUE_PER_HOUR, 0.001)
+    }
+
+    @Test
     fun `calculates impact by km and hour using conservative final impact`() {
         val trip = trip(
             price = 20.0,

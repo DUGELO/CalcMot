@@ -43,6 +43,7 @@ object UiTestTags {
     const val PROFIT_MEDIUM_KM_INPUT = "profit_medium_km_input"
     const val PROFIT_HOUR_INPUT = "profit_hour_input"
     const val PROFIT_SAVE_BUTTON = "profit_save_button"
+    const val PROFIT_ADVANCED_TOGGLE = "profit_advanced_toggle"
     const val FINANCIAL_IMPACT_SWITCH = "financial_impact_switch"
     const val DRIVER_GOAL_KM_INPUT = "driver_goal_km_input"
     const val DRIVER_GOAL_HOUR_INPUT = "driver_goal_hour_input"

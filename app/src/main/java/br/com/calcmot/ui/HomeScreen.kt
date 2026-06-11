@@ -217,7 +217,7 @@ private fun AppDrawer(
             )
             NavigationDrawerItem(
                 modifier = Modifier.testTag(UiTestTags.DRAWER_FINANCE_ITEM),
-                label = { Text("Finanças") },
+                label = { Text("Metas") },
                 selected = selected == HomeDestination.FINANCE,
                 onClick = { onSelect(HomeDestination.FINANCE) }
             )
@@ -671,7 +671,7 @@ private fun StatusPill(status: HomeStatus) {
 
 private enum class HomeDestination(val title: String) {
     START("Início"),
-    FINANCE("Finanças"),
+    FINANCE("Metas"),
     SECURITY("Segurança"),
     PRIVACY("Privacidade"),
     DIAGNOSTICS("Diagnóstico")

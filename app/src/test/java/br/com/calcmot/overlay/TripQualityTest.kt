@@ -12,13 +12,13 @@ class TripQualityTest {
 
     @Test
     fun `trip quality uses boa atencao ruim labels`() {
-        assertEquals(TripQuality.GOOD, getTripQuality(trip(valorPorKm = 2.5)))
+        assertEquals(TripQuality.GOOD, getTripQuality(trip(valorPorKm = 1.75)))
         assertEquals("BOA", TripQuality.GOOD.text)
 
-        assertEquals(TripQuality.MEDIUM, getTripQuality(trip(valorPorKm = 1.8)))
+        assertEquals(TripQuality.MEDIUM, getTripQuality(trip(valorPorKm = 1.4)))
         assertEquals("ATENÇÃO", TripQuality.MEDIUM.text)
 
-        assertEquals(TripQuality.BAD, getTripQuality(trip(valorPorKm = 1.79)))
+        assertEquals(TripQuality.BAD, getTripQuality(trip(valorPorKm = 1.39)))
         assertEquals("RUIM", TripQuality.BAD.text)
     }
 

@@ -33,8 +33,8 @@ data class ProfitabilitySettings(
         const val DEFAULT_VEHICLE_EFFICIENCY_KM_PER_UNIT = 0.0
         const val DEFAULT_INPUT_PRICE_PER_UNIT = 0.0
         const val DEFAULT_MAINTENANCE_COST_PER_KM = 0.0
-        const val DEFAULT_GOOD_NET_PER_KM = 2.5
-        const val DEFAULT_MEDIUM_NET_PER_KM = 1.8
+        const val DEFAULT_GOOD_NET_PER_KM = 1.75
+        const val DEFAULT_MEDIUM_NET_PER_KM = 1.40
         const val DEFAULT_MINIMUM_NET_PER_HOUR = 0.0
     }
 }

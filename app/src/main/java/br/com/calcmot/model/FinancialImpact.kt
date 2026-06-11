@@ -17,8 +17,8 @@ data class DriverGoal(
     }
 
     companion object {
-        const val DEFAULT_MIN_VALUE_PER_KM = 1.70
-        const val DEFAULT_MIN_VALUE_PER_HOUR = 50.0
+        const val DEFAULT_MIN_VALUE_PER_KM = 1.50
+        const val DEFAULT_MIN_VALUE_PER_HOUR = 35.0
         const val MIN_ALLOWED_GOAL = 0.01
     }
 }

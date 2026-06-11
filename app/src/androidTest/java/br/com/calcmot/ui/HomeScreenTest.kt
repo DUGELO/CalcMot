@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -84,6 +85,25 @@ class HomeScreenTest {
     }
 
     @Test
+    fun financePrioritizesGoalAndKeepsAdvancedCostsCollapsed() {
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
+
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_FINANCE_ITEM).performClick()
+        composeRule.onNodeWithText("Mostrar impacto na meta").assertIsDisplayed()
+        composeRule.onNodeWithText("Escolha uma meta rápida").assertIsDisplayed()
+        composeRule.onNodeWithText("Começando").assertIsDisplayed()
+        composeRule.onNodeWithText("Equilibrado").assertIsDisplayed()
+        composeRule.onNodeWithText("Exigente").assertIsDisplayed()
+
+        composeRule.onNodeWithTag(UiTestTags.FINANCE_SCREEN)
+            .performScrollToNode(hasTestTag(UiTestTags.PROFIT_ADVANCED_TOGGLE))
+        composeRule.onAllNodesWithTag(UiTestTags.PROFIT_EFFICIENCY_INPUT).assertCountEquals(0)
+        composeRule.onNodeWithTag(UiTestTags.PROFIT_ADVANCED_TOGGLE).performClick()
+        composeRule.onNodeWithTag(UiTestTags.PROFIT_EFFICIENCY_INPUT).assertIsDisplayed()
+    }
+
+    @Test
     fun drawerNavigatesToPrivacy() {
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
 
@@ -141,6 +161,8 @@ class HomeScreenTest {
 
         composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
         composeRule.onNodeWithTag(UiTestTags.DRAWER_FINANCE_ITEM).performClick()
+        composeRule.onNodeWithTag(UiTestTags.FINANCE_SCREEN)
+            .performScrollToNode(hasTestTag(UiTestTags.FINANCE_AMOUNT_INPUT))
         composeRule.onNodeWithTag(UiTestTags.FINANCE_AMOUNT_INPUT).performTextInput("123,45")
         composeRule.onNodeWithTag(UiTestTags.FINANCE_DESCRIPTION_INPUT).performTextInput("Pedágio")
         composeRule.onNodeWithTag(UiTestTags.FINANCE_ADD_BUTTON)
