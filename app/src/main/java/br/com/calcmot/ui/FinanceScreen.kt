@@ -307,14 +307,14 @@ private fun DriverGoalSettingsCard(
             verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
         ) {
             CalcMotSwitchRow(
-                title = "Impacto no aviso",
+                title = "Mostrar impacto na meta",
                 description = "Mostra quanto a oferta está acima ou abaixo da sua meta.",
                 checked = enabled,
                 onCheckedChange = onEnabledChange,
                 switchModifier = Modifier.testTag(UiTestTags.FINANCIAL_IMPACT_SWITCH)
             )
 
-            Text(text = "Presets de meta", style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
+            Text(text = "Escolha uma meta rápida", style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
             GoalPreset.entries.forEach { preset ->
                 GoalPresetCard(
                     title = preset.label,
@@ -335,7 +335,7 @@ private fun DriverGoalSettingsCard(
                         .testTag(UiTestTags.DRIVER_GOAL_KM_INPUT),
                     value = goalKmText,
                     onValueChange = onGoalKmChange,
-                    label = "Meta R$/km"
+                    label = "Quero ganhar pelo menos por km"
                 )
                 CalcMotNumberField(
                     modifier = Modifier
@@ -343,7 +343,7 @@ private fun DriverGoalSettingsCard(
                         .testTag(UiTestTags.DRIVER_GOAL_HOUR_INPUT),
                     value = goalHourText,
                     onValueChange = onGoalHourChange,
-                    label = "Meta R$/h"
+                    label = "Quero ganhar pelo menos por hora"
                 )
             }
 
@@ -365,7 +365,7 @@ private fun DriverGoalSettingsCard(
             }
 
             CalcMotButton(
-                text = "Salvar metas",
+                text = "Salvar minha meta",
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(UiTestTags.DRIVER_GOAL_SAVE_BUTTON),
@@ -401,7 +401,7 @@ private fun ProfitabilitySettingsCard(
                 .padding(CalcMotSpacing.CardPadding),
             verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
         ) {
-            Text(text = "Conta da corrida", style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
+            Text(text = "Custos do carro", style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
             Text(
                 text = "Preencha uma vez para o aviso mostrar lucro líquido, já descontando o custo do carro.",
                 style = CalcMotTypography.Body,
@@ -466,7 +466,7 @@ private fun ProfitabilitySettingsCard(
                     .testTag(UiTestTags.PROFIT_HOUR_INPUT),
                 value = hourText,
                 onValueChange = onHourChange,
-                label = "Meta R$/h líquido",
+                label = "Quero ganhar por hora líquido",
                 placeholder = "Opcional"
             )
             errorText?.let {
@@ -495,7 +495,7 @@ private fun FinanceSummaryCard(
 ) {
     val positive = net >= 0
     FinancialImpactSummaryCard(
-        title = "Resultado líquido",
+        title = "Resultado de hoje",
         body = "${FinanceFormatter.formatSignedMoney(net)} em ${countLabel(count)}. Ganhos: ${FinanceFormatter.formatMoney(earnings)}. Custos: ${FinanceFormatter.formatMoney(costs)}.",
         positive = positive
     )

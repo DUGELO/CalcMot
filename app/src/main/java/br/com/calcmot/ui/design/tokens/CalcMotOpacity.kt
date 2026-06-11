@@ -6,5 +6,5 @@ object CalcMotOpacity {
     const val Secondary = 0.82f
     const val OverlaySoft = 0.82f
     const val OverlayMedium = 0.86f
-    const val OverlayStrong = 0.90f
+    const val OverlayStrong = 0.94f
 }

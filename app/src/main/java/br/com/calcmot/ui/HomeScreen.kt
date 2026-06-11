@@ -331,7 +331,7 @@ private fun StatusCard(
 
             if (!permissionState.hasAccessibilityService) {
                 CalcMotButton(
-                    text = "Ativar acessibilidade",
+                    text = "Permitir leitura da oferta",
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON),
@@ -340,7 +340,7 @@ private fun StatusCard(
             }
 
             CalcMotButton(
-                text = "Atualizar estado",
+                text = "Já permiti, verificar novamente",
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(UiTestTags.REFRESH_PERMISSIONS_BUTTON),
@@ -520,21 +520,21 @@ private enum class HomeStatus(
     val color: Color
 ) {
     READY(
-        label = "Pronto",
-        title = "Monitoramento ativo",
-        description = "Pode abrir o app de motorista. O aviso aparece quando a oferta estiver completa.",
+        label = "Em espera",
+        title = "CalcMot em espera",
+        description = "Abra a Uber. O CalcMot calcula quando aparecer uma oferta completa.",
         color = CalcMotColors.Success
     ),
     PAUSED(
         label = "Pausado",
-        title = "Monitoramento pausado",
-        description = "Ligue o switch para voltar a analisar ofertas.",
+        title = "CalcMot pausado por você",
+        description = "O CalcMot não vai analisar ofertas até você ligar novamente.",
         color = CalcMotColors.Warning
     ),
     PERMISSION_PENDING(
-        label = "Falta ativar",
-        title = "Ative a acessibilidade",
-        description = "Essa permissão permite ler ofertas visíveis e mostrar o aviso.",
+        label = "Falta permissão",
+        title = "Falta permitir leitura da oferta",
+        description = "O CalcMot precisa ler a oferta visível para calcular R$/km, R$/hora e impacto na sua meta.",
         color = CalcMotColors.Danger
     )
 }

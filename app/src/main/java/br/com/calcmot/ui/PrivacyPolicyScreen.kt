@@ -49,7 +49,7 @@ fun PrivacyPolicyScreen(
 
             PolicySection(
                 title = "Resumo",
-                body = "O CalcMot é um assistente de leitura de ofertas para motoristas de aplicativo. Ele mostra métricas como R$/km, R$/h e tempo total para ajudar você a avaliar uma oferta visível na tela."
+                body = "O CalcMot é um assistente de leitura de ofertas para motoristas de aplicativo. Ele mostra R$/km, R$/hora e tempo total para ajudar você a avaliar uma oferta visível na tela."
             )
 
             PolicySection(
@@ -59,7 +59,7 @@ fun PrivacyPolicyScreen(
 
             PolicySection(
                 title = "Acessibilidade e leitura local",
-                body = "O CalcMot usa o Serviço de Acessibilidade do Android para identificar cards de oferta e exibir um aviso sobreposto. Quando necessário, o app pode ler localmente somente o card visível na tela."
+                body = "O CalcMot usa a permissão de leitura da tela para identificar ofertas visíveis e mostrar o cálculo por cima da Uber. Quando necessário, o app lê localmente somente a oferta visível na tela."
             )
 
             PolicySection(
@@ -79,7 +79,7 @@ fun PrivacyPolicyScreen(
 
             PolicySection(
                 title = "Controle do usuário",
-                body = "Você pode pausar o monitoramento dentro do app a qualquer momento. Também pode desativar o Serviço de Acessibilidade do CalcMot nas configurações do Android."
+                body = "Você pode pausar o CalcMot dentro do app a qualquer momento. Também pode remover a permissão de leitura da oferta nas configurações do Android."
             )
 
             PolicySection(

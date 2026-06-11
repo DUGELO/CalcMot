@@ -39,7 +39,7 @@ object CalcMotColors {
     val Great = Color(0xFF6D3BFF)
     val RoyalBlueAlternative = Color(0xFF2457FF)
 
-    val OverlayBackground = Color(0xE61A1A1A)
+    val OverlayBackground = Color(0xF01A1A1A)
     val OverlayBackgroundSoft = Color(0xD91A1A1A)
     val SurfaceElevated = Color(0xF2232323)
 
@@ -51,7 +51,7 @@ object CalcMotColors {
 }
 
 object CalcMotOpacity {
-    const val OverlayStrong = 0.90f
+    const val OverlayStrong = 0.94f
     const val OverlayMedium = 0.86f
     const val OverlaySoft = 0.82f
 
@@ -62,7 +62,7 @@ object CalcMotOpacity {
 
 object CalcMotTypography {
     val ValuePrimary = TextStyle(
-        fontSize = 18.sp,
+        fontSize = 21.sp,
         fontWeight = FontWeight.Bold
     )
 
@@ -72,12 +72,12 @@ object CalcMotTypography {
     )
 
     val MetricValue = TextStyle(
-        fontSize = 14.sp,
-        fontWeight = FontWeight.SemiBold
+        fontSize = 15.sp,
+        fontWeight = FontWeight.Bold
     )
 
     val ImpactMessage = TextStyle(
-        fontSize = 13.sp,
+        fontSize = 12.sp,
         fontWeight = FontWeight.Bold
     )
 
@@ -168,7 +168,7 @@ fun OfferQualityBadge(
             .clip(RoundedCornerShape(CalcMotShape.BadgeRadius))
             .background(quality.accentColor)
             .padding(horizontal = CalcMotSpacing.Sm, vertical = 3.dp)
-            .defaultMinSize(minWidth = 56.dp),
+            .defaultMinSize(minWidth = 58.dp),
         color = quality.badgeContentColor,
         style = CalcMotTypography.MetricLabel.copy(fontWeight = FontWeight.Bold),
         textAlign = TextAlign.Center,
@@ -237,7 +237,7 @@ fun FinancialImpactBlock(
                 quality = quality
             )
             Text(
-                text = impact.message,
+                text = impact.overlayMessage(),
                 modifier = Modifier.weight(1f),
                 color = CalcMotColors.TextPrimary,
                 style = CalcMotTypography.ImpactMessage,
@@ -326,6 +326,14 @@ fun OverlayMetricSummary(
                 modifier = Modifier.weight(1f)
             )
         }
+    }
+}
+
+private fun OfferFinancialImpact.overlayMessage(): String {
+    return when {
+        classification == OfferClassification.GREAT -> "Bem acima da meta"
+        finalImpact >= 0.0 -> "Acima da meta"
+        else -> "Abaixo da meta"
     }
 }
 

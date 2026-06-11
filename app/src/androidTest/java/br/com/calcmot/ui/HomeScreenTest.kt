@@ -38,6 +38,7 @@ class HomeScreenTest {
     @Before
     fun resetSettings() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.getSharedPreferences("calcmot_settings", 0).edit().clear().commit()
         AppSettings.setMonitoringEnabled(context, true)
         AppSettings.setOverlayPosition(context, OverlayPositionPreference.HIGH)
         context.getSharedPreferences("calcmot_finance", 0).edit().clear().commit()
@@ -54,7 +55,7 @@ class HomeScreenTest {
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
 
         composeRule.onNodeWithTag(UiTestTags.HOME_SCREEN).assertIsDisplayed()
-        composeRule.onNodeWithText("Pronto").assertIsDisplayed()
+        composeRule.onNodeWithText("Em espera").assertIsDisplayed()
         composeRule.onAllNodesWithText("Roots vistos").assertCountEquals(0)
         composeRule.onNodeWithTag(UiTestTags.MONITORING_SWITCH).assertIsOn()
         composeRule.onNodeWithTag(UiTestTags.OPEN_DRIVER_APP_BUTTON).assertIsDisplayed()
@@ -147,7 +148,7 @@ class HomeScreenTest {
     fun pendingPermissionDisablesMonitoringAndShowsAction() {
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = false))
 
-        composeRule.onNodeWithText("Falta ativar").assertIsDisplayed()
+        composeRule.onNodeWithText("Falta permissão").assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.MONITORING_SWITCH).assertIsNotEnabled()
         composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertIsDisplayed()
     }

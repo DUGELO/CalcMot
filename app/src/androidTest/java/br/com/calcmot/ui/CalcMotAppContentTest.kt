@@ -30,7 +30,7 @@ class CalcMotAppContentTest {
         }
 
         composeRule.onNodeWithTag(UiTestTags.ONBOARDING_SCREEN).assertIsDisplayed()
-        composeRule.onNodeWithText("Como o CalcMot usa acessibilidade").assertIsDisplayed()
+        composeRule.onNodeWithText("Como o CalcMot lê a oferta").assertIsDisplayed()
     }
 
     @Test
@@ -49,6 +49,6 @@ class CalcMotAppContentTest {
         }
 
         composeRule.onNodeWithTag(UiTestTags.HOME_SCREEN).assertIsDisplayed()
-        composeRule.onNodeWithText("Pronto").assertIsDisplayed()
+        composeRule.onNodeWithText("Em espera").assertIsDisplayed()
     }
 }

@@ -71,25 +71,25 @@ fun OnboardingScreen(
 
                 PermissionStatusCard(
                     modifier = Modifier.testTag(UiTestTags.ACCESSIBILITY_PERMISSION_ITEM),
-                    title = "Serviço de acessibilidade",
+                    title = "Permissão para ler a oferta",
                     description = if (permissionState.hasAccessibilityService) {
                         "Ativo."
                     } else {
-                        "Necessário para ler cards de oferta visíveis e calcular suas métricas."
+                        "O CalcMot precisa ler a oferta visível para calcular R$/km, R$/hora e impacto na sua meta."
                     },
                     status = if (permissionState.hasAccessibilityService) {
                         PermissionStatus.ACTIVE
                     } else {
                         PermissionStatus.REQUIRED
                     },
-                    actionLabel = "Abrir acessibilidade",
+                    actionLabel = "Permitir leitura da oferta",
                     onAction = {
                         context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     }
                 )
 
                 CalcMotButton(
-                    text = "Abrir acessibilidade",
+                    text = "Permitir leitura da oferta",
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON),
@@ -100,7 +100,7 @@ fun OnboardingScreen(
                 )
 
                 CalcMotButton(
-                    text = "Atualizar estado",
+                    text = "Já permiti, verificar novamente",
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(UiTestTags.REFRESH_PERMISSIONS_BUTTON),
@@ -109,7 +109,7 @@ fun OnboardingScreen(
                 )
 
                 CalcMotButton(
-                    text = "Concluir",
+                    text = "Continuar",
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(UiTestTags.FINISH_ONBOARDING_BUTTON),
@@ -144,8 +144,8 @@ fun OnboardingScreen(
 private fun DisclosureCard() {
     CalcMotInfoBanner(
         modifier = Modifier.testTag(UiTestTags.ACCESSIBILITY_DISCLOSURE),
-        title = "Como o CalcMot usa acessibilidade",
-        body = "O CalcMot lê cards de oferta visíveis para calcular R$/km, R$/h e tempo total no aparelho. O app não toca na tela, não aceita corridas, não recusa corridas e não é afiliado à Uber."
+        title = "Como o CalcMot lê a oferta",
+        body = "O CalcMot calcula R$/km, R$/hora e tempo total quando aparece uma oferta. Tudo acontece no seu aparelho. O CalcMot não toca na tela, não aceita corridas e não recusa corridas."
     )
 }
 
