@@ -52,7 +52,6 @@ data class ProfitabilityResult(
 )
 
 enum class ProfitabilityQuality {
-    GREAT,
     GOOD,
     MEDIUM,
     BAD
@@ -98,18 +97,10 @@ object ProfitabilityCalculator {
         settings: ProfitabilitySettings
     ): ProfitabilityQuality {
         val normalizedSettings = settings.normalized()
-        
-        val greatThresholdKm = normalizedSettings.goodNetPerKm * 1.2
-        val greatThresholdHour = normalizedSettings.minimumNetPerHour * 1.2
-        
         val reachesHourGoal = normalizedSettings.minimumNetPerHour <= 0.0 ||
             netPerHour >= normalizedSettings.minimumNetPerHour
-            
-        val reachesGreatHourGoal = normalizedSettings.minimumNetPerHour <= 0.0 ||
-            netPerHour >= greatThresholdHour
 
         return when {
-            netPerKm >= greatThresholdKm && reachesGreatHourGoal -> ProfitabilityQuality.GREAT
             netPerKm >= normalizedSettings.goodNetPerKm && reachesHourGoal -> ProfitabilityQuality.GOOD
             netPerKm >= normalizedSettings.mediumNetPerKm -> ProfitabilityQuality.MEDIUM
             else -> ProfitabilityQuality.BAD

@@ -246,13 +246,13 @@ class ReleaseReadinessTest {
     fun `public UI strings do not contain encoding artifacts`() {
         val files = listOf(
             "app/src/main/java/br/com/calcmot/AppSettings.kt",
-            "app/src/main/java/br/com/calcmot/ui/screens/HomeScreen.kt",
-            "app/src/main/java/br/com/calcmot/ui/screens/FinanceScreen.kt",
-            "app/src/main/java/br/com/calcmot/ui/screens/OnboardingScreen.kt",
-            "app/src/main/java/br/com/calcmot/ui/screens/PrivacyPolicyScreen.kt",
+            "app/src/main/java/br/com/calcmot/ui/HomeScreen.kt",
+            "app/src/main/java/br/com/calcmot/ui/FinanceScreen.kt",
+            "app/src/main/java/br/com/calcmot/ui/OnboardingScreen.kt",
+            "app/src/main/java/br/com/calcmot/ui/PrivacyPolicyScreen.kt",
             "app/src/main/java/br/com/calcmot/overlay/OverlayView.kt",
-            "app/src/main/java/br/com/calcmot/ui/design/theme/CalcMotTheme.kt",
-            "app/src/main/java/br/com/calcmot/ui/design/tokens/CalcMotColors.kt",
+            "app/src/main/java/br/com/calcmot/ui/theme/Theme.kt",
+            "app/src/main/java/br/com/calcmot/ui/theme/Color.kt",
             "app/src/main/res/values/strings.xml"
         )
 

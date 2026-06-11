@@ -8,15 +8,12 @@ import org.junit.Test
 class TripQualityTest {
 
     @Test
-    fun `trip quality uses boa atencao ruim labels`() {
-        assertEquals(TripQuality.GREAT, getTripQuality(trip(valorPorKm = 3.0)))
-        assertEquals("ÓTIMA", TripQuality.GREAT.text)
-
+    fun `trip quality uses boa media ruim labels`() {
         assertEquals(TripQuality.GOOD, getTripQuality(trip(valorPorKm = 2.5)))
         assertEquals("BOA", TripQuality.GOOD.text)
 
         assertEquals(TripQuality.MEDIUM, getTripQuality(trip(valorPorKm = 1.8)))
-        assertEquals("ATENÇÃO", TripQuality.MEDIUM.text)
+        assertEquals("MÉDIA", TripQuality.MEDIUM.text)
 
         assertEquals(TripQuality.BAD, getTripQuality(trip(valorPorKm = 1.79)))
         assertEquals("RUIM", TripQuality.BAD.text)

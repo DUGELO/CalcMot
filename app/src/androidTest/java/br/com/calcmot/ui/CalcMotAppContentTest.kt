@@ -8,7 +8,7 @@ import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
 import br.com.calcmot.OverlayPositionPreference
 import br.com.calcmot.CalcMotAppContent
-import br.com.calcmot.ui.design.theme.CalcMotTheme
+import br.com.calcmot.ui.theme.MetricaTheme
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
 import org.junit.Test
@@ -21,7 +21,7 @@ class CalcMotAppContentTest {
     @Test
     fun permissionMissingShowsOnboarding() {
         composeRule.setContent {
-            CalcMotTheme {
+            MetricaTheme {
                 CalcMotAppContent(
                     permissionState = AppPermissionState(hasAccessibilityService = false),
                     onPermissionsRefresh = {}
@@ -40,7 +40,7 @@ class CalcMotAppContentTest {
         AppSettings.setOverlayPosition(context, OverlayPositionPreference.HIGH)
 
         composeRule.setContent {
-            CalcMotTheme {
+            MetricaTheme {
                 CalcMotAppContent(
                     permissionState = AppPermissionState(hasAccessibilityService = true),
                     onPermissionsRefresh = {}

@@ -40,12 +40,7 @@ import br.com.calcmot.model.ProfitabilityCalculator
 import br.com.calcmot.model.ProfitabilityResult
 import br.com.calcmot.model.TripData
 import br.com.calcmot.processor.overlayFingerprint
-import br.com.calcmot.ui.design.overlay.CalcMotOverlayContainer
-import br.com.calcmot.ui.design.overlay.FinancialImpactBlockDS
-import br.com.calcmot.ui.design.overlay.MetricRow
-import br.com.calcmot.ui.design.overlay.OfferQualityBadge
-import br.com.calcmot.ui.design.overlay.OverlayDragHandle
-import br.com.calcmot.ui.design.theme.CalcMotTheme
+import br.com.calcmot.ui.theme.MetricaTheme
 import android.util.Log
 import kotlin.math.roundToInt
 import java.util.concurrent.CountDownLatch
@@ -421,7 +416,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             }
 
             setContent {
-                CalcMotTheme {
+                MetricaTheme {
                     tripDataState.value?.let {
                         OverlayView(
                             tripData = it,
@@ -455,7 +450,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             setViewTreeSavedStateRegistryOwner(owner)
 
             setContent {
-                CalcMotTheme {
+                MetricaTheme {
                     debugOverlayState.value?.let {
                         DebugOverlayView(state = it)
                     }
