@@ -116,11 +116,15 @@ class HomeScreenTest {
     }
 
     @Test
-    fun drawerNavigatesToPrivacy() {
+    fun drawerNavigatesToHelpAndPrivacy() {
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
 
         composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
-        composeRule.onNodeWithTag(UiTestTags.DRAWER_PRIVACY_ITEM).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_HELP_ITEM).performClick()
+        composeRule.onNodeWithTag(UiTestTags.HELP_SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithText("Segurança e privacidade").assertIsDisplayed()
+
+        composeRule.onNodeWithTag(UiTestTags.HELP_PRIVACY_BUTTON).performClick()
         composeRule.onNodeWithTag(UiTestTags.PRIVACY_POLICY_SCREEN).assertIsDisplayed()
         composeRule.onNodeWithText("Sua segurança primeiro").assertIsDisplayed()
         composeRule.onNodeWithText("3 garantias importantes").assertIsDisplayed()

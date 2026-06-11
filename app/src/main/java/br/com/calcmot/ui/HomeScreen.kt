@@ -110,11 +110,7 @@ fun HomeScreen(
         drawerContent = {
             AppDrawer(
                 selected = destination,
-                onSelect = ::navigate,
-                onSupport = {
-                    scope.launch { drawerState.close() }
-                    uriHandler.openUri("mailto:$CALCMOT_SUPPORT_EMAIL")
-                }
+                onSelect = ::navigate
             )
         }
     ) {
@@ -162,8 +158,12 @@ fun HomeScreen(
                             context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                         }
                     )
+                    HomeDestination.HELP -> HelpScreen(
+                        onOpenPrivacy = { navigate(HomeDestination.PRIVACY) },
+                        onSupport = { uriHandler.openUri("mailto:$CALCMOT_SUPPORT_EMAIL") }
+                    )
                     HomeDestination.PRIVACY -> PrivacyPolicyScreen(
-                        onBack = { navigate(HomeDestination.START) },
+                        onBack = { navigate(HomeDestination.HELP) },
                         onSupport = { uriHandler.openUri("mailto:$CALCMOT_SUPPORT_EMAIL") }
                     )
 
@@ -197,8 +197,7 @@ private fun TopBar(
 @Composable
 private fun AppDrawer(
     selected: HomeDestination,
-    onSelect: (HomeDestination) -> Unit,
-    onSupport: () -> Unit
+    onSelect: (HomeDestination) -> Unit
 ) {
     ModalDrawerSheet {
         Column(
@@ -235,18 +234,18 @@ private fun AppDrawer(
                 onClick = { onSelect(HomeDestination.SECURITY) }
             )
             NavigationDrawerItem(
-                modifier = Modifier.testTag(UiTestTags.DRAWER_PRIVACY_ITEM),
-                label = { Text("Privacidade") },
-                selected = selected == HomeDestination.PRIVACY,
-                onClick = { onSelect(HomeDestination.PRIVACY) }
-            )
-            NavigationDrawerItem(
-                modifier = Modifier.testTag(UiTestTags.DRAWER_SUPPORT_ITEM),
-                label = { Text("Suporte") },
-                selected = false,
-                onClick = onSupport
+                modifier = Modifier.testTag(UiTestTags.DRAWER_HELP_ITEM),
+                label = { Text("Ajuda") },
+                selected = selected == HomeDestination.HELP || selected == HomeDestination.PRIVACY,
+                onClick = { onSelect(HomeDestination.HELP) }
             )
             if (BuildConfig.DEBUG) {
+                Text(
+                    text = "Área técnica",
+                    style = CalcMotTypography.Caption,
+                    color = CalcMotColors.TextSecondary,
+                    modifier = Modifier.padding(start = 16.dp, top = 8.dp)
+                )
                 NavigationDrawerItem(
                     modifier = Modifier.testTag(UiTestTags.DRAWER_DIAGNOSTICS_ITEM),
                     label = { Text("Diagnóstico") },
@@ -681,6 +680,7 @@ private enum class HomeDestination(val title: String) {
     FINANCE("Metas"),
     RESULT("Resultado"),
     SECURITY("Segurança"),
+    HELP("Ajuda"),
     PRIVACY("Privacidade"),
     DIAGNOSTICS("Diagnóstico")
 }
