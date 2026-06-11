@@ -144,6 +144,7 @@ fun HomeScreen(
                             onPermissionsRefresh()
                             diagnosticsRefreshKey++
                         },
+                        onOpenSafety = { navigate(HomeDestination.SECURITY) },
                         onOpenDriverApp = {
                             context.packageManager
                                 .getLaunchIntentForPackage(DRIVER_PACKAGE)
@@ -152,6 +153,14 @@ fun HomeScreen(
                     )
 
                     HomeDestination.FINANCE -> FinanceScreen()
+                    HomeDestination.SECURITY -> SafetyScreen(
+                        monitoringEnabled = monitoringEnabled,
+                        permissionState = permissionState,
+                        onMonitoringChange = ::setMonitoringEnabled,
+                        onOpenAccessibility = {
+                            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        }
+                    )
                     HomeDestination.PRIVACY -> PrivacyPolicyScreen(
                         onBack = { navigate(HomeDestination.START) },
                         onSupport = { uriHandler.openUri("mailto:$CALCMOT_SUPPORT_EMAIL") }
@@ -213,6 +222,12 @@ private fun AppDrawer(
                 onClick = { onSelect(HomeDestination.FINANCE) }
             )
             NavigationDrawerItem(
+                modifier = Modifier.testTag(UiTestTags.DRAWER_SECURITY_ITEM),
+                label = { Text("Segurança") },
+                selected = selected == HomeDestination.SECURITY,
+                onClick = { onSelect(HomeDestination.SECURITY) }
+            )
+            NavigationDrawerItem(
                 modifier = Modifier.testTag(UiTestTags.DRAWER_PRIVACY_ITEM),
                 label = { Text("Privacidade") },
                 selected = selected == HomeDestination.PRIVACY,
@@ -246,6 +261,7 @@ private fun StartContent(
     onOverlayPositionChange: (OverlayPositionPreference) -> Unit,
     onOpenAccessibility: () -> Unit,
     onPermissionsRefresh: () -> Unit,
+    onOpenSafety: () -> Unit,
     onOpenDriverApp: () -> Unit
 ) {
     Column(
@@ -266,6 +282,7 @@ private fun StartContent(
             onPermissionsRefresh = onPermissionsRefresh,
             onOpenDriverApp = onOpenDriverApp
         )
+        SafetySummaryCard(onOpenSafety = onOpenSafety)
         DailySummaryCard(
             state = DailySummaryUiState(
                 offersAnalyzed = 0,
@@ -285,6 +302,36 @@ private fun StartContent(
             selected = overlayPosition,
             onSelected = onOverlayPositionChange
         )
+    }
+}
+
+@Composable
+private fun SafetySummaryCard(onOpenSafety: () -> Unit) {
+    CalcMotCard(
+        modifier = Modifier.testTag(UiTestTags.SAFETY_SUMMARY_CARD),
+        variant = CalcMotCardVariant.HIGHLIGHT
+    ) {
+        Column(
+            modifier = Modifier.padding(CalcMotSpacing.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
+        ) {
+            Text(
+                text = "Seguro para usar no corre",
+                style = CalcMotTypography.CardTitle,
+                color = CalcMotColors.TextPrimary
+            )
+            Text(
+                text = "Lê só a oferta visível, calcula no aparelho e não toca na tela por você.",
+                style = CalcMotTypography.Body,
+                color = CalcMotColors.TextSecondary
+            )
+            CalcMotButton(
+                text = "Ver segurança",
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onOpenSafety,
+                variant = CalcMotButtonVariant.SECONDARY
+            )
+        }
     }
 }
 
@@ -450,6 +497,109 @@ private fun OverlayPreviewCard() {
 }
 
 @Composable
+private fun SafetyScreen(
+    monitoringEnabled: Boolean,
+    permissionState: AppPermissionState,
+    onMonitoringChange: (Boolean) -> Unit,
+    onOpenAccessibility: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag(UiTestTags.SECURITY_SCREEN)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = CalcMotSpacing.ScreenHorizontal, vertical = CalcMotSpacing.ScreenVertical),
+        verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.SectionGap)
+    ) {
+        CalcMotSectionHeader(
+            title = "Segurança",
+            subtitle = "O que o CalcMot lê, onde atua e como você mantém o controle."
+        )
+        SafetyControlCard(
+            monitoringEnabled = monitoringEnabled,
+            permissionState = permissionState,
+            onMonitoringChange = onMonitoringChange,
+            onOpenAccessibility = onOpenAccessibility
+        )
+        SafetyTextCard(
+            title = "Onde o CalcMot atua",
+            body = "Ele fica em espera e calcula quando encontra uma oferta completa no app de motorista."
+        )
+        SafetyTextCard(
+            title = "Onde ele não deve atuar",
+            body = "Em banco, conversa, foto, navegador ou outro app sensível, o CalcMot não mostra cálculo de oferta."
+        )
+        SafetyTextCard(
+            title = "O que ele não faz",
+            body = "Não aceita corrida, não recusa corrida, não toca na tela e não controla a Uber."
+        )
+        SafetyTextCard(
+            title = "Dados no aparelho",
+            body = "O cálculo usa a oferta visível e acontece localmente. O CalcMot não envia dados de corrida para servidor."
+        )
+    }
+}
+
+@Composable
+private fun SafetyControlCard(
+    monitoringEnabled: Boolean,
+    permissionState: AppPermissionState,
+    onMonitoringChange: (Boolean) -> Unit,
+    onOpenAccessibility: () -> Unit
+) {
+    CalcMotCard(
+        variant = if (monitoringEnabled && permissionState.hasAccessibilityService) {
+            CalcMotCardVariant.SUCCESS
+        } else {
+            CalcMotCardVariant.HIGHLIGHT
+        }
+    ) {
+        Column(
+            modifier = Modifier.padding(CalcMotSpacing.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
+        ) {
+            CalcMotSwitchRow(
+                title = if (monitoringEnabled) "CalcMot em espera" else "CalcMot pausado por você",
+                description = if (monitoringEnabled) {
+                    "Use este controle quando quiser parar a leitura da oferta."
+                } else {
+                    "Enquanto estiver pausado, o CalcMot não analisa ofertas."
+                },
+                checked = monitoringEnabled,
+                onCheckedChange = onMonitoringChange,
+                enabled = permissionState.hasAccessibilityService,
+                switchModifier = Modifier.testTag(UiTestTags.MONITORING_SWITCH)
+            )
+            if (!permissionState.hasAccessibilityService) {
+                CalcMotButton(
+                    text = "Permitir leitura da oferta",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON),
+                    onClick = onOpenAccessibility
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SafetyTextCard(
+    title: String,
+    body: String
+) {
+    CalcMotCard {
+        Column(
+            modifier = Modifier.padding(CalcMotSpacing.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Xs)
+        ) {
+            Text(text = title, style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
+            Text(text = body, style = CalcMotTypography.Body, color = CalcMotColors.TextSecondary)
+        }
+    }
+}
+
+@Composable
 private fun DiagnosticsScreen(
     snapshot: AppDiagnostics.Snapshot,
     onRefresh: () -> Unit
@@ -522,6 +672,7 @@ private fun StatusPill(status: HomeStatus) {
 private enum class HomeDestination(val title: String) {
     START("Início"),
     FINANCE("Finanças"),
+    SECURITY("Segurança"),
     PRIVACY("Privacidade"),
     DIAGNOSTICS("Diagnóstico")
 }

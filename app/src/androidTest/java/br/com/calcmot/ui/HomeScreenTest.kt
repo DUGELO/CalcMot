@@ -61,6 +61,10 @@ class HomeScreenTest {
         composeRule.onNodeWithTag(UiTestTags.MONITORING_SWITCH).assertIsOn()
         composeRule.onNodeWithTag(UiTestTags.OPEN_DRIVER_APP_BUTTON).assertIsDisplayed()
         composeRule.onNodeWithText("Abrir Uber Driver").assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.SAFETY_SUMMARY_CARD)
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Ver segurança").assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.OVERLAY_PREVIEW)
             .performScrollTo()
             .assertIsDisplayed()
@@ -89,6 +93,36 @@ class HomeScreenTest {
         composeRule.onNodeWithText("eduardoangelo20001@gmail.com", substring = true)
             .performScrollTo()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun drawerNavigatesToSecurity() {
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
+
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_SECURITY_ITEM).performClick()
+        composeRule.onNodeWithTag(UiTestTags.SECURITY_SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithText("Onde o CalcMot atua").assertIsDisplayed()
+        composeRule.onNodeWithText("O que ele não faz")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun securityScreenPausesMonitoring() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
+
+        composeRule.onNodeWithText("Ver segurança")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag(UiTestTags.SECURITY_SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.MONITORING_SWITCH).performClick()
+
+        composeRule.runOnIdle {
+            assertFalse(AppSettings.isMonitoringEnabled(context))
+        }
+        composeRule.onNodeWithText("CalcMot pausado por você").assertIsDisplayed()
     }
 
     @Test
