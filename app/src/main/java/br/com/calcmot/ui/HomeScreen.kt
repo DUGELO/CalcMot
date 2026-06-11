@@ -153,6 +153,7 @@ fun HomeScreen(
                     )
 
                     HomeDestination.FINANCE -> FinanceScreen()
+                    HomeDestination.RESULT -> ResultScreen()
                     HomeDestination.SECURITY -> SafetyScreen(
                         monitoringEnabled = monitoringEnabled,
                         permissionState = permissionState,
@@ -220,6 +221,12 @@ private fun AppDrawer(
                 label = { Text("Metas") },
                 selected = selected == HomeDestination.FINANCE,
                 onClick = { onSelect(HomeDestination.FINANCE) }
+            )
+            NavigationDrawerItem(
+                modifier = Modifier.testTag(UiTestTags.DRAWER_RESULT_ITEM),
+                label = { Text("Resultado") },
+                selected = selected == HomeDestination.RESULT,
+                onClick = { onSelect(HomeDestination.RESULT) }
             )
             NavigationDrawerItem(
                 modifier = Modifier.testTag(UiTestTags.DRAWER_SECURITY_ITEM),
@@ -672,6 +679,7 @@ private fun StatusPill(status: HomeStatus) {
 private enum class HomeDestination(val title: String) {
     START("Início"),
     FINANCE("Metas"),
+    RESULT("Resultado"),
     SECURITY("Segurança"),
     PRIVACY("Privacidade"),
     DIAGNOSTICS("Diagnóstico")

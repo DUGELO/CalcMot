@@ -44,12 +44,6 @@ import java.util.Locale
 @Composable
 fun FinanceScreen() {
     val context = LocalContext.current
-    val repository = remember { FinanceRepository(context) }
-    var entries by remember { mutableStateOf(repository.getEntries()) }
-    var selectedType by remember { mutableStateOf(FinanceEntryType.EARNING) }
-    var amountText by remember { mutableStateOf("") }
-    var descriptionText by remember { mutableStateOf("") }
-    var errorText by remember { mutableStateOf<String?>(null) }
     var profitabilitySettings by remember {
         mutableStateOf(AppSettings.getProfitabilitySettings(context))
     }
@@ -89,7 +83,6 @@ fun FinanceScreen() {
     }
     var profitabilityErrorText by remember { mutableStateOf<String?>(null) }
     var profitabilitySavedText by remember { mutableStateOf<String?>(null) }
-    val summary = entries.toFinanceSummary()
 
     LazyColumn(
         modifier = Modifier
@@ -231,6 +224,32 @@ fun FinanceScreen() {
                 }
             )
         }
+    }
+}
+
+@Composable
+fun ResultScreen() {
+    val context = LocalContext.current
+    val repository = remember { FinanceRepository(context) }
+    var entries by remember { mutableStateOf(repository.getEntries()) }
+    var selectedType by remember { mutableStateOf(FinanceEntryType.EARNING) }
+    var amountText by remember { mutableStateOf("") }
+    var descriptionText by remember { mutableStateOf("") }
+    var errorText by remember { mutableStateOf<String?>(null) }
+    val summary = entries.toFinanceSummary()
+
+    LazyColumn(
+        modifier = Modifier
+            .testTag(UiTestTags.RESULT_SCREEN)
+            .padding(horizontal = CalcMotSpacing.ScreenHorizontal, vertical = CalcMotSpacing.ScreenVertical),
+        verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
+    ) {
+        item {
+            CalcMotSectionHeader(
+                title = "Resultado",
+                subtitle = "Acompanhe ganhos e custos anotados no dia, sem misturar com suas metas."
+            )
+        }
 
         item {
             FinanceSummaryCard(
@@ -274,8 +293,8 @@ fun FinanceScreen() {
         if (entries.isEmpty()) {
             item {
                 CalcMotEmptyState(
-                    title = "Nenhum lançamento ainda.",
-                    body = "Anote ganhos e custos para acompanhar seu resultado líquido."
+                    title = "Nenhum ganho ou custo anotado hoje.",
+                    body = "Quando quiser acompanhar o resultado do dia, adicione seus ganhos e custos aqui."
                 )
             }
         } else {

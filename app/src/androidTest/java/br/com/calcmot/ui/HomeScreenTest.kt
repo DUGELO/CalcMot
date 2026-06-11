@@ -85,6 +85,17 @@ class HomeScreenTest {
     }
 
     @Test
+    fun drawerNavigatesToResult() {
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
+
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_RESULT_ITEM).performClick()
+        composeRule.onNodeWithTag(UiTestTags.RESULT_SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithText("Resultado de hoje").assertIsDisplayed()
+        composeRule.onNodeWithText("Nenhum ganho ou custo anotado hoje.").assertIsDisplayed()
+    }
+
+    @Test
     fun financePrioritizesGoalAndKeepsAdvancedCostsCollapsed() {
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
 
@@ -95,6 +106,7 @@ class HomeScreenTest {
         composeRule.onNodeWithText("Começando").assertIsDisplayed()
         composeRule.onNodeWithText("R$ 1,50/km • R$ 35,00/h").assertIsDisplayed()
         composeRule.onNodeWithText("Exigente").assertIsDisplayed()
+        composeRule.onAllNodesWithTag(UiTestTags.FINANCE_AMOUNT_INPUT).assertCountEquals(0)
 
         composeRule.onNodeWithTag(UiTestTags.FINANCE_SCREEN)
             .performScrollToNode(hasTestTag(UiTestTags.PROFIT_ADVANCED_TOGGLE))
@@ -163,8 +175,8 @@ class HomeScreenTest {
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
 
         composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
-        composeRule.onNodeWithTag(UiTestTags.DRAWER_FINANCE_ITEM).performClick()
-        composeRule.onNodeWithTag(UiTestTags.FINANCE_SCREEN)
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_RESULT_ITEM).performClick()
+        composeRule.onNodeWithTag(UiTestTags.RESULT_SCREEN)
             .performScrollToNode(hasTestTag(UiTestTags.FINANCE_AMOUNT_INPUT))
         composeRule.onNodeWithTag(UiTestTags.FINANCE_AMOUNT_INPUT).performTextInput("123,45")
         composeRule.onNodeWithTag(UiTestTags.FINANCE_DESCRIPTION_INPUT).performTextInput("Pedágio")
@@ -176,17 +188,17 @@ class HomeScreenTest {
             assertEquals(1, FinanceRepository(context).getEntries().size)
         }
 
-        composeRule.onNodeWithTag(UiTestTags.FINANCE_SCREEN)
+        composeRule.onNodeWithTag(UiTestTags.RESULT_SCREEN)
             .performScrollToNode(hasText("Pedágio"))
         composeRule.onNodeWithText("Pedágio").assertIsDisplayed()
 
-        composeRule.onNodeWithTag(UiTestTags.FINANCE_SCREEN)
+        composeRule.onNodeWithTag(UiTestTags.RESULT_SCREEN)
             .performScrollToNode(hasText("Excluir"))
         composeRule.onNodeWithText("Excluir").performClick()
         composeRule.runOnIdle {
             assertEquals(0, FinanceRepository(context).getEntries().size)
         }
-        composeRule.onNodeWithText("Nenhum lançamento ainda.")
+        composeRule.onNodeWithText("Nenhum ganho ou custo anotado hoje.")
             .performScrollTo()
             .assertIsDisplayed()
     }
