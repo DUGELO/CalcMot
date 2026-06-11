@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -59,6 +60,7 @@ class HomeScreenTest {
         composeRule.onAllNodesWithText("Roots vistos").assertCountEquals(0)
         composeRule.onNodeWithTag(UiTestTags.MONITORING_SWITCH).assertIsOn()
         composeRule.onNodeWithTag(UiTestTags.OPEN_DRIVER_APP_BUTTON).assertIsDisplayed()
+        composeRule.onNodeWithText("Abrir Uber Driver").assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.OVERLAY_PREVIEW)
             .performScrollTo()
             .assertIsDisplayed()
@@ -141,6 +143,8 @@ class HomeScreenTest {
             assertFalse(AppSettings.isMonitoringEnabled(context))
         }
         composeRule.onNodeWithText("Pausado").assertIsDisplayed()
+        composeRule.onNodeWithText("Ligar CalcMot").assertIsDisplayed()
+        composeRule.onAllNodesWithTag(UiTestTags.OPEN_DRIVER_APP_BUTTON).assertCountEquals(0)
         composeRule.onNodeWithTag(UiTestTags.MONITORING_SWITCH).assertIsOff()
     }
 

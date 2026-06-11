@@ -263,12 +263,8 @@ private fun StartContent(
             onMonitoringChange = onMonitoringChange,
             permissionState = permissionState,
             onOpenAccessibility = onOpenAccessibility,
-            onPermissionsRefresh = onPermissionsRefresh
-        )
-        FinancialImpactSummaryCard(
-            title = "Meta financeira no centro",
-            body = "O CalcMot compara cada oferta com sua meta e mostra o impacto sem prometer ganho garantido.",
-            positive = status == HomeStatus.READY
+            onPermissionsRefresh = onPermissionsRefresh,
+            onOpenDriverApp = onOpenDriverApp
         )
         DailySummaryCard(
             state = DailySummaryUiState(
@@ -279,19 +275,16 @@ private fun StartContent(
                 averagePerHour = "R$ 0"
             )
         )
-        CalcMotButton(
-            text = "Abrir app de motorista",
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag(UiTestTags.OPEN_DRIVER_APP_BUTTON),
-            onClick = onOpenDriverApp,
-            enabled = permissionState.hasAccessibilityService
+        FinancialImpactSummaryCard(
+            title = "Meta financeira no centro",
+            body = "O CalcMot compara cada oferta com sua meta e mostra o impacto sem prometer ganho garantido.",
+            positive = true
         )
+        OverlayPreviewCard()
         OverlayPositionCard(
             selected = overlayPosition,
             onSelected = onOverlayPositionChange
         )
-        OverlayPreviewCard()
     }
 }
 
@@ -300,7 +293,7 @@ private fun Header(status: HomeStatus) {
     Column(verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)) {
         CalcMotSectionHeader(
             title = "CalcMot",
-            subtitle = "Ligue, abra seu app de motorista e veja se a corrida vale a pena."
+            subtitle = "Veja rapidamente se a corrida compensa."
         )
         StatusPill(status = status)
     }
@@ -313,7 +306,8 @@ private fun StatusCard(
     onMonitoringChange: (Boolean) -> Unit,
     permissionState: AppPermissionState,
     onOpenAccessibility: () -> Unit,
-    onPermissionsRefresh: () -> Unit
+    onPermissionsRefresh: () -> Unit,
+    onOpenDriverApp: () -> Unit
 ) {
     CalcMotCard(variant = status.cardVariant) {
         Column(
@@ -329,24 +323,43 @@ private fun StatusCard(
                 switchModifier = Modifier.testTag(UiTestTags.MONITORING_SWITCH)
             )
 
-            if (!permissionState.hasAccessibilityService) {
-                CalcMotButton(
-                    text = "Permitir leitura da oferta",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON),
-                    onClick = onOpenAccessibility
-                )
-            }
+            when (status) {
+                HomeStatus.PERMISSION_PENDING -> {
+                    CalcMotButton(
+                        text = "Permitir leitura da oferta",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON),
+                        onClick = onOpenAccessibility
+                    )
+                    CalcMotButton(
+                        text = "Já permiti, verificar novamente",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(UiTestTags.REFRESH_PERMISSIONS_BUTTON),
+                        onClick = onPermissionsRefresh,
+                        variant = CalcMotButtonVariant.SECONDARY
+                    )
+                }
 
-            CalcMotButton(
-                text = "Já permiti, verificar novamente",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(UiTestTags.REFRESH_PERMISSIONS_BUTTON),
-                onClick = onPermissionsRefresh,
-                variant = CalcMotButtonVariant.SECONDARY
-            )
+                HomeStatus.READY -> {
+                    CalcMotButton(
+                        text = "Abrir Uber Driver",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(UiTestTags.OPEN_DRIVER_APP_BUTTON),
+                        onClick = onOpenDriverApp
+                    )
+                }
+
+                HomeStatus.PAUSED -> {
+                    CalcMotButton(
+                        text = "Ligar CalcMot",
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onMonitoringChange(true) }
+                    )
+                }
+            }
         }
     }
 }
