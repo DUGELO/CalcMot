@@ -3,7 +3,9 @@ package br.com.calcmot.ui
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -34,14 +36,18 @@ class OnboardingScreenTest {
             .performScrollTo()
             .assertIsDisplayed()
         composeRule.onNodeWithText("Como o CalcMot lê a oferta").assertIsDisplayed()
-        composeRule.onNodeWithText("não toca na tela", substring = true)
+        composeRule.onNodeWithText("Não toca na tela", substring = true)
             .performScrollTo()
             .assertIsDisplayed()
+        composeRule.onAllNodesWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertCountEquals(1)
         composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON)
             .performScrollTo()
             .assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertIsEnabled()
         composeRule.onNodeWithTag(UiTestTags.FINISH_ONBOARDING_BUTTON).assertIsNotEnabled()
+        composeRule.onNodeWithText("Ainda falta permitir a leitura da oferta", substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test
@@ -56,6 +62,7 @@ class OnboardingScreenTest {
         }
 
         composeRule.onNodeWithText("Ativo").assertIsDisplayed()
+        composeRule.onNodeWithText("Permissão ativada", substring = true).assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertIsNotEnabled()
         composeRule.onNodeWithTag(UiTestTags.FINISH_ONBOARDING_BUTTON).assertIsEnabled()
     }

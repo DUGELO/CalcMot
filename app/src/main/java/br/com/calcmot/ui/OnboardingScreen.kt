@@ -28,7 +28,6 @@ import br.com.calcmot.AppPermissionState
 import br.com.calcmot.ui.design.components.CalcMotButton
 import br.com.calcmot.ui.design.components.CalcMotButtonVariant
 import br.com.calcmot.ui.design.components.CalcMotCard
-import br.com.calcmot.ui.design.components.CalcMotInfoBanner
 import br.com.calcmot.ui.design.components.CalcMotScaffold
 import br.com.calcmot.ui.design.components.CalcMotSectionHeader
 import br.com.calcmot.ui.design.domain.PermissionStatus
@@ -71,11 +70,11 @@ fun OnboardingScreen(
 
                 PermissionStatusCard(
                     modifier = Modifier.testTag(UiTestTags.ACCESSIBILITY_PERMISSION_ITEM),
-                    title = "Permissão para ler a oferta",
+                    title = "Permita a leitura da oferta",
                     description = if (permissionState.hasAccessibilityService) {
-                        "Ativo."
+                        "Permissão ativada. Agora você pode usar o CalcMot na Uber."
                     } else {
-                        "O CalcMot precisa ler a oferta visível para calcular R$/km, R$/hora e impacto na sua meta."
+                        "O CalcMot usa essa permissão para ler a oferta visível enquanto você usa um app de motorista."
                     },
                     status = if (permissionState.hasAccessibilityService) {
                         PermissionStatus.ACTIVE
@@ -83,20 +82,12 @@ fun OnboardingScreen(
                         PermissionStatus.REQUIRED
                     },
                     actionLabel = "Permitir leitura da oferta",
+                    actionModifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON),
                     onAction = {
                         context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     }
-                )
-
-                CalcMotButton(
-                    text = "Permitir leitura da oferta",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON),
-                    onClick = {
-                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                    },
-                    enabled = !permissionState.hasAccessibilityService
                 )
 
                 CalcMotButton(
@@ -117,13 +108,21 @@ fun OnboardingScreen(
                     enabled = permissionState.hasAllRequiredPermissions
                 )
 
+                if (!permissionState.hasAllRequiredPermissions) {
+                    Text(
+                        text = "Ainda falta permitir a leitura da oferta. Toque no botão acima e ative o CalcMot nas configurações do Android.",
+                        style = CalcMotTypography.Caption,
+                        color = CalcMotColors.TextSecondary
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(CalcMotSpacing.Sm))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center
                 ) {
                     CalcMotButton(
-                        text = "Política de privacidade",
+                        text = "Ver política de privacidade",
                         modifier = Modifier.testTag(UiTestTags.PRIVACY_LINK),
                         onClick = { showPrivacyPolicy = true },
                         variant = CalcMotButtonVariant.GHOST
@@ -142,11 +141,35 @@ fun OnboardingScreen(
 
 @Composable
 private fun DisclosureCard() {
-    CalcMotInfoBanner(
-        modifier = Modifier.testTag(UiTestTags.ACCESSIBILITY_DISCLOSURE),
-        title = "Como o CalcMot lê a oferta",
-        body = "O CalcMot calcula R$/km, R$/hora e tempo total quando aparece uma oferta. Tudo acontece no seu aparelho. O CalcMot não toca na tela, não aceita corridas e não recusa corridas."
-    )
+    CalcMotCard(
+        modifier = Modifier.testTag(UiTestTags.ACCESSIBILITY_DISCLOSURE)
+    ) {
+        Column(
+            modifier = Modifier.padding(CalcMotSpacing.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)
+        ) {
+            Text(
+                text = "Como o CalcMot lê a oferta",
+                style = CalcMotTypography.CardTitle,
+                color = CalcMotColors.TextPrimary
+            )
+            Text(
+                text = "- Calcula R$/km e R$/hora quando aparece uma oferta.",
+                style = CalcMotTypography.Body,
+                color = CalcMotColors.TextSecondary
+            )
+            Text(
+                text = "- Tudo acontece no seu aparelho.",
+                style = CalcMotTypography.Body,
+                color = CalcMotColors.TextSecondary
+            )
+            Text(
+                text = "- Não toca na tela e não aceita corridas.",
+                style = CalcMotTypography.Body,
+                color = CalcMotColors.TextSecondary
+            )
+        }
+    }
 }
 
 @Composable

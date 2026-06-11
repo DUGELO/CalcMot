@@ -40,7 +40,8 @@ fun PermissionStatusCard(
     status: PermissionStatus,
     actionLabel: String,
     onAction: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    actionModifier: Modifier = Modifier.fillMaxWidth()
 ) {
     CalcMotCard(
         modifier = modifier,
@@ -67,7 +68,7 @@ fun PermissionStatusCard(
             CalcMotButton(
                 text = actionLabel,
                 onClick = onAction,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = actionModifier,
                 enabled = status != PermissionStatus.ACTIVE,
                 variant = if (status == PermissionStatus.ERROR) CalcMotButtonVariant.DANGER else CalcMotButtonVariant.PRIMARY
             )
