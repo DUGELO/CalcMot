@@ -134,15 +134,15 @@ object FinancialImpactCalculator {
     ): String {
         return when (classification) {
             OfferClassification.GREAT -> "+${formatMoney(min(impactByKm, impactByHour))} estimado"
-            OfferClassification.GOOD -> "Passa no km e na hora"
+            OfferClassification.GOOD -> "Boa por km e por hora"
             OfferClassification.WARNING -> when {
-                impactByKm < 0.0 -> "${formatMoney(abs(impactByKm))} abaixo no km"
-                impactByHour < 0.0 -> "${formatMoney(abs(impactByHour))} abaixo na hora"
+                impactByKm < 0.0 -> "${formatMoney(abs(impactByKm))} abaixo por km"
+                impactByHour < 0.0 -> "${formatMoney(abs(impactByHour))} abaixo por hora"
                 else -> "Confira sua meta"
             }
             OfferClassification.BAD -> when (finalMetric) {
-                ImpactMetric.KM -> "Abaixo no R$/km"
-                ImpactMetric.HOUR -> "Abaixo no R$/h"
+                ImpactMetric.KM -> "Abaixo por km"
+                ImpactMetric.HOUR -> "Abaixo por hora"
             }
         }
     }

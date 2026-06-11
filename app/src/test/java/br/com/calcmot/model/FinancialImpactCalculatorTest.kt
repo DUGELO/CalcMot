@@ -31,7 +31,7 @@ class FinancialImpactCalculatorTest {
         assertEquals(ImpactMetric.HOUR, impact.finalMetric)
         assertEquals(OfferClassification.WARNING, impact.classification)
         assertEquals("R$ 5,00 abaixo da sua meta", impact.message)
-        assertEquals("R$ 5,00 abaixo na hora", impact.subtext)
+        assertEquals("R$ 5,00 abaixo por hora", impact.subtext)
     }
 
     @Test

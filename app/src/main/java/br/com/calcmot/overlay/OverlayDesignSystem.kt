@@ -6,12 +6,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -27,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import br.com.calcmot.model.ImpactMetric
 import br.com.calcmot.model.OfferClassification
 import br.com.calcmot.model.OfferFinancialImpact
 import java.util.Locale
@@ -62,7 +61,7 @@ object CalcMotOpacity {
 
 object CalcMotTypography {
     val ValuePrimary = TextStyle(
-        fontSize = 21.sp,
+        fontSize = 23.sp,
         fontWeight = FontWeight.Bold
     )
 
@@ -93,9 +92,9 @@ object CalcMotSpacing {
     val Md = 12.dp
     val Lg = 16.dp
 
-    val OverlayPadding = 10.dp
-    val MetricGap = 6.dp
-    val SectionGap = 8.dp
+    val OverlayPadding = 9.dp
+    val MetricGap = 4.dp
+    val SectionGap = 5.dp
 }
 
 object CalcMotShape {
@@ -111,13 +110,14 @@ object CalcMotElevation {
 
 enum class OverlayOfferQuality(
     val label: String,
+    val meaning: String,
     val accentColor: Color,
     val badgeContentColor: Color
 ) {
-    GREAT("ÓTIMA", CalcMotColors.Great, CalcMotColors.TextPrimary),
-    GOOD("BOA", CalcMotColors.Good, CalcMotColors.TextPrimary),
-    WARNING("ATENÇÃO", CalcMotColors.Warning, Color(0xFF181818)),
-    BAD("RUIM", CalcMotColors.Bad, CalcMotColors.TextPrimary);
+    GREAT("ÓTIMA", "Muito acima da meta", CalcMotColors.Great, CalcMotColors.TextPrimary),
+    GOOD("BOA", "Dentro da meta", CalcMotColors.Good, CalcMotColors.TextPrimary),
+    WARNING("ATENÇÃO", "No limite", CalcMotColors.Warning, Color(0xFF181818)),
+    BAD("RUIM", "Abaixo da meta", CalcMotColors.Bad, CalcMotColors.TextPrimary);
 
     companion object {
         fun fromClassification(classification: OfferClassification): OverlayOfferQuality {
@@ -145,36 +145,51 @@ fun CalcMotOverlayContainer(
             .background(CalcMotColors.OverlayBackground)
             .border(
                 width = 1.dp,
-                color = quality.accentColor.copy(alpha = CalcMotOpacity.AccentFull),
+                color = quality.accentColor.copy(alpha = 0.72f),
                 shape = shape
             )
             .padding(CalcMotSpacing.OverlayPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.SectionGap)
     ) {
-        OverlayDragHandle(color = quality.accentColor)
+        OverlayDragHandle(color = CalcMotColors.TextMuted)
         content()
     }
 }
 
 @Composable
-fun OfferQualityBadge(
+fun OfferDecisionHeader(
     quality: OverlayOfferQuality,
     modifier: Modifier = Modifier
 ) {
-    Text(
-        text = quality.label,
+    Row(
         modifier = modifier
-            .clip(RoundedCornerShape(CalcMotShape.BadgeRadius))
-            .background(quality.accentColor)
-            .padding(horizontal = CalcMotSpacing.Sm, vertical = 3.dp)
-            .defaultMinSize(minWidth = 58.dp),
-        color = quality.badgeContentColor,
-        style = CalcMotTypography.MetricLabel.copy(fontWeight = FontWeight.Bold),
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis
-    )
+            .fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = quality.label,
+            modifier = Modifier
+                .clip(RoundedCornerShape(CalcMotShape.BadgeRadius))
+                .background(quality.accentColor)
+                .padding(horizontal = CalcMotSpacing.Sm, vertical = 3.dp)
+                .defaultMinSize(minWidth = 58.dp),
+            color = quality.badgeContentColor,
+            style = CalcMotTypography.MetricLabel.copy(fontWeight = FontWeight.Bold),
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = quality.meaning,
+            modifier = Modifier.padding(start = CalcMotSpacing.Sm),
+            color = CalcMotColors.TextPrimary,
+            style = CalcMotTypography.ImpactMessage,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 @Composable
@@ -210,69 +225,19 @@ fun MetricRow(
 }
 
 @Composable
-fun FinancialImpactBlock(
+fun FinancialImpactLine(
     impact: OfferFinancialImpact,
     quality: OverlayOfferQuality,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    Text(
+        text = impact.decisionImpactLine(),
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(CalcMotColors.SurfaceElevated)
-            .border(
-                width = 1.dp,
-                color = quality.accentColor.copy(alpha = 0.42f),
-                shape = RoundedCornerShape(10.dp)
-            )
-            .padding(horizontal = CalcMotSpacing.Sm, vertical = 6.dp),
-        horizontalAlignment = Alignment.Start,
-        verticalArrangement = Arrangement.spacedBy(3.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Xs)
-        ) {
-            GoalStatusPill(
-                impact = impact.finalImpact,
-                quality = quality
-            )
-            Text(
-                text = impact.overlayMessage(),
-                modifier = Modifier.weight(1f),
-                color = CalcMotColors.TextPrimary,
-                style = CalcMotTypography.ImpactMessage,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        Text(
-            text = impact.subtext,
-            color = CalcMotColors.TextSecondary.copy(alpha = CalcMotOpacity.SecondaryText),
-            style = CalcMotTypography.ImpactSubMessage,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-fun GoalStatusPill(
-    impact: Double,
-    quality: OverlayOfferQuality,
-    modifier: Modifier = Modifier
-) {
-    val isPositive = impact >= 0.0
-    val text = "${if (isPositive) "+" else "-"}${formatMoney(abs(impact))}"
-    Text(
-        text = text,
-        modifier = modifier
-            .clip(RoundedCornerShape(CalcMotShape.BadgeRadius))
-            .background(quality.accentColor.copy(alpha = if (isPositive) 0.28f else 0.34f))
-            .padding(horizontal = 6.dp, vertical = 2.dp),
-        color = CalcMotColors.TextPrimary,
-        style = CalcMotTypography.ImpactSubMessage.copy(fontWeight = FontWeight.Bold),
+            .padding(top = 1.dp),
+        color = quality.accentColor,
+        style = CalcMotTypography.ImpactMessage,
+        textAlign = TextAlign.Center,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis
     )
@@ -282,13 +247,13 @@ fun GoalStatusPill(
 fun OverlayDragHandle(
     color: Color,
     modifier: Modifier = Modifier,
-    width: Dp = 34.dp
+    width: Dp = 30.dp
 ) {
     Box(
         modifier = modifier
             .size(width = width, height = 3.dp)
             .clip(RoundedCornerShape(CalcMotShape.BadgeRadius))
-            .background(color.copy(alpha = 0.55f))
+            .background(color.copy(alpha = 0.34f))
     )
 }
 
@@ -315,25 +280,33 @@ fun OverlayMetricSummary(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            MetricRow(
-                value = perHour,
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(CalcMotSpacing.Sm))
-            MetricRow(
-                value = duration,
-                label = "tempo total",
-                modifier = Modifier.weight(1f)
+            Text(
+                text = "$perHour · $duration",
+                color = CalcMotColors.TextPrimary,
+                style = CalcMotTypography.MetricValue,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
 }
 
-private fun OfferFinancialImpact.overlayMessage(): String {
-    return when {
-        classification == OfferClassification.GREAT -> "Muito acima da meta"
-        finalImpact >= 0.0 -> "Acima da meta"
-        else -> "Abaixo da meta"
+private fun OfferFinancialImpact.decisionImpactLine(): String {
+    val value = formatMoney(abs(finalImpact))
+    return if (finalImpact >= 0.0) {
+        "+$value acima da meta"
+    } else {
+        "-$value ${negativeImpactLabel()}"
+    }
+}
+
+private fun OfferFinancialImpact.negativeImpactLabel(): String {
+    return when (classification) {
+        OfferClassification.WARNING -> when (finalMetric) {
+            ImpactMetric.KM -> "abaixo por km"
+            ImpactMetric.HOUR -> "abaixo por hora"
+        }
+        else -> "abaixo da meta"
     }
 }
 

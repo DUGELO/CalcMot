@@ -23,7 +23,7 @@ fun OverlayView(
     CalcMotOverlayContainer(
         quality = quality
     ) {
-        OfferQualityBadge(quality = quality)
+        OfferDecisionHeader(quality = quality)
         OverlayMetricSummary(
             perKm = brCurrencyPerUnit(perKm, "km"),
             perHour = brCurrencyPerUnit(perHour, "h"),
@@ -31,7 +31,7 @@ fun OverlayView(
             quality = quality
         )
         financialImpact?.let {
-            FinancialImpactBlock(
+            FinancialImpactLine(
                 impact = it,
                 quality = quality
             )
