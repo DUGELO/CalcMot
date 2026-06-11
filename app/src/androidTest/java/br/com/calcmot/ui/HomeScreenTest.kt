@@ -93,7 +93,7 @@ class HomeScreenTest {
         composeRule.onNodeWithText("Mostrar impacto na meta").assertIsDisplayed()
         composeRule.onNodeWithText("Escolha uma meta rápida").assertIsDisplayed()
         composeRule.onNodeWithText("Começando").assertIsDisplayed()
-        composeRule.onNodeWithText("Equilibrado").assertIsDisplayed()
+        composeRule.onNodeWithText("R$ 1,50/km • R$ 35,00/h").assertIsDisplayed()
         composeRule.onNodeWithText("Exigente").assertIsDisplayed()
 
         composeRule.onNodeWithTag(UiTestTags.FINANCE_SCREEN)
@@ -110,6 +110,9 @@ class HomeScreenTest {
         composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
         composeRule.onNodeWithTag(UiTestTags.DRAWER_PRIVACY_ITEM).performClick()
         composeRule.onNodeWithTag(UiTestTags.PRIVACY_POLICY_SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithText("Sua segurança primeiro").assertIsDisplayed()
+        composeRule.onNodeWithText("3 garantias importantes").assertIsDisplayed()
+        composeRule.onNodeWithText("O que o CalcMot não faz").assertIsDisplayed()
         composeRule.onNodeWithText("eduardoangelo20001@gmail.com", substring = true)
             .performScrollTo()
             .assertIsDisplayed()

@@ -43,7 +43,27 @@ fun PrivacyPolicyScreen(
 
             CalcMotSectionHeader(
                 modifier = Modifier.testTag(UiTestTags.PRIVACY_POLICY_SCREEN),
-                title = "Política de privacidade",
+                title = "Sua segurança primeiro",
+                subtitle = "Antes dos detalhes legais, veja o que o CalcMot faz e o que ele não faz."
+            )
+
+            PolicySection(
+                title = "3 garantias importantes",
+                body = "O CalcMot não toca na tela. Não aceita nem recusa corridas. Não envia ofertas para servidor."
+            )
+
+            PolicySection(
+                title = "O que o CalcMot não faz",
+                body = "Não acessa sua conta bancária. Não lê mensagens. Não aceita corridas por você. Não recusa corridas por você. Não vende seus dados."
+            )
+
+            PolicySection(
+                title = "Controle do usuário",
+                body = "Você pode pausar o CalcMot dentro do app a qualquer momento. Também pode remover a permissão de leitura da oferta nas configurações do Android."
+            )
+
+            CalcMotSectionHeader(
+                title = "Detalhes da política",
                 subtitle = "Última atualização: 27 de maio de 2026."
             )
 
@@ -58,7 +78,7 @@ fun PrivacyPolicyScreen(
             )
 
             PolicySection(
-                title = "Acessibilidade e leitura local",
+                title = "Permissão para ler a oferta",
                 body = "O CalcMot usa a permissão de leitura da tela para identificar ofertas visíveis e mostrar o cálculo por cima da Uber. Quando necessário, o app lê localmente somente a oferta visível na tela."
             )
 
@@ -68,18 +88,8 @@ fun PrivacyPolicyScreen(
             )
 
             PolicySection(
-                title = "O que o app não faz",
-                body = "O app não aceita corridas, não recusa corridas, não toca na tela por você e não controla o app de motorista. O CalcMot não é afiliado à Uber."
-            )
-
-            PolicySection(
                 title = "Compartilhamento",
                 body = "O CalcMot não vende dados pessoais e não compartilha dados de ofertas ou corridas com terceiros."
-            )
-
-            PolicySection(
-                title = "Controle do usuário",
-                body = "Você pode pausar o CalcMot dentro do app a qualquer momento. Também pode remover a permissão de leitura da oferta nas configurações do Android."
             )
 
             PolicySection(
