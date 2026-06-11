@@ -2,63 +2,50 @@ package br.com.calcmot.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import br.com.calcmot.ui.design.components.CalcMotButton
+import br.com.calcmot.ui.design.components.CalcMotButtonVariant
+import br.com.calcmot.ui.design.components.CalcMotCard
+import br.com.calcmot.ui.design.components.CalcMotScaffold
+import br.com.calcmot.ui.design.components.CalcMotSectionHeader
+import br.com.calcmot.ui.design.tokens.CalcMotColors
+import br.com.calcmot.ui.design.tokens.CalcMotSpacing
+import br.com.calcmot.ui.design.tokens.CalcMotTypography
 
 @Composable
 fun PrivacyPolicyScreen(
     onBack: () -> Unit,
     onSupport: () -> Unit
 ) {
-    Scaffold { innerPadding ->
+    CalcMotScaffold { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(innerPadding)
-                .padding(horizontal = 20.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+                .padding(horizontal = CalcMotSpacing.ScreenHorizontal, vertical = CalcMotSpacing.ScreenVertical),
+            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.SectionGap)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    modifier = Modifier.testTag(UiTestTags.PRIVACY_POLICY_BACK_BUTTON),
-                    onClick = onBack
-                ) {
-                    Text("Voltar")
-                }
-            }
+            CalcMotButton(
+                modifier = Modifier.testTag(UiTestTags.PRIVACY_POLICY_BACK_BUTTON),
+                text = "Voltar",
+                onClick = onBack,
+                variant = CalcMotButtonVariant.SECONDARY
+            )
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    modifier = Modifier.testTag(UiTestTags.PRIVACY_POLICY_SCREEN),
-                    text = "Política de privacidade",
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Última atualização: 27 de maio de 2026.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
+            CalcMotSectionHeader(
+                modifier = Modifier.testTag(UiTestTags.PRIVACY_POLICY_SCREEN),
+                title = "Política de privacidade",
+                subtitle = "Última atualização: 27 de maio de 2026."
+            )
 
             PolicySection(
                 title = "Resumo",
@@ -100,14 +87,13 @@ fun PrivacyPolicyScreen(
                 body = "Para dúvidas, suporte ou solicitações relacionadas à privacidade, entre em contato pelo email $CALCMOT_SUPPORT_EMAIL."
             )
 
-            Button(
+            CalcMotButton(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(UiTestTags.PRIVACY_POLICY_SUPPORT_BUTTON),
+                text = "Enviar email para suporte",
                 onClick = onSupport
-            ) {
-                Text("Enviar email para suporte")
-            }
+            )
         }
     }
 }
@@ -117,16 +103,13 @@ private fun PolicySection(
     title: String,
     body: String
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = body,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.secondary
-        )
+    CalcMotCard {
+        Column(
+            modifier = Modifier.padding(CalcMotSpacing.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Xs)
+        ) {
+            Text(text = title, style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
+            Text(text = body, style = CalcMotTypography.Body, color = CalcMotColors.TextSecondary)
+        }
     }
 }

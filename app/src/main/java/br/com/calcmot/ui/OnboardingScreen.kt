@@ -11,17 +11,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,9 +24,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import br.com.calcmot.AppPermissionState
+import br.com.calcmot.ui.design.components.CalcMotButton
+import br.com.calcmot.ui.design.components.CalcMotButtonVariant
+import br.com.calcmot.ui.design.components.CalcMotCard
+import br.com.calcmot.ui.design.components.CalcMotInfoBanner
+import br.com.calcmot.ui.design.components.CalcMotScaffold
+import br.com.calcmot.ui.design.components.CalcMotSectionHeader
+import br.com.calcmot.ui.design.domain.PermissionStatus
+import br.com.calcmot.ui.design.domain.PermissionStatusCard
+import br.com.calcmot.ui.design.tokens.CalcMotColors
+import br.com.calcmot.ui.design.tokens.CalcMotSpacing
+import br.com.calcmot.ui.design.tokens.CalcMotTypography
 
 @Composable
 fun OnboardingScreen(
@@ -51,41 +52,44 @@ fun OnboardingScreen(
             onSupport = { uriHandler.openUri("mailto:$CALCMOT_SUPPORT_EMAIL") }
         )
     } else {
-        Scaffold { innerPadding ->
+        CalcMotScaffold { innerPadding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag(UiTestTags.ONBOARDING_SCREEN)
                     .verticalScroll(rememberScrollState())
                     .padding(innerPadding)
-                    .padding(horizontal = 20.dp, vertical = 28.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
+                    .padding(horizontal = CalcMotSpacing.ScreenHorizontal, vertical = CalcMotSpacing.Xl),
+                verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.SectionGap)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("CalcMot", style = MaterialTheme.typography.displayLarge)
-                    Text(
-                        text = "Assistente de leitura de ofertas para motoristas de app.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                }
+                CalcMotSectionHeader(
+                    title = "CalcMot",
+                    subtitle = "Assistente de leitura de ofertas para motoristas de app."
+                )
 
                 DisclosureCard()
 
-                PermissionCheckItem(
-                    text = "Serviço de acessibilidade",
-                    detail = if (permissionState.hasAccessibilityService) {
-                        "Ativo"
+                PermissionStatusCard(
+                    modifier = Modifier.testTag(UiTestTags.ACCESSIBILITY_PERMISSION_ITEM),
+                    title = "Serviço de acessibilidade",
+                    description = if (permissionState.hasAccessibilityService) {
+                        "Ativo."
                     } else {
-                        "Necessário para ler cards de oferta visíveis."
+                        "Necessário para ler cards de oferta visíveis e calcular suas métricas."
                     },
-                    isChecked = permissionState.hasAccessibilityService,
-                    onClick = {
+                    status = if (permissionState.hasAccessibilityService) {
+                        PermissionStatus.ACTIVE
+                    } else {
+                        PermissionStatus.REQUIRED
+                    },
+                    actionLabel = "Abrir acessibilidade",
+                    onAction = {
                         context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     }
                 )
 
-                Button(
+                CalcMotButton(
+                    text = "Abrir acessibilidade",
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON),
@@ -93,46 +97,43 @@ fun OnboardingScreen(
                         context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     },
                     enabled = !permissionState.hasAccessibilityService
-                ) {
-                    Text("Abrir acessibilidade")
-                }
+                )
 
-                OutlinedButton(
+                CalcMotButton(
+                    text = "Atualizar estado",
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(UiTestTags.REFRESH_PERMISSIONS_BUTTON),
-                    onClick = onPermissionsRefresh
-                ) {
-                    Text("Atualizar estado")
-                }
+                    onClick = onPermissionsRefresh,
+                    variant = CalcMotButtonVariant.SECONDARY
+                )
 
-                Button(
+                CalcMotButton(
+                    text = "Concluir",
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(UiTestTags.FINISH_ONBOARDING_BUTTON),
                     onClick = onPermissionsRefresh,
                     enabled = permissionState.hasAllRequiredPermissions
-                ) {
-                    Text("Concluir")
-                }
+                )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(CalcMotSpacing.Sm))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    TextButton(
+                    CalcMotButton(
+                        text = "Política de privacidade",
                         modifier = Modifier.testTag(UiTestTags.PRIVACY_LINK),
-                        onClick = { showPrivacyPolicy = true }
-                    ) {
-                        Text("Política de privacidade")
-                    }
-                    TextButton(
+                        onClick = { showPrivacyPolicy = true },
+                        variant = CalcMotButtonVariant.GHOST
+                    )
+                    CalcMotButton(
+                        text = "Suporte",
                         modifier = Modifier.testTag(UiTestTags.SUPPORT_LINK),
-                        onClick = { uriHandler.openUri("mailto:$CALCMOT_SUPPORT_EMAIL") }
-                    ) {
-                        Text("Suporte")
-                    }
+                        onClick = { uriHandler.openUri("mailto:$CALCMOT_SUPPORT_EMAIL") },
+                        variant = CalcMotButtonVariant.GHOST
+                    )
                 }
             }
         }
@@ -141,32 +142,11 @@ fun OnboardingScreen(
 
 @Composable
 private fun DisclosureCard() {
-    Card(
+    CalcMotInfoBanner(
         modifier = Modifier.testTag(UiTestTags.ACCESSIBILITY_DISCLOSURE),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(
-                text = "Como o CalcMot usa acessibilidade",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "O CalcMot lê cards de oferta visíveis no app de motorista para calcular R$/km, R$/h e tempo total. O processamento acontece no aparelho.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.secondary
-            )
-            Text(
-                text = "O app não toca na tela, não aceita corridas, não recusa corridas e não é afiliado à Uber.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.secondary
-            )
-        }
-    }
+        title = "Como o CalcMot usa acessibilidade",
+        body = "O CalcMot lê cards de oferta visíveis para calcular R$/km, R$/h e tempo total no aparelho. O app não toca na tela, não aceita corridas, não recusa corridas e não é afiliado à Uber."
+    )
 }
 
 @Composable
@@ -176,24 +156,22 @@ fun PermissionCheckItem(
     isChecked: Boolean,
     onClick: () -> Unit
 ) {
-    Card(
+    CalcMotCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(UiTestTags.ACCESSIBILITY_PERMISSION_ITEM),
-        onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(8.dp)
+        onClick = onClick
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(CalcMotSpacing.CardPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text, style = MaterialTheme.typography.titleLarge)
+                Text(text, style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
                 Text(
                     text = detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.secondary
+                    style = CalcMotTypography.Caption,
+                    color = CalcMotColors.TextSecondary
                 )
             }
             Checkbox(checked = isChecked, onCheckedChange = null)

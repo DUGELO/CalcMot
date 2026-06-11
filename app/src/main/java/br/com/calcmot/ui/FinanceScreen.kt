@@ -7,28 +7,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import br.com.calcmot.AppSettings
 import br.com.calcmot.finance.FinanceEntry
 import br.com.calcmot.finance.FinanceEntryType
@@ -38,6 +26,19 @@ import br.com.calcmot.finance.toFinanceSummary
 import br.com.calcmot.model.DriverGoal
 import br.com.calcmot.model.GoalMode
 import br.com.calcmot.model.ProfitabilitySettings
+import br.com.calcmot.ui.design.components.CalcMotButton
+import br.com.calcmot.ui.design.components.CalcMotButtonVariant
+import br.com.calcmot.ui.design.components.CalcMotCard
+import br.com.calcmot.ui.design.components.CalcMotEmptyState
+import br.com.calcmot.ui.design.components.CalcMotNumberField
+import br.com.calcmot.ui.design.components.CalcMotSectionHeader
+import br.com.calcmot.ui.design.components.CalcMotSwitchRow
+import br.com.calcmot.ui.design.components.CalcMotTextField
+import br.com.calcmot.ui.design.domain.FinancialImpactSummaryCard
+import br.com.calcmot.ui.design.domain.GoalPresetCard
+import br.com.calcmot.ui.design.tokens.CalcMotColors
+import br.com.calcmot.ui.design.tokens.CalcMotSpacing
+import br.com.calcmot.ui.design.tokens.CalcMotTypography
 import java.util.Locale
 
 @Composable
@@ -92,22 +93,14 @@ fun FinanceScreen() {
     LazyColumn(
         modifier = Modifier
             .testTag(UiTestTags.FINANCE_SCREEN)
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .padding(horizontal = CalcMotSpacing.ScreenHorizontal, vertical = CalcMotSpacing.ScreenVertical),
+        verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "Finanças",
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Anote ganhos e custos do seu dia de trabalho.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
+            CalcMotSectionHeader(
+                title = "Finanças",
+                subtitle = "Metas, custos e lançamentos do seu dia de trabalho."
+            )
         }
 
         item {
@@ -116,6 +109,36 @@ fun FinanceScreen() {
                 costs = summary.costsCents,
                 net = summary.netCents,
                 count = summary.entryCount
+            )
+        }
+
+        item {
+            FinanceFormCard(
+                selectedType = selectedType,
+                amountText = amountText,
+                descriptionText = descriptionText,
+                errorText = errorText,
+                onTypeChange = { selectedType = it },
+                onAmountChange = {
+                    amountText = it
+                    errorText = null
+                },
+                onDescriptionChange = { descriptionText = it },
+                onAdd = {
+                    val amountCents = FinanceFormatter.parseMoneyToCents(amountText)
+                    if (amountCents == null) {
+                        errorText = "Digite um valor válido."
+                    } else {
+                        entries = repository.addEntry(
+                            type = selectedType,
+                            amountCents = amountCents,
+                            description = descriptionText
+                        )
+                        amountText = ""
+                        descriptionText = ""
+                        errorText = null
+                    }
+                }
             )
         }
 
@@ -149,6 +172,13 @@ fun FinanceScreen() {
                 },
                 onGoalModeChange = {
                     goalMode = it
+                    goalErrorText = null
+                    goalSavedText = null
+                },
+                onPreset = { preset ->
+                    goalKmText = preset.km.toInputText()
+                    goalHourText = preset.hour.toInputText()
+                    goalMode = preset.mode
                     goalErrorText = null
                     goalSavedText = null
                 },
@@ -236,43 +266,11 @@ fun FinanceScreen() {
             )
         }
 
-        item {
-            FinanceFormCard(
-                selectedType = selectedType,
-                amountText = amountText,
-                descriptionText = descriptionText,
-                errorText = errorText,
-                onTypeChange = { selectedType = it },
-                onAmountChange = {
-                    amountText = it
-                    errorText = null
-                },
-                onDescriptionChange = { descriptionText = it },
-                onAdd = {
-                    val amountCents = FinanceFormatter.parseMoneyToCents(amountText)
-                    if (amountCents == null) {
-                        errorText = "Digite um valor válido."
-                    } else {
-                        entries = repository.addEntry(
-                            type = selectedType,
-                            amountCents = amountCents,
-                            description = descriptionText
-                        )
-                        amountText = ""
-                        descriptionText = ""
-                        errorText = null
-                    }
-                }
-            )
-        }
-
         if (entries.isEmpty()) {
             item {
-                Text(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    text = "Nenhum lançamento ainda.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.secondary
+                CalcMotEmptyState(
+                    title = "Nenhum lançamento ainda.",
+                    body = "Anote ganhos e custos para acompanhar seu resultado líquido."
                 )
             }
         } else {
@@ -298,68 +296,58 @@ private fun DriverGoalSettingsCard(
     onGoalKmChange: (String) -> Unit,
     onGoalHourChange: (String) -> Unit,
     onGoalModeChange: (GoalMode) -> Unit,
+    onPreset: (GoalPreset) -> Unit,
     onSave: () -> Unit
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
+    CalcMotCard {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(CalcMotSpacing.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Impacto no aviso",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Mostra quanto a oferta esta acima ou abaixo da sua meta.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                }
-                Switch(
-                    modifier = Modifier.testTag(UiTestTags.FINANCIAL_IMPACT_SWITCH),
-                    checked = enabled,
-                    onCheckedChange = onEnabledChange
+            CalcMotSwitchRow(
+                title = "Impacto no aviso",
+                description = "Mostra quanto a oferta está acima ou abaixo da sua meta.",
+                checked = enabled,
+                onCheckedChange = onEnabledChange,
+                switchModifier = Modifier.testTag(UiTestTags.FINANCIAL_IMPACT_SWITCH)
+            )
+
+            Text(text = "Presets de meta", style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
+            GoalPreset.entries.forEach { preset ->
+                GoalPresetCard(
+                    title = preset.label,
+                    perKm = preset.km.toCurrency(),
+                    perHour = preset.hour.toCurrency(),
+                    selected = goalKmText == preset.km.toInputText() && goalHourText == preset.hour.toInputText(),
+                    onClick = { onPreset(preset) }
                 )
             }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)
             ) {
-                OutlinedTextField(
+                CalcMotNumberField(
                     modifier = Modifier
                         .weight(1f)
                         .testTag(UiTestTags.DRIVER_GOAL_KM_INPUT),
                     value = goalKmText,
                     onValueChange = onGoalKmChange,
-                    label = { Text("Meta R$/km") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true
+                    label = "Meta R$/km"
                 )
-                OutlinedTextField(
+                CalcMotNumberField(
                     modifier = Modifier
                         .weight(1f)
                         .testTag(UiTestTags.DRIVER_GOAL_HOUR_INPUT),
                     value = goalHourText,
                     onValueChange = onGoalHourChange,
-                    label = { Text("Meta R$/h") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true
+                    label = "Meta R$/h"
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)) {
                 GoalMode.entries.forEach { mode ->
                     FilterChip(
                         selected = goalMode == mode,
@@ -370,28 +358,19 @@ private fun DriverGoalSettingsCard(
             }
 
             errorText?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
+                Text(text = it, style = CalcMotTypography.Caption, color = CalcMotColors.Danger)
             }
             savedText?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Text(text = it, style = CalcMotTypography.Caption, color = CalcMotColors.BrandAccent)
             }
 
-            Button(
+            CalcMotButton(
+                text = "Salvar metas",
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(UiTestTags.DRIVER_GOAL_SAVE_BUTTON),
                 onClick = onSave
-            ) {
-                Text("Salvar metas")
-            }
+            )
         }
     }
 }
@@ -415,121 +394,94 @@ private fun ProfitabilitySettingsCard(
     onHourChange: (String) -> Unit,
     onSave: () -> Unit
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
+    CalcMotCard {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(CalcMotSpacing.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
         ) {
-            Text(
-                text = "Conta da corrida",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
+            Text(text = "Conta da corrida", style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
             Text(
                 text = "Preencha uma vez para o aviso mostrar lucro líquido, já descontando o custo do carro.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.secondary
+                style = CalcMotTypography.Body,
+                color = CalcMotColors.TextSecondary
             )
-            Text(
-                text = "Custo atual: ${formatMoneyPerKm(settings.operatingCostPerKm)}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+            FinancialImpactSummaryCard(
+                title = "Custo atual",
+                body = "${formatMoneyPerKm(settings.operatingCostPerKm)} descontado de cada oferta.",
+                positive = true
             )
-            OutlinedTextField(
+            CalcMotNumberField(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(UiTestTags.PROFIT_EFFICIENCY_INPUT),
                 value = efficiencyText,
                 onValueChange = onEfficiencyChange,
-                label = { Text("Rendimento do carro") },
-                placeholder = { Text("Ex: 10 km/l") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                singleLine = true
+                label = "Rendimento do carro",
+                placeholder = "Ex: 10 km/l"
             )
-            OutlinedTextField(
+            CalcMotNumberField(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(UiTestTags.PROFIT_INPUT_PRICE_INPUT),
                 value = inputPriceText,
                 onValueChange = onInputPriceChange,
-                label = { Text("Preço do combustível") },
-                placeholder = { Text("Ex: 5,89") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                singleLine = true
+                label = "Preço do combustível",
+                placeholder = "Ex: 5,89"
             )
-            OutlinedTextField(
+            CalcMotNumberField(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(UiTestTags.PROFIT_MAINTENANCE_INPUT),
                 value = maintenanceText,
                 onValueChange = onMaintenanceChange,
-                label = { Text("Manutenção por km") },
-                placeholder = { Text("Ex: 0,35") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                singleLine = true
+                label = "Manutenção por km",
+                placeholder = "Ex: 0,35"
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)
             ) {
-                OutlinedTextField(
+                CalcMotNumberField(
                     modifier = Modifier
                         .weight(1f)
                         .testTag(UiTestTags.PROFIT_GOOD_KM_INPUT),
                     value = goodKmText,
                     onValueChange = onGoodKmChange,
-                    label = { Text("Boa R$/km") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true
+                    label = "Boa R$/km"
                 )
-                OutlinedTextField(
+                CalcMotNumberField(
                     modifier = Modifier
                         .weight(1f)
                         .testTag(UiTestTags.PROFIT_MEDIUM_KM_INPUT),
                     value = mediumKmText,
                     onValueChange = onMediumKmChange,
-                    label = { Text("Média R$/km") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true
+                    label = "Atenção R$/km"
                 )
             }
-            OutlinedTextField(
+            CalcMotNumberField(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(UiTestTags.PROFIT_HOUR_INPUT),
                 value = hourText,
                 onValueChange = onHourChange,
-                label = { Text("Meta R$/h líquido") },
-                placeholder = { Text("Opcional") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                singleLine = true
+                label = "Meta R$/h líquido",
+                placeholder = "Opcional"
             )
             errorText?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
+                Text(text = it, style = CalcMotTypography.Caption, color = CalcMotColors.Danger)
             }
             savedText?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Text(text = it, style = CalcMotTypography.Caption, color = CalcMotColors.BrandAccent)
             }
-            Button(
+            CalcMotButton(
+                text = "Salvar conta",
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(UiTestTags.PROFIT_SAVE_BUTTON),
                 onClick = onSave
-            ) {
-                Text("Salvar conta")
-            }
+            )
         }
     }
 }
@@ -541,41 +493,99 @@ private fun FinanceSummaryCard(
     net: Long,
     count: Int
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
+    val positive = net >= 0
+    FinancialImpactSummaryCard(
+        title = "Resultado líquido",
+        body = "${FinanceFormatter.formatSignedMoney(net)} em ${countLabel(count)}. Ganhos: ${FinanceFormatter.formatMoney(earnings)}. Custos: ${FinanceFormatter.formatMoney(costs)}.",
+        positive = positive
+    )
+}
+
+@Composable
+private fun FinanceFormCard(
+    selectedType: FinanceEntryType,
+    amountText: String,
+    descriptionText: String,
+    errorText: String?,
+    onTypeChange: (FinanceEntryType) -> Unit,
+    onAmountChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onAdd: () -> Unit
+) {
+    CalcMotCard {
+        Column(
+            modifier = Modifier.padding(CalcMotSpacing.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)) {
+                FinanceEntryType.entries.forEach { type ->
+                    FilterChip(
+                        selected = selectedType == type,
+                        onClick = { onTypeChange(type) },
+                        label = { Text(type.label) }
+                    )
+                }
+            }
+            CalcMotNumberField(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(UiTestTags.FINANCE_AMOUNT_INPUT),
+                value = amountText,
+                onValueChange = onAmountChange,
+                label = "Valor",
+                isError = errorText != null,
+                supportingText = errorText
+            )
+            CalcMotTextField(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(UiTestTags.FINANCE_DESCRIPTION_INPUT),
+                value = descriptionText,
+                onValueChange = onDescriptionChange,
+                label = "Descrição"
+            )
+            CalcMotButton(
+                text = "Adicionar",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(UiTestTags.FINANCE_ADD_BUTTON),
+                onClick = onAdd
+            )
+        }
+    }
+}
+
+@Composable
+private fun FinanceEntryRow(
+    entry: FinanceEntry,
+    onDelete: () -> Unit
+) {
+    CalcMotCard {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(CalcMotSpacing.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)
         ) {
-            Text(
-                text = "Resultado líquido",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = FinanceFormatter.formatSignedMoney(net),
-                style = MaterialTheme.typography.displayMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column {
                 Text(
-                    text = "Ganhos: ${FinanceFormatter.formatMoney(earnings)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary
+                    text = "${entry.type.label} - ${FinanceFormatter.formatMoney(entry.amountCents)}",
+                    style = CalcMotTypography.CardTitle,
+                    color = CalcMotColors.TextPrimary
                 )
                 Text(
-                    text = "Custos: ${FinanceFormatter.formatMoney(costs)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary
+                    text = entry.description.ifBlank { FinanceFormatter.formatDate(entry.dateMillis) },
+                    style = CalcMotTypography.Body,
+                    color = CalcMotColors.TextSecondary
                 )
             }
-            Text(
-                text = if (count == 1) "1 lançamento" else "$count lançamentos",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.secondary
+            CalcMotButton(
+                text = "Excluir",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(UiTestTags.FINANCE_DELETE_BUTTON),
+                onClick = onDelete,
+                variant = CalcMotButtonVariant.GHOST
             )
         }
     }
@@ -638,8 +648,16 @@ private fun Double.toInputText(blankWhenZero: Boolean = false): String {
     return String.format(Locale.forLanguageTag("pt-BR"), "%.2f", this)
 }
 
+private fun Double.toCurrency(): String {
+    return String.format(Locale.forLanguageTag("pt-BR"), "R$ %.2f", this)
+}
+
 private fun formatMoneyPerKm(value: Double): String {
     return String.format(Locale.forLanguageTag("pt-BR"), "R$ %.2f/km", value)
+}
+
+private fun countLabel(count: Int): String {
+    return if (count == 1) "1 lançamento" else "$count lançamentos"
 }
 
 private fun GoalMode.label(): String {
@@ -650,100 +668,13 @@ private fun GoalMode.label(): String {
     }
 }
 
-@Composable
-private fun FinanceFormCard(
-    selectedType: FinanceEntryType,
-    amountText: String,
-    descriptionText: String,
-    errorText: String?,
-    onTypeChange: (FinanceEntryType) -> Unit,
-    onAmountChange: (String) -> Unit,
-    onDescriptionChange: (String) -> Unit,
-    onAdd: () -> Unit
+private enum class GoalPreset(
+    val label: String,
+    val km: Double,
+    val hour: Double,
+    val mode: GoalMode
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FinanceEntryType.entries.forEach { type ->
-                    FilterChip(
-                        selected = selectedType == type,
-                        onClick = { onTypeChange(type) },
-                        label = { Text(type.label) }
-                    )
-                }
-            }
-            OutlinedTextField(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(UiTestTags.FINANCE_AMOUNT_INPUT),
-                value = amountText,
-                onValueChange = onAmountChange,
-                label = { Text("Valor") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                singleLine = true,
-                isError = errorText != null,
-                supportingText = { errorText?.let { Text(it) } }
-            )
-            OutlinedTextField(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(UiTestTags.FINANCE_DESCRIPTION_INPUT),
-                value = descriptionText,
-                onValueChange = onDescriptionChange,
-                label = { Text("Descrição") },
-                singleLine = true
-            )
-            Button(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(UiTestTags.FINANCE_ADD_BUTTON),
-                onClick = onAdd
-            ) {
-                Text("Adicionar")
-            }
-        }
-    }
-}
-
-@Composable
-private fun FinanceEntryRow(
-    entry: FinanceEntry,
-    onDelete: () -> Unit
-) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Column {
-                Text(
-                    text = "${entry.type.label} - ${FinanceFormatter.formatMoney(entry.amountCents)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = entry.description.ifBlank { FinanceFormatter.formatDate(entry.dateMillis) },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
-            TextButton(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(UiTestTags.FINANCE_DELETE_BUTTON),
-                onClick = onDelete
-            ) {
-                Text("Excluir")
-            }
-        }
-    }
+    CONSERVADOR("Conservador", 1.50, 45.0, GoalMode.BALANCED),
+    EQUILIBRADO("Equilibrado", 1.70, 50.0, GoalMode.BALANCED),
+    EXIGENTE("Exigente", 2.10, 65.0, GoalMode.BALANCED)
 }

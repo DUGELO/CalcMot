@@ -14,24 +14,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,6 +46,23 @@ import br.com.calcmot.model.FinancialImpactCalculator
 import br.com.calcmot.model.ProfitabilityCalculator
 import br.com.calcmot.model.TripData
 import br.com.calcmot.overlay.OverlayView
+import br.com.calcmot.ui.design.components.CalcMotButton
+import br.com.calcmot.ui.design.components.CalcMotButtonVariant
+import br.com.calcmot.ui.design.components.CalcMotCard
+import br.com.calcmot.ui.design.components.CalcMotCardVariant
+import br.com.calcmot.ui.design.components.CalcMotIconButton
+import br.com.calcmot.ui.design.components.CalcMotScaffold
+import br.com.calcmot.ui.design.components.CalcMotSectionHeader
+import br.com.calcmot.ui.design.components.CalcMotStatusBadge
+import br.com.calcmot.ui.design.components.CalcMotSwitchRow
+import br.com.calcmot.ui.design.components.CalcMotTopBar
+import br.com.calcmot.ui.design.domain.DailySummaryCard
+import br.com.calcmot.ui.design.domain.DailySummaryUiState
+import br.com.calcmot.ui.design.domain.FinancialImpactSummaryCard
+import br.com.calcmot.ui.design.tokens.CalcMotColors
+import br.com.calcmot.ui.design.tokens.CalcMotShape
+import br.com.calcmot.ui.design.tokens.CalcMotSpacing
+import br.com.calcmot.ui.design.tokens.CalcMotTypography
 import kotlinx.coroutines.launch
 
 @Composable
@@ -111,7 +118,7 @@ fun HomeScreen(
             )
         }
     ) {
-        Scaffold { innerPadding ->
+        CalcMotScaffold { innerPadding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -165,25 +172,16 @@ private fun TopBar(
     title: String,
     onMenu: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(
-            modifier = Modifier.testTag(UiTestTags.DRAWER_MENU_BUTTON),
-            onClick = onMenu
-        ) {
-            Text("Menu", style = MaterialTheme.typography.labelLarge)
+    CalcMotTopBar(
+        title = title,
+        navigation = {
+            CalcMotIconButton(
+                modifier = Modifier.testTag(UiTestTags.DRAWER_MENU_BUTTON),
+                text = "Menu",
+                onClick = onMenu
+            )
         }
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
-    }
+    )
 }
 
 @Composable
@@ -199,8 +197,8 @@ private fun AppDrawer(
         ) {
             Text(
                 text = "CalcMot",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
+                style = CalcMotTypography.ScreenTitle,
+                color = CalcMotColors.TextPrimary
             )
             NavigationDrawerItem(
                 modifier = Modifier.testTag(UiTestTags.DRAWER_HOME_ITEM),
@@ -255,8 +253,8 @@ private fun StartContent(
             .fillMaxSize()
             .testTag(UiTestTags.HOME_SCREEN)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
+            .padding(horizontal = CalcMotSpacing.ScreenHorizontal, vertical = CalcMotSpacing.ScreenVertical),
+        verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.SectionGap)
     ) {
         Header(status = status)
         StatusCard(
@@ -267,15 +265,28 @@ private fun StartContent(
             onOpenAccessibility = onOpenAccessibility,
             onPermissionsRefresh = onPermissionsRefresh
         )
-        Button(
+        FinancialImpactSummaryCard(
+            title = "Meta financeira no centro",
+            body = "O CalcMot compara cada oferta com sua meta e mostra o impacto sem prometer ganho garantido.",
+            positive = status == HomeStatus.READY
+        )
+        DailySummaryCard(
+            state = DailySummaryUiState(
+                offersAnalyzed = 0,
+                offersAboveGoal = 0,
+                offersBelowGoal = 0,
+                averagePerKm = "R$ 0,00",
+                averagePerHour = "R$ 0"
+            )
+        )
+        CalcMotButton(
+            text = "Abrir app de motorista",
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(UiTestTags.OPEN_DRIVER_APP_BUTTON),
             onClick = onOpenDriverApp,
             enabled = permissionState.hasAccessibilityService
-        ) {
-            Text("Abrir app de motorista")
-        }
+        )
         OverlayPositionCard(
             selected = overlayPosition,
             onSelected = onOverlayPositionChange
@@ -286,15 +297,10 @@ private fun StartContent(
 
 @Composable
 private fun Header(status: HomeStatus) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = "CalcMot",
-            style = MaterialTheme.typography.displayLarge
-        )
-        Text(
-            text = "Ligue, abra seu app de motorista e veja se a corrida vale a pena.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.secondary
+    Column(verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)) {
+        CalcMotSectionHeader(
+            title = "CalcMot",
+            subtitle = "Ligue, abra seu app de motorista e veja se a corrida vale a pena."
         )
         StatusPill(status = status)
     }
@@ -309,54 +315,38 @@ private fun StatusCard(
     onOpenAccessibility: () -> Unit,
     onPermissionsRefresh: () -> Unit
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(8.dp)
-    ) {
+    CalcMotCard(variant = status.cardVariant) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(CalcMotSpacing.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = status.title,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = status.description,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                }
-                Switch(
-                    modifier = Modifier.testTag(UiTestTags.MONITORING_SWITCH),
-                    checked = monitoringEnabled,
-                    onCheckedChange = onMonitoringChange,
-                    enabled = permissionState.hasAccessibilityService
-                )
-            }
+            CalcMotSwitchRow(
+                title = status.title,
+                description = status.description,
+                checked = monitoringEnabled,
+                onCheckedChange = onMonitoringChange,
+                enabled = permissionState.hasAccessibilityService,
+                switchModifier = Modifier.testTag(UiTestTags.MONITORING_SWITCH)
+            )
 
             if (!permissionState.hasAccessibilityService) {
-                Button(
+                CalcMotButton(
+                    text = "Ativar acessibilidade",
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON),
                     onClick = onOpenAccessibility
-                ) {
-                    Text("Ativar acessibilidade")
-                }
+                )
             }
 
-            OutlinedButton(
+            CalcMotButton(
+                text = "Atualizar estado",
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(UiTestTags.REFRESH_PERMISSIONS_BUTTON),
-                onClick = onPermissionsRefresh
-            ) {
-                Text("Atualizar estado")
-            }
+                onClick = onPermissionsRefresh,
+                variant = CalcMotButtonVariant.SECONDARY
+            )
         }
     }
 }
@@ -366,20 +356,17 @@ private fun OverlayPositionCard(
     selected: OverlayPositionPreference,
     onSelected: (OverlayPositionPreference) -> Unit
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(8.dp)
-    ) {
+    CalcMotCard {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(CalcMotSpacing.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
         ) {
             Text(
                 text = "Posição do aviso",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
+                style = CalcMotTypography.CardTitle,
+                color = CalcMotColors.TextPrimary
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)) {
                 OverlayPositionPreference.entries.forEach { position ->
                     FilterChip(
                         modifier = Modifier.testTag(position.testTag),
@@ -391,8 +378,8 @@ private fun OverlayPositionCard(
             }
             Text(
                 text = "Você também pode arrastar o aviso na tela quando ele aparecer.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.secondary
+                style = CalcMotTypography.Caption,
+                color = CalcMotColors.TextSecondary
             )
         }
     }
@@ -418,29 +405,25 @@ private fun OverlayPreviewCard() {
         }
     }
 
-    Card(
-        modifier = Modifier.testTag(UiTestTags.OVERLAY_PREVIEW),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(8.dp)
-    ) {
+    CalcMotCard(modifier = Modifier.testTag(UiTestTags.OVERLAY_PREVIEW)) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(CalcMotSpacing.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
         ) {
             Text(
                 text = "Prévia",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
+                style = CalcMotTypography.CardTitle,
+                color = CalcMotColors.TextPrimary
             )
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(188.dp)
                     .background(
-                        color = Color(0xFF22252B),
-                        shape = RoundedCornerShape(8.dp)
+                        color = CalcMotColors.SurfaceSoft,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(CalcMotShape.Sm)
                     )
-                    .padding(18.dp),
+                    .padding(CalcMotSpacing.Lg),
                 contentAlignment = Alignment.TopCenter
             ) {
                 OverlayView(
@@ -463,22 +446,14 @@ private fun DiagnosticsScreen(
             .fillMaxSize()
             .testTag(UiTestTags.DIAGNOSTICS_SCREEN)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = CalcMotSpacing.ScreenHorizontal, vertical = CalcMotSpacing.ScreenVertical),
+        verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
     ) {
-        Text(
-            text = "Diagnóstico",
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.Bold
+        CalcMotSectionHeader(
+            title = "Diagnóstico",
+            subtitle = "Dados técnicos para teste de campo."
         )
-        Text(
-            text = "Dados técnicos para teste de campo.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.secondary
-        )
-        OutlinedButton(onClick = onRefresh) {
-            Text("Atualizar")
-        }
+        CalcMotButton(text = "Atualizar", onClick = onRefresh, variant = CalcMotButtonVariant.SECONDARY)
         DiagnosticLine("Último status", snapshot.lastStage.label)
         DiagnosticLine("Eventos da Uber", snapshot.eventCount.toString())
         DiagnosticLine("Cards na acessibilidade", snapshot.treeCandidateCount.toString())
@@ -505,21 +480,18 @@ private fun DiagnosticsScreen(
 
 @Composable
 private fun DiagnosticLine(label: String, value: String) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(8.dp)
-    ) {
+    CalcMotCard {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(CalcMotSpacing.Md),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(label, style = MaterialTheme.typography.bodyMedium)
+            Text(label, style = CalcMotTypography.Body, color = CalcMotColors.TextPrimary)
             Text(
                 text = value,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.secondary
+                style = CalcMotTypography.Body,
+                color = CalcMotColors.TextSecondary
             )
         }
     }
@@ -527,19 +499,11 @@ private fun DiagnosticLine(label: String, value: String) {
 
 @Composable
 private fun StatusPill(status: HomeStatus) {
-    Surface(
+    CalcMotStatusBadge(
         modifier = Modifier.testTag(UiTestTags.STATUS_PILL),
-        color = status.color.copy(alpha = 0.16f),
-        contentColor = status.color,
-        shape = RoundedCornerShape(100.dp)
-    ) {
-        Text(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            text = status.label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold
-        )
-    }
+        text = status.label,
+        color = status.color
+    )
 }
 
 private enum class HomeDestination(val title: String) {
@@ -559,21 +523,28 @@ private enum class HomeStatus(
         label = "Pronto",
         title = "Monitoramento ativo",
         description = "Pode abrir o app de motorista. O aviso aparece quando a oferta estiver completa.",
-        color = Color(0xFF3DDC84)
+        color = CalcMotColors.Success
     ),
     PAUSED(
         label = "Pausado",
         title = "Monitoramento pausado",
         description = "Ligue o switch para voltar a analisar ofertas.",
-        color = Color(0xFFFFC453)
+        color = CalcMotColors.Warning
     ),
     PERMISSION_PENDING(
         label = "Falta ativar",
         title = "Ative a acessibilidade",
         description = "Essa permissão permite ler ofertas visíveis e mostrar o aviso.",
-        color = Color(0xFFFF6670)
+        color = CalcMotColors.Danger
     )
 }
+
+private val HomeStatus.cardVariant: CalcMotCardVariant
+    get() = when (this) {
+        HomeStatus.READY -> CalcMotCardVariant.SUCCESS
+        HomeStatus.PAUSED -> CalcMotCardVariant.HIGHLIGHT
+        HomeStatus.PERMISSION_PENDING -> CalcMotCardVariant.DANGER
+    }
 
 private const val DRIVER_PACKAGE = "com.ubercab.driver"
 

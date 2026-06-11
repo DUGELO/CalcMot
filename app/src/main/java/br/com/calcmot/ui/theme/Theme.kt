@@ -4,27 +4,17 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-
-private val DarkColorScheme = darkColorScheme(
-    background = SurfaceBackground,
-    surface = SurfacePrimary,
-    onSurface = TextPrimary,
-    primary = InteractiveAccent,
-    onPrimary = TextPrimary,
-    secondary = TextSecondary,
-    onSecondary = TextPrimary,
-)
+import br.com.calcmot.ui.design.theme.CalcMotColorScheme
+import br.com.calcmot.ui.design.theme.CalcMotTheme
 
 @Composable
 fun MetricaTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    val colorScheme = DarkColorScheme
+    val colorScheme = CalcMotColorScheme.Dark
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -38,9 +28,8 @@ fun MetricaTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composabl
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = MetricaTypography,
+    CalcMotTheme(
+        darkTheme = true,
         content = content
     )
 }
