@@ -71,7 +71,9 @@ class HomeScreenTest {
             .assertIsDisplayed()
         composeRule.onNodeWithText("BOA").assertIsDisplayed()
         composeRule.onNodeWithText("R$ 2,50/km").assertIsDisplayed()
+        composeRule.onAllNodesWithText("por km").assertCountEquals(0)
         composeRule.onNodeWithText("R$ 41,86/h").assertIsDisplayed()
+        composeRule.onAllNodesWithText("por hora").assertCountEquals(0)
         composeRule.onNodeWithText("43 min").assertIsDisplayed()
     }
 

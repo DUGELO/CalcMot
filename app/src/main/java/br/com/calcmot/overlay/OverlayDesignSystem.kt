@@ -180,7 +180,7 @@ fun OfferQualityBadge(
 @Composable
 fun MetricRow(
     value: String,
-    label: String,
+    label: String? = null,
     modifier: Modifier = Modifier,
     prominent: Boolean = false,
     accentColor: Color = CalcMotColors.TextPrimary
@@ -197,13 +197,15 @@ fun MetricRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Text(
-            text = label,
-            color = CalcMotColors.TextSecondary.copy(alpha = CalcMotOpacity.SecondaryText),
-            style = CalcMotTypography.MetricLabel,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        if (!label.isNullOrBlank()) {
+            Text(
+                text = label,
+                color = CalcMotColors.TextSecondary.copy(alpha = CalcMotOpacity.SecondaryText),
+                style = CalcMotTypography.MetricLabel,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -305,7 +307,6 @@ fun OverlayMetricSummary(
     ) {
         MetricRow(
             value = perKm,
-            label = "R$/km",
             prominent = true,
             accentColor = quality.accentColor
         )
@@ -316,7 +317,6 @@ fun OverlayMetricSummary(
         ) {
             MetricRow(
                 value = perHour,
-                label = "R$/hora",
                 modifier = Modifier.weight(1f)
             )
             Spacer(modifier = Modifier.width(CalcMotSpacing.Sm))
@@ -331,7 +331,7 @@ fun OverlayMetricSummary(
 
 private fun OfferFinancialImpact.overlayMessage(): String {
     return when {
-        classification == OfferClassification.GREAT -> "Bem acima da meta"
+        classification == OfferClassification.GREAT -> "Muito acima da meta"
         finalImpact >= 0.0 -> "Acima da meta"
         else -> "Abaixo da meta"
     }
