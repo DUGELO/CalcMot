@@ -2,6 +2,7 @@ package br.com.calcmot.accessibility
 
 import br.com.calcmot.model.OfferCandidate
 import br.com.calcmot.model.TripData
+import br.com.calcmot.telemetry.OverlayLatencyTrace
 import java.util.concurrent.atomic.AtomicReference
 
 object ShellOfferBridge {
@@ -31,4 +32,5 @@ sealed class ShellOfferFrame {
     object InvalidFrame : ShellOfferFrame()
     data class Candidate(val candidate: OfferCandidate) : ShellOfferFrame()
     data class StableTrip(val tripData: TripData) : ShellOfferFrame()
+    data class VisualProbe(val probe: OverlayLatencyTrace.VisualProbe) : ShellOfferFrame()
 }

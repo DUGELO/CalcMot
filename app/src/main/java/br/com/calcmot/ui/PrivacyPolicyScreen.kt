@@ -7,119 +7,126 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import br.com.calcmot.ui.design.components.CalcMotButton
-import br.com.calcmot.ui.design.components.CalcMotButtonVariant
-import br.com.calcmot.ui.design.components.CalcMotCard
-import br.com.calcmot.ui.design.components.CalcMotScaffold
-import br.com.calcmot.ui.design.components.CalcMotSectionHeader
-import br.com.calcmot.ui.design.tokens.CalcMotColors
-import br.com.calcmot.ui.design.tokens.CalcMotSpacing
-import br.com.calcmot.ui.design.tokens.CalcMotTypography
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun PrivacyPolicyScreen(
+    modifier: Modifier = Modifier,
     onBack: () -> Unit,
     onSupport: () -> Unit
 ) {
-    CalcMotScaffold { innerPadding ->
+    Scaffold(containerColor = MaterialTheme.colorScheme.background) { innerPadding ->
         Column(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxSize()
+                .testTag(UiTestTags.PRIVACY_POLICY_SCREEN)
                 .verticalScroll(rememberScrollState())
                 .padding(innerPadding)
-                .padding(horizontal = CalcMotSpacing.ScreenHorizontal, vertical = CalcMotSpacing.ScreenVertical),
-            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.SectionGap)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            CalcMotButton(
+            TextButton(
                 modifier = Modifier.testTag(UiTestTags.PRIVACY_POLICY_BACK_BUTTON),
-                text = "Voltar",
-                onClick = onBack,
-                variant = CalcMotButtonVariant.SECONDARY
+                onClick = onBack
+            ) {
+                Text("Voltar")
+            }
+            Text(
+                text = "Privacidade",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(horizontal = 8.dp)
             )
-
-            CalcMotSectionHeader(
-                modifier = Modifier.testTag(UiTestTags.PRIVACY_POLICY_SCREEN),
-                title = "Sua segurança primeiro",
-                subtitle = "Antes dos detalhes legais, veja o que o CalcMot faz e o que ele não faz."
+            ElevatedCard {
+                Text(
+                    modifier = Modifier.padding(20.dp),
+                    text = "O CalcMot calcula ofertas visíveis no seu aparelho. Ele não toca na tela, não aceita corridas, não recusa corridas e não vende seus dados.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+            PrivacyListItem(
+                title = "Onde atua",
+                body = "Em apps de motorista, quando aparece uma oferta completa."
             )
-
-            PolicySection(
-                title = "3 garantias importantes",
-                body = "O CalcMot não toca na tela. Não aceita nem recusa corridas. Não envia ofertas para servidor."
+            PrivacyListItem(
+                title = "O que não faz",
+                body = "Não acessa banco, mensagens, fotos ou navegador para calcular corrida."
             )
-
-            PolicySection(
-                title = "O que o CalcMot não faz",
-                body = "Não acessa sua conta bancária. Não lê mensagens. Não aceita corridas por você. Não recusa corridas por você. Não vende seus dados."
-            )
-
-            PolicySection(
+            PrivacyListItem(
                 title = "Controle do usuário",
-                body = "Você pode pausar o CalcMot dentro do app a qualquer momento. Também pode remover a permissão de leitura da oferta nas configurações do Android."
+                body = "Você pode pausar o cálculo automático ou remover a permissão no Android."
             )
-
-            CalcMotSectionHeader(
-                title = "Detalhes da política",
-                subtitle = "Última atualização: 27 de maio de 2026."
+            HorizontalDivider()
+            Text(
+                text = "Detalhes da política",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp)
             )
-
-            PolicySection(
-                title = "Resumo",
-                body = "O CalcMot é um assistente de leitura de ofertas para motoristas de aplicativo. Ele mostra R$/km, R$/hora e tempo total para ajudar você a avaliar uma oferta visível na tela."
+            PolicyDetail(
+                title = "Última atualização",
+                body = "27 de maio de 2026."
             )
-
-            PolicySection(
+            PolicyDetail(
                 title = "Dados processados",
-                body = "Durante uma oferta, o app pode processar no próprio aparelho textos visíveis no card, como valor, distância, tempo, nota exibida e endereços mostrados pelo app de motorista."
+                body = "Durante uma oferta, o app pode processar no próprio aparelho textos visíveis no card, como valor, distância, tempo e endereços mostrados pelo app de motorista."
             )
-
-            PolicySection(
-                title = "Permissão para ler a oferta",
-                body = "O CalcMot usa a permissão de leitura da tela para identificar ofertas visíveis e mostrar o cálculo por cima da Uber. Quando necessário, o app lê localmente somente a oferta visível na tela."
+            PolicyDetail(
+                title = "Permissão do Android",
+                body = "A permissão permite identificar ofertas visíveis e mostrar o cálculo por cima do app de motorista. O processamento acontece localmente."
             )
-
-            PolicySection(
-                title = "Processamento local",
-                body = "Os cálculos acontecem no aparelho. O CalcMot não envia screenshots, endereços, localização, dados de corrida, notas ou conteúdo de tela para servidores externos."
-            )
-
-            PolicySection(
+            PolicyDetail(
                 title = "Compartilhamento",
                 body = "O CalcMot não vende dados pessoais e não compartilha dados de ofertas ou corridas com terceiros."
             )
-
-            PolicySection(
+            PolicyDetail(
                 title = "Suporte",
                 body = "Para dúvidas, suporte ou solicitações relacionadas à privacidade, entre em contato pelo email $CALCMOT_SUPPORT_EMAIL."
             )
-
-            CalcMotButton(
+            androidx.compose.material3.Button(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(UiTestTags.PRIVACY_POLICY_SUPPORT_BUTTON),
-                text = "Enviar email para suporte",
                 onClick = onSupport
-            )
+            ) {
+                Text("Enviar email para suporte")
+            }
         }
     }
 }
 
 @Composable
-private fun PolicySection(
+private fun PrivacyListItem(
     title: String,
     body: String
 ) {
-    CalcMotCard {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(body) }
+    )
+}
+
+@Composable
+private fun PolicyDetail(
+    title: String,
+    body: String
+) {
+    OutlinedCard {
         Column(
-            modifier = Modifier.padding(CalcMotSpacing.CardPadding),
-            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Xs)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(text = title, style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
-            Text(text = body, style = CalcMotTypography.Body, color = CalcMotColors.TextSecondary)
+            Text(text = title, style = MaterialTheme.typography.titleSmall)
+            Text(text = body, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

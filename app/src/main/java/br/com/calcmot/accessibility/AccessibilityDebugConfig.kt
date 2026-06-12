@@ -14,12 +14,12 @@ object AccessibilityDebugConfig {
     const val MAX_DEBUG_TREE_NODES = 5_000
 
     val TIMING_SWEEP_DELAYS_MS = longArrayOf(
-        120L,
-        240L,
-        420L,
-        700L,
-        1_000L,
-        1_500L,
-        2_200L
+        0L,
+        80L,
+        160L,
+        300L,
+        500L,
+        750L,
+        1_000L
     )
 }

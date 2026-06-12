@@ -30,7 +30,7 @@ class CalcMotAppContentTest {
         }
 
         composeRule.onNodeWithTag(UiTestTags.ONBOARDING_SCREEN).assertIsDisplayed()
-        composeRule.onNodeWithText("Como o CalcMot lê a oferta").assertIsDisplayed()
+        composeRule.onNodeWithText("Veja se a corrida compensa antes de aceitar.").assertIsDisplayed()
     }
 
     @Test
@@ -49,6 +49,7 @@ class CalcMotAppContentTest {
         }
 
         composeRule.onNodeWithTag(UiTestTags.HOME_SCREEN).assertIsDisplayed()
-        composeRule.onNodeWithText("Em espera").assertIsDisplayed()
+        composeRule.onNodeWithText("Calculador de ganhos").assertIsDisplayed()
+        composeRule.onNodeWithText("Pronto para calcular").assertIsDisplayed()
     }
 }

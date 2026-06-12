@@ -3,7 +3,8 @@ package br.com.calcmot.processor
 data class DebugTreeWalkResult<T>(
     val visited: List<DebugTreeVisit<T>>,
     val maxDepthReached: Int,
-    val truncated: Boolean
+    val truncated: Boolean,
+    val duplicateNodeSkips: Int
 )
 
 data class DebugTreeVisit<T>(
@@ -28,6 +29,7 @@ object DebugTreeWalker {
         val seen = mutableSetOf<String>()
         var maxDepthReached = 0
         var truncated = false
+        var duplicateNodeSkips = 0
 
         fun visit(
             node: T,
@@ -47,7 +49,10 @@ object DebugTreeWalker {
 
             val safeChildCount = runCatching { childCount(node).coerceAtLeast(0) }.getOrDefault(0)
             val nodeIdentity = "${identity(node)}|$path|$depth|$safeChildCount"
-            if (!seen.add(nodeIdentity)) return
+            if (!seen.add(nodeIdentity)) {
+                duplicateNodeSkips += 1
+                return
+            }
 
             maxDepthReached = maxOf(maxDepthReached, depth)
             visited += DebugTreeVisit(
@@ -86,7 +91,8 @@ object DebugTreeWalker {
         return DebugTreeWalkResult(
             visited = visited,
             maxDepthReached = maxDepthReached,
-            truncated = truncated
+            truncated = truncated,
+            duplicateNodeSkips = duplicateNodeSkips
         )
     }
 }

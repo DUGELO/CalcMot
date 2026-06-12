@@ -7,7 +7,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import br.com.calcmot.AppSettings
 import br.com.calcmot.finance.FinanceEntry
 import br.com.calcmot.finance.FinanceEntryType
@@ -32,33 +43,22 @@ import br.com.calcmot.ui.design.components.CalcMotCard
 import br.com.calcmot.ui.design.components.CalcMotEmptyState
 import br.com.calcmot.ui.design.components.CalcMotNumberField
 import br.com.calcmot.ui.design.components.CalcMotSectionHeader
-import br.com.calcmot.ui.design.components.CalcMotSwitchRow
 import br.com.calcmot.ui.design.components.CalcMotTextField
 import br.com.calcmot.ui.design.domain.FinancialImpactSummaryCard
-import br.com.calcmot.ui.design.domain.GoalPresetCard
 import br.com.calcmot.ui.design.tokens.CalcMotColors
 import br.com.calcmot.ui.design.tokens.CalcMotSpacing
 import br.com.calcmot.ui.design.tokens.CalcMotTypography
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FinanceScreen() {
+fun FinanceScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    var profitabilitySettings by remember {
-        mutableStateOf(AppSettings.getProfitabilitySettings(context))
-    }
-    var financialImpactEnabled by remember {
-        mutableStateOf(AppSettings.isFinancialImpactEnabled(context))
-    }
-    var driverGoal by remember {
-        mutableStateOf(AppSettings.getDriverGoal(context))
-    }
-    var goalKmText by remember {
-        mutableStateOf(driverGoal.minValuePerKm.toInputText())
-    }
-    var goalHourText by remember {
-        mutableStateOf(driverGoal.minValuePerHour.toInputText())
-    }
+    var profitabilitySettings by remember { mutableStateOf(AppSettings.getProfitabilitySettings(context)) }
+    var financialImpactEnabled by remember { mutableStateOf(AppSettings.isFinancialImpactEnabled(context)) }
+    var driverGoal by remember { mutableStateOf(AppSettings.getDriverGoal(context)) }
+    var goalKmText by remember { mutableStateOf(driverGoal.minValuePerKm.toInputText()) }
+    var goalHourText by remember { mutableStateOf(driverGoal.minValuePerHour.toInputText()) }
     var goalMode by remember { mutableStateOf(driverGoal.mode) }
     var goalErrorText by remember { mutableStateOf<String?>(null) }
     var goalSavedText by remember { mutableStateOf<String?>(null) }
@@ -72,12 +72,8 @@ fun FinanceScreen() {
     var maintenanceText by remember {
         mutableStateOf(profitabilitySettings.maintenanceCostPerKm.toInputText(blankWhenZero = true))
     }
-    var goodKmText by remember {
-        mutableStateOf(profitabilitySettings.goodNetPerKm.toInputText())
-    }
-    var mediumKmText by remember {
-        mutableStateOf(profitabilitySettings.mediumNetPerKm.toInputText())
-    }
+    var goodKmText by remember { mutableStateOf(profitabilitySettings.goodNetPerKm.toInputText()) }
+    var mediumKmText by remember { mutableStateOf(profitabilitySettings.mediumNetPerKm.toInputText()) }
     var hourText by remember {
         mutableStateOf(profitabilitySettings.minimumNetPerHour.toInputText(blankWhenZero = true))
     }
@@ -85,36 +81,33 @@ fun FinanceScreen() {
     var profitabilitySavedText by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(
-        modifier = Modifier
+        modifier = modifier
             .testTag(UiTestTags.FINANCE_SCREEN)
-            .padding(horizontal = CalcMotSpacing.ScreenHorizontal, vertical = CalcMotSpacing.ScreenVertical),
-        verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            CalcMotSectionHeader(
-                title = "Metas",
-                subtitle = "Defina o que vale a pena antes de sair para o corre."
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Minha meta",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    text = "Usamos sua meta para dizer se a corrida está boa, no limite ou ruim.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         item {
-            DriverGoalSettingsCard(
-                enabled = financialImpactEnabled,
+            DriverGoalSettings(
+                selectedPreset = GoalPreset.fromInputs(goalKmText, goalHourText),
                 goalKmText = goalKmText,
                 goalHourText = goalHourText,
-                goalMode = goalMode,
                 errorText = goalErrorText,
                 savedText = goalSavedText,
-                onEnabledChange = {
-                    financialImpactEnabled = it
-                    AppSettings.setFinancialImpactEnabled(context, it)
-                    goalSavedText = if (it) {
-                        "Impacto financeiro ligado para o aviso."
-                    } else {
-                        "Impacto financeiro desligado."
-                    }
-                    goalErrorText = null
-                },
                 onGoalKmChange = {
                     goalKmText = it
                     goalErrorText = null
@@ -122,11 +115,6 @@ fun FinanceScreen() {
                 },
                 onGoalHourChange = {
                     goalHourText = it
-                    goalErrorText = null
-                    goalSavedText = null
-                },
-                onGoalModeChange = {
-                    goalMode = it
                     goalErrorText = null
                     goalSavedText = null
                 },
@@ -152,14 +140,37 @@ fun FinanceScreen() {
                         goalKmText = parsed.minValuePerKm.toInputText()
                         goalHourText = parsed.minValuePerHour.toInputText()
                         goalErrorText = null
-                        goalSavedText = "Metas salvas para o aviso."
+                        goalSavedText = "Meta salva."
                     }
                 }
             )
         }
 
         item {
-            ProfitabilitySettingsCard(
+            GoalMeaningCompact()
+        }
+
+        item {
+            ListItem(
+                headlineContent = { Text("Mostrar impacto no aviso") },
+                supportingContent = { Text("Mostra se a oferta passou ou ficou abaixo da meta.") },
+                trailingContent = {
+                    Switch(
+                        modifier = Modifier.testTag(UiTestTags.FINANCIAL_IMPACT_SWITCH),
+                        checked = financialImpactEnabled,
+                        onCheckedChange = {
+                            financialImpactEnabled = it
+                            AppSettings.setFinancialImpactEnabled(context, it)
+                            goalSavedText = if (it) "Impacto ligado." else "Impacto desligado."
+                            goalErrorText = null
+                        }
+                    )
+                }
+            )
+        }
+
+        item {
+            AdvancedCosts(
                 settings = profitabilitySettings,
                 expanded = advancedCostsExpanded,
                 efficiencyText = efficiencyText,
@@ -219,7 +230,7 @@ fun FinanceScreen() {
                         AppSettings.setProfitabilitySettings(context, parsed)
                         profitabilitySettings = parsed
                         profitabilityErrorText = null
-                        profitabilitySavedText = "Custos salvos. O aviso agora usa lucro líquido."
+                        profitabilitySavedText = "Custos salvos."
                     }
                 }
             )
@@ -228,7 +239,7 @@ fun FinanceScreen() {
 }
 
 @Composable
-fun ResultScreen() {
+fun ResultScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val repository = remember { FinanceRepository(context) }
     var entries by remember { mutableStateOf(repository.getEntries()) }
@@ -239,7 +250,7 @@ fun ResultScreen() {
     val summary = entries.toFinanceSummary()
 
     LazyColumn(
-        modifier = Modifier
+        modifier = modifier
             .testTag(UiTestTags.RESULT_SCREEN)
             .padding(horizontal = CalcMotSpacing.ScreenHorizontal, vertical = CalcMotSpacing.ScreenVertical),
         verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
@@ -308,105 +319,94 @@ fun ResultScreen() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DriverGoalSettingsCard(
-    enabled: Boolean,
+private fun DriverGoalSettings(
+    selectedPreset: GoalPreset?,
     goalKmText: String,
     goalHourText: String,
-    goalMode: GoalMode,
     errorText: String?,
     savedText: String?,
-    onEnabledChange: (Boolean) -> Unit,
     onGoalKmChange: (String) -> Unit,
     onGoalHourChange: (String) -> Unit,
-    onGoalModeChange: (GoalMode) -> Unit,
     onPreset: (GoalPreset) -> Unit,
     onSave: () -> Unit
 ) {
-    CalcMotCard {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(CalcMotSpacing.CardPadding),
-            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
-        ) {
-            CalcMotSwitchRow(
-                title = "Mostrar impacto na meta",
-                description = "Mostra quanto a oferta está acima ou abaixo da sua meta.",
-                checked = enabled,
-                onCheckedChange = onEnabledChange,
-                switchModifier = Modifier.testTag(UiTestTags.FINANCIAL_IMPACT_SWITCH)
-            )
-
-            Text(
-                text = "Use sua meta para o CalcMot dizer se a oferta ficou acima ou abaixo do que você quer ganhar.",
-                style = CalcMotTypography.Body,
-                color = CalcMotColors.TextSecondary
-            )
-
-            Text(text = "Escolha uma meta rápida", style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
-            GoalPreset.entries.forEach { preset ->
-                GoalPresetCard(
-                    title = preset.label,
-                    perKm = preset.km.toCurrency(),
-                    perHour = preset.hour.toCurrency(),
-                    selected = goalKmText == preset.km.toInputText() && goalHourText == preset.hour.toInputText(),
-                    onClick = { onPreset(preset) }
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)
-            ) {
-                CalcMotNumberField(
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag(UiTestTags.DRIVER_GOAL_KM_INPUT),
-                    value = goalKmText,
-                    onValueChange = onGoalKmChange,
-                    label = "Quero ganhar pelo menos por km"
-                )
-                CalcMotNumberField(
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag(UiTestTags.DRIVER_GOAL_HOUR_INPUT),
-                    value = goalHourText,
-                    onValueChange = onGoalHourChange,
-                    label = "Quero ganhar pelo menos por hora"
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)) {
-                GoalMode.entries.forEach { mode ->
-                    FilterChip(
-                        selected = goalMode == mode,
-                        onClick = { onGoalModeChange(mode) },
-                        label = { Text(mode.label()) }
-                    )
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            text = "Escolha um perfil",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            GoalPreset.entries.forEachIndexed { index, preset ->
+                SegmentedButton(
+                    modifier = Modifier.testTag(preset.testTag),
+                    selected = selectedPreset == preset,
+                    onClick = { onPreset(preset) },
+                    shape = SegmentedButtonDefaults.itemShape(index, GoalPreset.entries.size)
+                ) {
+                    Text(preset.label)
                 }
             }
-
-            errorText?.let {
-                Text(text = it, style = CalcMotTypography.Caption, color = CalcMotColors.Danger)
-            }
-            savedText?.let {
-                Text(text = it, style = CalcMotTypography.Caption, color = CalcMotColors.BrandAccent)
-            }
-
-            CalcMotButton(
-                text = "Salvar minha meta",
+        }
+        Text(
+            text = "Ou ajuste manualmente",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CalcMotNumberField(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(UiTestTags.DRIVER_GOAL_SAVE_BUTTON),
-                onClick = onSave
+                    .weight(1f)
+                    .testTag(UiTestTags.DRIVER_GOAL_KM_INPUT),
+                value = goalKmText,
+                onValueChange = onGoalKmChange,
+                label = "R$/km"
             )
+            CalcMotNumberField(
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag(UiTestTags.DRIVER_GOAL_HOUR_INPUT),
+                value = goalHourText,
+                onValueChange = onGoalHourChange,
+                label = "R$/h"
+            )
+        }
+        errorText?.let {
+            Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+        savedText?.let {
+            Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+        }
+        Button(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(UiTestTags.DRIVER_GOAL_SAVE_BUTTON),
+            onClick = onSave
+        ) {
+            Text("Salvar meta")
         }
     }
 }
 
 @Composable
-private fun ProfitabilitySettingsCard(
+private fun GoalMeaningCompact() {
+    OutlinedCard(modifier = Modifier.testTag(UiTestTags.GOAL_SEMAPHORE_PREVIEW)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Semáforo", style = MaterialTheme.typography.titleMedium)
+            Text("Boa: dentro da meta", style = MaterialTheme.typography.bodyMedium)
+            Text("Média: no limite", style = MaterialTheme.typography.bodyMedium)
+            Text("Ruim: abaixo da meta", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun AdvancedCosts(
     settings: ProfitabilitySettings,
     expanded: Boolean,
     efficiencyText: String,
@@ -426,104 +426,99 @@ private fun ProfitabilitySettingsCard(
     onToggleExpanded: () -> Unit,
     onSave: () -> Unit
 ) {
-    CalcMotCard {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(CalcMotSpacing.CardPadding),
-            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
-        ) {
-            Text(text = "Lucro líquido no overlay", style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
-            Text(
-                text = "Essa régua classifica BOA, MÉDIA ou RUIM depois de descontar os custos do carro.",
-                style = CalcMotTypography.Body,
-                color = CalcMotColors.TextSecondary
-            )
-            Text(
-                text = "Custo atual: ${formatMoneyPerKm(settings.operatingCostPerKm)} descontado de cada oferta.",
-                style = CalcMotTypography.BodyStrong,
-                color = CalcMotColors.TextPrimary
-            )
-            CalcMotButton(
-                text = if (expanded) "Ocultar custos avançados" else "Ajustar custos avançados",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(UiTestTags.PROFIT_ADVANCED_TOGGLE),
-                onClick = onToggleExpanded,
-                variant = CalcMotButtonVariant.SECONDARY
-            )
-
-            if (expanded) {
-                CalcMotNumberField(
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        ListItem(
+            headlineContent = { Text("Avançado") },
+            supportingContent = { Text("Custos do carro: ${formatMoneyPerKm(settings.operatingCostPerKm)}") },
+            trailingContent = {
+                OutlinedButton(
+                    modifier = Modifier.testTag(UiTestTags.PROFIT_ADVANCED_TOGGLE),
+                    onClick = onToggleExpanded
+                ) {
+                    Text(if (expanded) "Ocultar" else "Abrir")
+                }
+            }
+        )
+        if (expanded) {
+            OutlinedCard {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag(UiTestTags.PROFIT_EFFICIENCY_INPUT),
-                    value = efficiencyText,
-                    onValueChange = onEfficiencyChange,
-                    label = "Rendimento do carro",
-                    placeholder = "Ex: 10 km/l"
-                )
-                CalcMotNumberField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(UiTestTags.PROFIT_INPUT_PRICE_INPUT),
-                    value = inputPriceText,
-                    onValueChange = onInputPriceChange,
-                    label = "Preço do combustível",
-                    placeholder = "Ex: 5,89"
-                )
-                CalcMotNumberField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(UiTestTags.PROFIT_MAINTENANCE_INPUT),
-                    value = maintenanceText,
-                    onValueChange = onMaintenanceChange,
-                    label = "Manutenção por km",
-                    placeholder = "Ex: 0,35"
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     CalcMotNumberField(
                         modifier = Modifier
-                            .weight(1f)
-                            .testTag(UiTestTags.PROFIT_GOOD_KM_INPUT),
-                        value = goodKmText,
-                        onValueChange = onGoodKmChange,
-                        label = "Boa R$/km"
+                            .fillMaxWidth()
+                            .testTag(UiTestTags.PROFIT_EFFICIENCY_INPUT),
+                        value = efficiencyText,
+                        onValueChange = onEfficiencyChange,
+                        label = "Rendimento do carro",
+                        placeholder = "Ex: 10 km/l"
                     )
                     CalcMotNumberField(
                         modifier = Modifier
-                            .weight(1f)
-                            .testTag(UiTestTags.PROFIT_MEDIUM_KM_INPUT),
-                        value = mediumKmText,
-                        onValueChange = onMediumKmChange,
-                        label = "Atenção R$/km"
+                            .fillMaxWidth()
+                            .testTag(UiTestTags.PROFIT_INPUT_PRICE_INPUT),
+                        value = inputPriceText,
+                        onValueChange = onInputPriceChange,
+                        label = "Preço do combustível",
+                        placeholder = "Ex: 5,89"
                     )
+                    CalcMotNumberField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(UiTestTags.PROFIT_MAINTENANCE_INPUT),
+                        value = maintenanceText,
+                        onValueChange = onMaintenanceChange,
+                        label = "Manutenção por km",
+                        placeholder = "Ex: 0,35"
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CalcMotNumberField(
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag(UiTestTags.PROFIT_GOOD_KM_INPUT),
+                            value = goodKmText,
+                            onValueChange = onGoodKmChange,
+                            label = "Boa R$/km"
+                        )
+                        CalcMotNumberField(
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag(UiTestTags.PROFIT_MEDIUM_KM_INPUT),
+                            value = mediumKmText,
+                            onValueChange = onMediumKmChange,
+                            label = "Média R$/km"
+                        )
+                    }
+                    CalcMotNumberField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(UiTestTags.PROFIT_HOUR_INPUT),
+                        value = hourText,
+                        onValueChange = onHourChange,
+                        label = "Meta líquida por hora",
+                        placeholder = "Opcional"
+                    )
+                    errorText?.let {
+                        Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                    savedText?.let {
+                        Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                    Button(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(UiTestTags.PROFIT_SAVE_BUTTON),
+                        onClick = onSave
+                    ) {
+                        Text("Salvar custos")
+                    }
                 }
-                CalcMotNumberField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(UiTestTags.PROFIT_HOUR_INPUT),
-                    value = hourText,
-                    onValueChange = onHourChange,
-                    label = "Quero ganhar por hora líquido",
-                    placeholder = "Opcional"
-                )
-                errorText?.let {
-                    Text(text = it, style = CalcMotTypography.Caption, color = CalcMotColors.Danger)
-                }
-                savedText?.let {
-                    Text(text = it, style = CalcMotTypography.Caption, color = CalcMotColors.BrandAccent)
-                }
-                CalcMotButton(
-                    text = "Salvar conta",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(UiTestTags.PROFIT_SAVE_BUTTON),
-                    onClick = onSave
-                )
             }
         }
     }
@@ -691,10 +686,6 @@ private fun Double.toInputText(blankWhenZero: Boolean = false): String {
     return String.format(Locale.forLanguageTag("pt-BR"), "%.2f", this)
 }
 
-private fun Double.toCurrency(): String {
-    return String.format(Locale.forLanguageTag("pt-BR"), "R$ %.2f", this)
-}
-
 private fun formatMoneyPerKm(value: Double): String {
     return String.format(Locale.forLanguageTag("pt-BR"), "R$ %.2f/km", value)
 }
@@ -703,21 +694,22 @@ private fun countLabel(count: Int): String {
     return if (count == 1) "1 lançamento" else "$count lançamentos"
 }
 
-private fun GoalMode.label(): String {
-    return when (this) {
-        GoalMode.BALANCED -> "Equilibrado"
-        GoalMode.PRIORITIZE_KM -> "Por km"
-        GoalMode.PRIORITIZE_HOUR -> "Por hora"
-    }
-}
-
 private enum class GoalPreset(
     val label: String,
     val km: Double,
     val hour: Double,
-    val mode: GoalMode
+    val mode: GoalMode,
+    val testTag: String
 ) {
-    CONSERVADOR("Começando", 1.35, 30.0, GoalMode.BALANCED),
-    EQUILIBRADO("Equilibrado", 1.50, 35.0, GoalMode.BALANCED),
-    EXIGENTE("Exigente", 1.70, 42.0, GoalMode.BALANCED)
+    CONSERVADOR("Começando", 1.35, 30.0, GoalMode.BALANCED, UiTestTags.GOAL_PRESET_BEGINNER),
+    EQUILIBRADO("Equilibrado", 1.50, 35.0, GoalMode.BALANCED, UiTestTags.GOAL_PRESET_BALANCED),
+    EXIGENTE("Exigente", 1.70, 42.0, GoalMode.BALANCED, UiTestTags.GOAL_PRESET_DEMANDING);
+
+    companion object {
+        fun fromInputs(kmText: String, hourText: String): GoalPreset? {
+            return entries.firstOrNull {
+                kmText == it.km.toInputText() && hourText == it.hour.toInputText()
+            }
+        }
+    }
 }

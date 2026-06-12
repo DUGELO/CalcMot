@@ -8,6 +8,7 @@ import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Build
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.GestureDetector
 import android.view.Gravity
@@ -32,7 +33,9 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import br.com.calcmot.AppSettings
 import br.com.calcmot.AppDiagnostics
 import br.com.calcmot.BuildConfig
+import br.com.calcmot.DriverAppPackagePolicy
 import br.com.calcmot.OverlayCustomPosition
+import br.com.calcmot.PackageDecision
 import br.com.calcmot.accessibility.AccessibilityDebugOverlayState
 import br.com.calcmot.model.FinancialImpactCalculator
 import br.com.calcmot.model.OfferFinancialImpact
@@ -40,6 +43,7 @@ import br.com.calcmot.model.ProfitabilityCalculator
 import br.com.calcmot.model.ProfitabilityResult
 import br.com.calcmot.model.TripData
 import br.com.calcmot.processor.overlayFingerprint
+import br.com.calcmot.telemetry.OverlayLatencyTrace
 import br.com.calcmot.ui.theme.MetricaTheme
 import android.util.Log
 import kotlin.math.roundToInt
@@ -60,6 +64,11 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     private val financialImpactState = mutableStateOf<OfferFinancialImpact?>(null)
     private val debugOverlayState = mutableStateOf<AccessibilityDebugOverlayState?>(null)
     private val overlayStateMachine = OverlayStateMachine()
+    private var foregroundPackageName: String? = null
+    private var trustedDriverPackageName: String? = null
+    private var trustedDriverPackageSeenAtElapsed: Long = 0L
+    private var criticalBlockPackageName: String? = null
+    private var pendingLatencyTrace: OverlayLatencyTrace? = null
     private var lifecycleOwner: CustomLifecycleOwner? = null
     private var debugLifecycleOwner: CustomLifecycleOwner? = null
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -113,13 +122,71 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     @SuppressLint("ClickableViewAccessibility")
     override fun showOverlay(data: TripData) {
         runOnMainBlocking {
+            if (!isOverlayAllowed()) {
+                blockOverlayOutsideDriverApp("showOverlay")
+                return@runOnMainBlocking
+            }
             showOverlayInternal(data, retryOnBadToken = true)
         }
     }
 
     override fun showDebugOverlay(state: AccessibilityDebugOverlayState) {
         runOnMainBlocking {
+            if (!isOverlayAllowed()) {
+                blockOverlayOutsideDriverApp("showDebugOverlay")
+                return@runOnMainBlocking
+            }
             showDebugOverlayInternal(state, retryOnBadToken = true, forceApplicationOverlay = false)
+        }
+    }
+
+    override fun setForegroundPackage(packageName: String?) {
+        runOnMainBlocking {
+            val decision = DriverAppPackagePolicy.classify(packageName)
+            when (decision) {
+                PackageDecision.DRIVER_APP -> {
+                    foregroundPackageName = DriverAppPackagePolicy.normalize(packageName)
+                    trustedDriverPackageName = foregroundPackageName
+                    trustedDriverPackageSeenAtElapsed = SystemClock.elapsedRealtime()
+                    criticalBlockPackageName = null
+                    Log.w(
+                        "OverlayManager",
+                        "OVERLAY_ALLOWED_DRIVER_APP package=${DriverAppPackagePolicy.describe(packageName)}"
+                    )
+                }
+
+                PackageDecision.BLOCKED_USER_APP -> {
+                    foregroundPackageName = DriverAppPackagePolicy.normalize(packageName)
+                    trustedDriverPackageName = null
+                    criticalBlockPackageName = foregroundPackageName
+                    blockOverlayForBlockedUserApp("foregroundChanged")
+                }
+
+                PackageDecision.OWN_APP -> {
+                    Log.w(
+                        "OverlayManager",
+                        "OVERLAY_FOREGROUND_OWN_IGNORED package=${DriverAppPackagePolicy.describe(packageName)}"
+                    )
+                }
+
+                PackageDecision.TRANSIENT_SYSTEM -> {
+                    Log.w(
+                        "OverlayManager",
+                        "OVERLAY_FOREGROUND_TRANSIENT_IGNORED " +
+                            "package=${DriverAppPackagePolicy.describe(packageName)}"
+                    )
+                }
+
+                PackageDecision.UNKNOWN -> {
+                    Log.w("OverlayManager", "OVERLAY_FOREGROUND_UNKNOWN_IGNORED")
+                }
+            }
+        }
+    }
+
+    override fun setLatencyTrace(trace: OverlayLatencyTrace?) {
+        runOnMainBlocking {
+            pendingLatencyTrace = trace
         }
     }
 
@@ -194,8 +261,12 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
         val oldFingerprint = overlayStateMachine.currentFingerprint()
         val transition = overlayStateMachine.showRequested(newFingerprint)
         val requestedAt = System.currentTimeMillis()
+        val requestedAtElapsed = android.os.SystemClock.elapsedRealtime()
+        val latencyTrace = pendingLatencyTrace?.withTripData(data)
 
         Log.w("OverlayManager", "OVERLAY_SHOW_REQUESTED fingerprint=$newFingerprint")
+        Log.w("OverlayManager", "CALCMOT_OVERLAY_REQUEST fingerprint=$newFingerprint")
+        latencyTrace?.mark(OverlayLatencyTrace.Stage.T10_OVERLAY_ADD_OR_UPDATE_START)
 
         val hasAttachedOverlay = composeView?.parent != null
         if (
@@ -212,6 +283,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
         }
 
         try {
+            val calculationStartedAt = android.os.SystemClock.elapsedRealtime()
             tripDataState.value = data
             profitabilityState.value = ProfitabilityCalculator.calculate(
                 tripData = data,
@@ -225,8 +297,14 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             } else {
                 null
             }
+            latencyTrace?.metric(
+                name = "overlay.localCalculation",
+                durationMs = android.os.SystemClock.elapsedRealtime() - calculationStartedAt,
+                details = "financialImpact=${financialImpactState.value != null}"
+            )
 
             if (composeView == null) {
+                val createViewStartedAt = android.os.SystemClock.elapsedRealtime()
                 lifecycleOwner = CustomLifecycleOwner()
                 lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
                 val windowContext = createOverlayWindowContext(windowType)
@@ -234,27 +312,50 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
                 overlayWindowManager = windowContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
                 createComposeView(windowContext)
                 lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+                latencyTrace?.metric(
+                    name = "overlay.createComposeView",
+                    durationMs = android.os.SystemClock.elapsedRealtime() - createViewStartedAt,
+                    details = "windowType=$windowType"
+                )
             }
 
-            composeView?.registerVisibleTelemetry(newFingerprint, requestedAt)
+            composeView?.registerVisibleTelemetry(
+                fingerprint = newFingerprint,
+                requestedAt = requestedAt,
+                requestedAtElapsed = requestedAtElapsed,
+                trace = latencyTrace
+            )
             composeView?.visibility = View.VISIBLE
 
             if (composeView?.parent == null) {
                 val params = getLayoutParams(windowType)
                 currentLayoutParams = params
+                val addViewStartedAt = android.os.SystemClock.elapsedRealtime()
                 requireNotNull(overlayWindowManager).addView(composeView, params)
+                latencyTrace?.metric(
+                    name = "overlay.addView",
+                    durationMs = android.os.SystemClock.elapsedRealtime() - addViewStartedAt,
+                    details = "transition=$transition"
+                )
                 Log.w("OverlayManager", "OVERLAY_VIEW_ADDED fingerprint=$newFingerprint")
                 overlayStateMachine.markShown(newFingerprint)
                 if (transition == OverlayTransition.AttachOrReplace && oldFingerprint != null) {
                     Log.w("OverlayManager", "OVERLAY_REPLACED_OLD_FINGERPRINT old=$oldFingerprint new=$newFingerprint")
                 }
             } else if (transition == OverlayTransition.UpdateInPlace) {
+                latencyTrace?.metric(
+                    name = "overlay.updateInPlace",
+                    durationMs = 0L,
+                    details = "transition=$transition"
+                )
                 if (BuildConfig.DEBUG) {
                     Log.d("OverlayManager", "Overlay updated in-place: $newFingerprint")
                 }
             } else if (transition == OverlayTransition.AttachOrReplace) {
                 overlayStateMachine.markShown(newFingerprint)
             }
+            latencyTrace?.mark(OverlayLatencyTrace.Stage.T11_OVERLAY_ADD_OR_UPDATE_END)
+            Log.w("OverlayManager", "CALCMOT_OVERLAY_WINDOW fingerprint=$newFingerprint")
             AppDiagnostics.recordStage(context, AppDiagnostics.Stage.OVERLAY_SHOWN)
             if (BuildConfig.DEBUG) {
                 Log.i("OverlayManager", "Overlay shown: $data")
@@ -283,11 +384,45 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
                         )
                     }
                 )
+            } else {
+                latencyTrace?.close(OverlayLatencyTrace.EndReason.BAD_TOKEN)
             }
         } catch (e: Exception) {
             AppDiagnostics.recordStage(context, AppDiagnostics.Stage.OVERLAY_ERROR)
+            latencyTrace?.close(OverlayLatencyTrace.EndReason.CARD_GONE)
             Log.e("OverlayManager", "Erro showOverlay: ", e)
         }
+    }
+
+    private fun isOverlayAllowed(): Boolean {
+        if (criticalBlockPackageName != null) return false
+        val trustedPackage = trustedDriverPackageName ?: return false
+        if (!DriverAppPackagePolicy.isDriverPackage(trustedPackage)) return false
+        val elapsedSinceTrustedDriver = SystemClock.elapsedRealtime() - trustedDriverPackageSeenAtElapsed
+        return elapsedSinceTrustedDriver in 0..TRUSTED_DRIVER_GRACE_MS
+    }
+
+    private fun blockOverlayOutsideDriverApp(reason: String) {
+        val packageName = DriverAppPackagePolicy.describe(foregroundPackageName)
+        Log.w(
+            "OverlayManager",
+            "OVERLAY_REQUEST_DROPPED_NO_TRUSTED_DRIVER package=$packageName reason=$reason"
+        )
+        pendingLatencyTrace?.close(OverlayLatencyTrace.EndReason.CARD_GONE)
+        pendingLatencyTrace = null
+    }
+
+    private fun blockOverlayForBlockedUserApp(reason: String) {
+        val packageName = DriverAppPackagePolicy.describe(criticalBlockPackageName ?: foregroundPackageName)
+        Log.w(
+            "OverlayManager",
+            "OVERLAY_BLOCKED_USER_APP package=$packageName reason=$reason"
+        )
+        resetOverlayView()
+        resetDebugOverlayView()
+        overlayStateMachine.markHidden()
+        pendingLatencyTrace?.close(OverlayLatencyTrace.EndReason.SAFE_MODE_BLOCKED_USER_APP)
+        pendingLatencyTrace = null
     }
 
     override fun hideOverlay() {
@@ -429,17 +564,33 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
         }
     }
 
-    private fun ComposeView.registerVisibleTelemetry(fingerprint: String, requestedAt: Long) {
+    private fun ComposeView.registerVisibleTelemetry(
+        fingerprint: String,
+        requestedAt: Long,
+        requestedAtElapsed: Long,
+        trace: OverlayLatencyTrace?
+    ) {
         viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
                 viewTreeObserver.removeOnPreDrawListener(this)
                 val drawnAt = System.currentTimeMillis()
+                val drawnAtElapsed = android.os.SystemClock.elapsedRealtime()
                 Log.w("OverlayManager", "OVERLAY_FIRST_DRAWN fingerprint=$fingerprint")
+                Log.w(
+                    "OverlayManager",
+                    "CALCMOT_OVERLAY_DRAW fingerprint=$fingerprint firstDrawMs=${drawnAtElapsed - requestedAtElapsed}"
+                )
+                trace?.mark(OverlayLatencyTrace.Stage.T12_OVERLAY_FIRST_DRAW)
                 val latency = drawnAt - requestedAt
                 Log.w("OverlayManager", "OVERLAY_VISIBLE_TO_USER fingerprint=$fingerprint visibleLatencyMs=$latency")
+                trace?.mark(OverlayLatencyTrace.Stage.T13_OVERLAY_VISIBLE_TO_USER)
                 return true
             }
         })
+        mainHandler.postDelayed(
+            { trace?.close(OverlayLatencyTrace.EndReason.PREDRAW_TIMEOUT) },
+            OVERLAY_PREDRAW_TIMEOUT_MS
+        )
     }
 
     private fun createDebugComposeView(windowContext: Context) {
@@ -602,7 +753,9 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
 
     private companion object {
         const val BAD_TOKEN_RETRY_DELAY_MS = 150L
+        const val OVERLAY_PREDRAW_TIMEOUT_MS = 1_500L
         const val USER_DISMISS_SUPPRESS_MILLIS = 10_000L
+        const val TRUSTED_DRIVER_GRACE_MS = 2_000L
         var preferDebugApplicationOverlay = false
     }
 }

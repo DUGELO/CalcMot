@@ -1,80 +1,95 @@
 package br.com.calcmot.ui
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import br.com.calcmot.ui.design.components.CalcMotButton
-import br.com.calcmot.ui.design.components.CalcMotButtonVariant
-import br.com.calcmot.ui.design.components.CalcMotCard
-import br.com.calcmot.ui.design.components.CalcMotSectionHeader
-import br.com.calcmot.ui.design.tokens.CalcMotColors
-import br.com.calcmot.ui.design.tokens.CalcMotSpacing
-import br.com.calcmot.ui.design.tokens.CalcMotTypography
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun HelpScreen(
+    modifier: Modifier = Modifier,
     onOpenPrivacy: () -> Unit,
     onSupport: () -> Unit
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .testTag(UiTestTags.HELP_SCREEN)
-            .padding(horizontal = CalcMotSpacing.ScreenHorizontal, vertical = CalcMotSpacing.ScreenVertical),
-        verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        CalcMotSectionHeader(
-            title = "Ajuda",
-            subtitle = "Tire dúvidas sobre segurança, privacidade e suporte do CalcMot."
+        Text(
+            text = "Ajuda",
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp)
         )
-
-        HelpCard(
-            title = "Segurança e privacidade",
-            body = "Veja como o CalcMot lê a oferta, o que fica no aparelho e o que ele não faz.",
-            actionText = "Ver privacidade",
-            actionTag = UiTestTags.HELP_PRIVACY_BUTTON,
-            onAction = onOpenPrivacy
+        FaqItem(
+            title = "Como usar",
+            body = "Abra o app de motorista. O aviso aparece quando surgir uma oferta completa."
         )
-
-        HelpCard(
-            title = "Falar com suporte",
-            body = "Use o email de suporte para dúvidas, problemas ou solicitações sobre seus dados.",
-            actionText = "Enviar email",
-            actionTag = UiTestTags.HELP_SUPPORT_BUTTON,
-            onAction = onSupport
+        FaqItem(
+            title = "O que significam as cores",
+            body = "Boa fica dentro da meta. Média fica no limite. Ruim fica abaixo."
+        )
+        FaqItem(
+            title = "Por que precisa da permissão",
+            body = "Para calcular automaticamente a oferta visível nos apps de motorista."
+        )
+        FaqItem(
+            title = "Funciona fora da Uber ou 99?",
+            body = "Não. Fora dos apps de motorista, o CalcMot fica em espera."
+        )
+        FaqItem(
+            title = "Como pausar",
+            body = "Entre em Configurações e desligue o cálculo automático."
+        )
+        HorizontalDivider()
+        ListItem(
+            headlineContent = { Text("Privacidade") },
+            supportingContent = { Text("Resumo de dados e segurança.") },
+            trailingContent = {
+                TextButton(
+                    modifier = Modifier.testTag(UiTestTags.HELP_PRIVACY_BUTTON),
+                    onClick = onOpenPrivacy
+                ) {
+                    Text("Abrir")
+                }
+            }
+        )
+        ListItem(
+            headlineContent = { Text("Suporte") },
+            supportingContent = { Text("Dúvidas, problemas ou solicitações.") },
+            trailingContent = {
+                TextButton(
+                    modifier = Modifier.testTag(UiTestTags.HELP_SUPPORT_BUTTON),
+                    onClick = onSupport
+                ) {
+                    Text("Email")
+                }
+            }
         )
     }
 }
 
 @Composable
-private fun HelpCard(
+private fun FaqItem(
     title: String,
-    body: String,
-    actionText: String,
-    actionTag: String,
-    onAction: () -> Unit
+    body: String
 ) {
-    CalcMotCard {
-        Column(
-            modifier = Modifier.padding(CalcMotSpacing.CardPadding),
-            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)
-        ) {
-            Text(text = title, style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
-            Text(text = body, style = CalcMotTypography.Body, color = CalcMotColors.TextSecondary)
-            CalcMotButton(
-                text = actionText,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(actionTag),
-                onClick = onAction,
-                variant = CalcMotButtonVariant.SECONDARY
-            )
-        }
-    }
+    ListItem(
+        modifier = Modifier.testTag(UiTestTags.FAQ_ITEM),
+        headlineContent = { Text(title) },
+        supportingContent = { Text(body) }
+    )
+    HorizontalDivider()
 }

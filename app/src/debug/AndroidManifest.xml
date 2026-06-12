@@ -19,5 +19,13 @@
                 <action android:name="br.com.calcmot.DEBUG_UIAUTOMATOR_OFFER" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".debug.LatencyVisualProbeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="br.com.calcmot.DEBUG_LATENCY_VISUAL_PROBE" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

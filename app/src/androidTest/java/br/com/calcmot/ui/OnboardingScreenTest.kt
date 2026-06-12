@@ -2,7 +2,6 @@ package br.com.calcmot.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -35,8 +34,11 @@ class OnboardingScreenTest {
         composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_DISCLOSURE)
             .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithText("Como o CalcMot lê a oferta").assertIsDisplayed()
-        composeRule.onNodeWithText("Não toca na tela", substring = true)
+        composeRule.onNodeWithText("Veja se a corrida compensa antes de aceitar.").assertIsDisplayed()
+        composeRule.onNodeWithText("Calcula R$/km e R$/h.", substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("fora dos apps de motorista", substring = true)
             .performScrollTo()
             .assertIsDisplayed()
         composeRule.onAllNodesWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertCountEquals(1)
@@ -44,8 +46,8 @@ class OnboardingScreenTest {
             .performScrollTo()
             .assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertIsEnabled()
-        composeRule.onNodeWithTag(UiTestTags.FINISH_ONBOARDING_BUTTON).assertIsNotEnabled()
-        composeRule.onNodeWithText("Ainda falta permitir a leitura da oferta", substring = true)
+        composeRule.onAllNodesWithTag(UiTestTags.FINISH_ONBOARDING_BUTTON).assertCountEquals(0)
+        composeRule.onNodeWithText("Depois de ativar a permissão", substring = true)
             .performScrollTo()
             .assertIsDisplayed()
     }
@@ -61,9 +63,7 @@ class OnboardingScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Ativo").assertIsDisplayed()
-        composeRule.onNodeWithText("Permissão ativada", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertIsNotEnabled()
+        composeRule.onNodeWithText("Permissão ativa", substring = true).assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.FINISH_ONBOARDING_BUTTON).assertIsEnabled()
     }
 

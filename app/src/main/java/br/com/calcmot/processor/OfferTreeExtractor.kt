@@ -1,54 +1,84 @@
 package br.com.calcmot.processor
 
+import br.com.calcmot.DriverAppPackagePolicy
+
 object OfferTreeExtractor {
 
     fun extractOfferText(snapshot: AccessibilityTreeSnapshot): String? {
         return inspect(snapshot).offerText
     }
 
-    fun inspect(snapshot: AccessibilityTreeSnapshot): TreeOfferInspection {
-        val lines = snapshot.semanticLines()
+    fun inspect(
+        snapshot: AccessibilityTreeSnapshot,
+        includeAuditFields: Boolean = true,
+        metric: ((name: String, durationMs: Long, details: String) -> Unit)? = null
+    ): TreeOfferInspection {
+        val lines = measureStage(metric, "semanticLines", "rawLineCount=${snapshot.lines.size}") {
+            snapshot.semanticLines()
+        }
 
         if (lines.isEmpty()) {
-            return snapshot.inspection(lines, rejectionReason = TreeRejectionReason.EMPTY_TREE)
+            return snapshot.inspection(
+                lines = lines,
+                rejectionReason = TreeRejectionReason.EMPTY_TREE,
+                includeAuditFields = includeAuditFields,
+                metric = metric
+            )
         }
 
         // Strong invalid states must beat stale card text that can remain in the tree briefly.
         // Weak ambient states are kept as rejection reasons only when no complete card is present.
         val allText = lines.joinToString(" ") { it.text }
-        val invalidReason = detectInvalidContext(allText)
+        val invalidReason = measureStage(metric, "invalidContext", "lineCount=${lines.size}") {
+            detectInvalidContext(allText)
+        }
         if (invalidReason?.isImmediateInvalidContext() == true) {
-            return snapshot.inspection(lines, rejectionReason = invalidReason)
+            return snapshot.inspection(
+                lines = lines,
+                rejectionReason = invalidReason,
+                includeAuditFields = includeAuditFields,
+                metric = metric
+            )
         }
 
-        val actionButtons = lines.filter { it.looksLikeActionButton() }
-        val tripBlocks = extractTripBlocks(lines, snapshot.screenHeight)
-        val priceLines = lines.filter { it.looksLikeOfferFareLine(snapshot.screenHeight) }
+        val actionButtons = measureStage(metric, "actionButtons", "lineCount=${lines.size}") {
+            lines.filter { it.looksLikeActionButton() }
+        }
+        val tripBlocks = measureStage(metric, "tripBlocks", "lineCount=${lines.size}") {
+            extractTripBlocks(lines, snapshot.screenHeight)
+        }
+        val priceLines = measureStage(metric, "priceLines", "lineCount=${lines.size}") {
+            lines.filter { it.looksLikeOfferFareLine(snapshot.screenHeight) }
+        }
 
         if (priceLines.isEmpty()) {
             return snapshot.inspection(
                 lines = lines,
                 hasActionButton = actionButtons.isNotEmpty(),
                 timeDistanceBlockCount = tripBlocks.size,
-                rejectionReason = invalidReason ?: TreeRejectionReason.NO_PRICE
+                rejectionReason = invalidReason ?: TreeRejectionReason.NO_PRICE,
+                includeAuditFields = includeAuditFields,
+                metric = metric
             )
         }
 
-        val bestOffer = priceLines
-            .mapNotNull { priceLine ->
-                buildCandidateOffer(
-                    lines = lines,
-                    screenHeight = snapshot.screenHeight,
-                    priceLine = priceLine,
-                    tripBlocks = tripBlocks,
-                    actionButtons = actionButtons
+        val bestOffer = measureStage(metric, "buildCandidateOffer", "priceLineCount=${priceLines.size} tripBlockCount=${tripBlocks.size} actionButtonCount=${actionButtons.size}") {
+            priceLines
+                .mapNotNull { priceLine ->
+                    buildCandidateOffer(
+                        lines = lines,
+                        screenHeight = snapshot.screenHeight,
+                        priceLine = priceLine,
+                        tripBlocks = tripBlocks,
+                        actionButtons = actionButtons
+                    )
+                }
+                .maxWithOrNull(
+                    compareBy<TreeOfferCandidate> { it.hasActionButton }
+                        .thenBy { it.priceLine.bounds.centerY }
+                        .thenBy { it.cardBottom }
                 )
-            }
-            .maxWithOrNull(
-                compareBy<TreeOfferCandidate> { it.hasActionButton }
-                    .thenBy { it.priceLine.bounds.centerY }
-                    .thenBy { it.cardBottom }
-            )
+        }
 
         if (bestOffer == null) {
             return snapshot.inspection(
@@ -56,7 +86,9 @@ object OfferTreeExtractor {
                 hasPrice = true,
                 hasActionButton = actionButtons.isNotEmpty(),
                 timeDistanceBlockCount = tripBlocks.size,
-                rejectionReason = invalidReason ?: TreeRejectionReason.INCOMPLETE_TIME_DISTANCE_BLOCKS
+                rejectionReason = invalidReason ?: TreeRejectionReason.INCOMPLETE_TIME_DISTANCE_BLOCKS,
+                includeAuditFields = includeAuditFields,
+                metric = metric
             )
         }
 
@@ -65,7 +97,9 @@ object OfferTreeExtractor {
             hasPrice = true,
             hasActionButton = bestOffer.hasActionButton,
             timeDistanceBlockCount = bestOffer.tripBlocks.size,
-            offerText = bestOffer.offerText
+            offerText = bestOffer.offerText,
+            includeAuditFields = includeAuditFields,
+            metric = metric
         )
     }
 
@@ -75,11 +109,27 @@ object OfferTreeExtractor {
         hasActionButton: Boolean = false,
         timeDistanceBlockCount: Int = 0,
         offerText: String? = null,
-        rejectionReason: TreeRejectionReason? = null
+        rejectionReason: TreeRejectionReason? = null,
+        includeAuditFields: Boolean = true,
+        metric: ((name: String, durationMs: Long, details: String) -> Unit)? = null
     ): TreeOfferInspection {
-        val fieldCandidates = extractFieldCandidates(lines, screenHeight)
         val allText = lines.joinToString(" ") { it.text }
         val isRadar = TextNormalizer.searchKey(allText).contains("radar")
+        val shouldBuildAuditFields = includeAuditFields || offerText == null
+        val fieldCandidates = if (shouldBuildAuditFields) {
+            measureStage(metric, "fieldCandidates", "lineCount=${lines.size}") {
+                extractFieldCandidates(lines, screenHeight)
+            }
+        } else {
+            emptyList()
+        }
+        val knownNodeMappings = if (shouldBuildAuditFields) {
+            measureStage(metric, "knownNodeMappings", "fieldCandidateCount=${fieldCandidates.size}") {
+                fieldCandidates.discoverKnownNodeMappings(capturedAtMillis)
+            }
+        } else {
+            emptyList()
+        }
         return TreeOfferInspection(
             sourceName = sourceName,
             elapsedSinceEventMs = elapsedSinceEventMs,
@@ -93,8 +143,21 @@ object OfferTreeExtractor {
             offerText = offerText,
             rejectionReason = rejectionReason,
             fieldCandidates = fieldCandidates,
-            knownNodeMappings = fieldCandidates.discoverKnownNodeMappings(capturedAtMillis)
+            knownNodeMappings = knownNodeMappings
         )
+    }
+
+    private fun <T> measureStage(
+        metric: ((name: String, durationMs: Long, details: String) -> Unit)?,
+        name: String,
+        details: String,
+        block: () -> T
+    ): T {
+        if (metric == null) return block()
+        val startedAt = System.nanoTime()
+        return block().also {
+            metric(name, ((System.nanoTime() - startedAt) / 1_000_000L).coerceAtLeast(0L), details)
+        }
     }
 
     private fun AccessibilityTreeSnapshot.semanticLines(): List<AccessibleLine> {
@@ -227,9 +290,10 @@ object OfferTreeExtractor {
     }
 
     private fun extractTripBlocks(lines: List<AccessibleLine>, screenHeight: Int): List<TreeTripBlock> {
-        val candidateBlocks = mutableListOf<TreeTripBlock>()
+        val acceptedBlocks = mutableListOf<TreeTripBlock>()
 
         for (startIndex in lines.indices) {
+            if (acceptedBlocks.isNotEmpty() && startIndex <= acceptedBlocks.last().endIndex) continue
             for (windowSize in 1..MAX_BLOCK_WINDOW_SIZE) {
                 val endIndex = startIndex + windowSize - 1
                 if (endIndex !in lines.indices) break
@@ -241,7 +305,7 @@ object OfferTreeExtractor {
                 if (!text.looksLikeTimeDistanceBlock()) continue
                 if (windowSize > 1 && !window.hasReasonableBlockSpan(screenHeight)) continue
 
-                candidateBlocks += TreeTripBlock(
+                acceptedBlocks += TreeTripBlock(
                     startIndex = startIndex,
                     endIndex = endIndex,
                     text = text,
@@ -251,14 +315,7 @@ object OfferTreeExtractor {
             }
         }
 
-        return candidateBlocks
-            .sortedWith(compareBy<TreeTripBlock> { it.startIndex }.thenBy { it.endIndex - it.startIndex })
-            .fold(mutableListOf()) { accepted, block ->
-                if (accepted.isEmpty() || block.startIndex > accepted.last().endIndex) {
-                    accepted += block
-                }
-                accepted
-            }
+        return acceptedBlocks
     }
 
     private fun List<AccessibleLine>.hasCloseVerticalSpacing(screenHeight: Int): Boolean {
@@ -440,7 +497,7 @@ object OfferTreeExtractor {
     private fun AccessibleLine.looksLikeOfferFareLine(screenHeight: Int): Boolean {
         if (!FarePriceExtractor.containsPrimaryFare(text)) return false
         if (source == AccessibleTextSource.VIEW_ID_RESOURCE_NAME) return false
-        if (packageName != null && packageName != UBER_DRIVER_PACKAGE) return false
+        if (packageName != null && !DriverAppPackagePolicy.isAllowedDriverPackage(packageName)) return false
 
         val id = viewId.orEmpty().lowercase()
         if (id.contains("earnings_tracker")) return false
@@ -593,7 +650,6 @@ object OfferTreeExtractor {
     private const val SAME_ROW_OVERLAP_RATIO = 0.55
     private const val BASE_FIELD_CONFIDENCE = 0.55
     private const val VIEW_ID_CONFIDENCE_BOOST = 0.10
-    private const val UBER_DRIVER_PACKAGE = "com.ubercab.driver"
     private const val TOP_COUNTER_MAX_CENTER_RATIO = 0.18
 }
 

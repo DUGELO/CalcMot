@@ -5,6 +5,7 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.graphics.Rect
 import android.os.Build
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityWindowInfo
 import android.view.accessibility.AccessibilityEvent
@@ -12,6 +13,8 @@ import android.view.accessibility.AccessibilityNodeInfo
 import br.com.calcmot.AppDiagnostics
 import br.com.calcmot.AppSettings
 import br.com.calcmot.BuildConfig
+import br.com.calcmot.DriverAppPackagePolicy
+import br.com.calcmot.PackageDecision
 import br.com.calcmot.model.OfferCaptureOutcome
 import br.com.calcmot.model.OfferCaptureRejectionReason
 import br.com.calcmot.model.OfferCaptureSource
@@ -29,6 +32,7 @@ import br.com.calcmot.processor.AccessibleTextSource
 import br.com.calcmot.processor.CaptureCoordinator
 import br.com.calcmot.processor.CaptureDecision
 import br.com.calcmot.processor.DebugTreeWalker
+import br.com.calcmot.processor.FarePriceExtractor
 import br.com.calcmot.processor.OfferParser
 import br.com.calcmot.processor.OfferTreeExtractor
 import br.com.calcmot.processor.ScreenBounds
@@ -36,6 +40,7 @@ import br.com.calcmot.processor.TextNormalizer
 import br.com.calcmot.processor.TreeOfferInspection
 import br.com.calcmot.processor.TreeRejectionReason
 import br.com.calcmot.processor.overlayFingerprint
+import br.com.calcmot.telemetry.OverlayLatencyTrace
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -50,6 +55,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
 class UberAccessibilityService : AccessibilityService() {
@@ -95,7 +101,28 @@ class UberAccessibilityService : AccessibilityService() {
     @Volatile
     private var activeScanSessionStartedAtMillis = 0L
     @Volatile
+    private var pendingCaptureAfterCurrent = false
+    @Volatile
+    private var pendingCaptureEventAtMillis = 0L
+    @Volatile
+    private var pendingCapturePackageName: String? = null
+    @Volatile
+    private var pendingCaptureEventType = 0
+    @Volatile
+    private var pendingCaptureWindowId = 0
+    @Volatile
     private var lastWatchdogScanAtMillis = 0L
+    @Volatile
+    private var rawForegroundPackageName: String? = null
+    @Volatile
+    private var trustedForegroundPackageName: String? = null
+    @Volatile
+    private var trustedForegroundDecision: PackageDecision? = null
+    @Volatile
+    private var trustedForegroundSeenAtElapsed: Long = 0L
+    @Volatile
+    private var latestVisualProbe: OverlayLatencyTrace.VisualProbe? = null
+    private val latencyTracesByGeneration = ConcurrentHashMap<Long, OverlayLatencyTrace>()
     private var lastParsedOfferAudit: ParsedOfferAudit? = null
     private val postReconnectCandidateGuard = PostReconnectCandidateGuard()
     private val accessibilityTreeLab by lazy { AccessibilityTreeLab(this) }
@@ -130,8 +157,8 @@ class UberAccessibilityService : AccessibilityService() {
             showDebugHeartbeat(
                 uberForeground = false,
                 lastEventType = "service_connected",
-                rootNull = rootInActiveWindow == null,
-                windowCount = runCatching { windows.size }.getOrDefault(0),
+                rootNull = true,
+                windowCount = 0,
                 nodeCount = 0,
                 textNodeCount = 0,
                 contentDescriptionNodeCount = 0,
@@ -171,11 +198,64 @@ class UberAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+
         val eventPackage = event.packageName?.toString()
-        val isUberPackageEvent = eventPackage == UBER_DRIVER_PACKAGE
-        val isUberWindowEvent = event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED &&
-            hasUberRootAvailable()
-        if (!isUberPackageEvent && !isUberWindowEvent) return
+        val packageDecision = DriverAppPackagePolicy.classify(eventPackage)
+        rawForegroundPackageName = DriverAppPackagePolicy.normalize(eventPackage)
+
+        when (packageDecision) {
+            PackageDecision.UNKNOWN -> {
+                overlayManager?.setForegroundPackage(eventPackage)
+                Log.w(
+                    TAG,
+                    "CALCMOT_UNKNOWN_PACKAGE_EVENT_IGNORED eventType=${event.eventType}"
+                )
+                return
+            }
+
+            PackageDecision.OWN_APP -> {
+                overlayManager?.setForegroundPackage(eventPackage)
+                Log.w(
+                    TAG,
+                    "CALCMOT_OWN_PACKAGE_EVENT_IGNORED " +
+                        "package=${DriverAppPackagePolicy.describe(eventPackage)} eventType=${event.eventType}"
+                )
+                return
+            }
+
+            PackageDecision.TRANSIENT_SYSTEM -> {
+                overlayManager?.setForegroundPackage(eventPackage)
+                Log.w(
+                    TAG,
+                    "CALCMOT_TRANSIENT_SYSTEM_EVENT_IGNORED " +
+                        "package=${DriverAppPackagePolicy.describe(eventPackage)} eventType=${event.eventType}"
+                )
+                return
+            }
+
+            PackageDecision.BLOCKED_USER_APP -> {
+                if (event.isForegroundDefiningEvent()) {
+                    enterSafeIdleForBlockedUserApp(eventPackage, event.eventType)
+                } else {
+                    Log.w(
+                        TAG,
+                        "CALCMOT_BLOCKED_USER_EVENT_IGNORED_NON_FOREGROUND " +
+                            "package=${DriverAppPackagePolicy.describe(eventPackage)} eventType=${event.eventType}"
+                    )
+                }
+                return
+            }
+
+            PackageDecision.DRIVER_APP -> Unit
+        }
+
+        updateTrustedForeground(packageName = eventPackage, decision = PackageDecision.DRIVER_APP)
+        overlayManager?.setForegroundPackage(eventPackage)
+        Log.w(
+            TAG,
+            "CALCMOT_PACKAGE_GUARD state=CALCMOT_ALLOWED_DRIVER_APP_ACTIVE " +
+                "package=${DriverAppPackagePolicy.describe(eventPackage)} eventType=${event.eventType}"
+        )
         if (!event.isRelevantUberEvent()) return
 
         val eventCopy = AccessibilityEvent.obtain(event)
@@ -185,8 +265,8 @@ class UberAccessibilityService : AccessibilityService() {
             showDebugHeartbeat(
                 uberForeground = true,
                 lastEventType = event.eventType.debugEventName(),
-                rootNull = rootInActiveWindow == null,
-                windowCount = runCatching { windows.size }.getOrDefault(0),
+                rootNull = false,
+                windowCount = 0,
                 nodeCount = 0,
                 textNodeCount = 0,
                 contentDescriptionNodeCount = 0,
@@ -198,18 +278,36 @@ class UberAccessibilityService : AccessibilityService() {
 
         if (!AppSettings.isMonitoringEnabled(this)) {
             AppDiagnostics.recordStage(this, AppDiagnostics.Stage.MONITORING_DISABLED)
-            cancelCapturePipeline()
+            cancelCapturePipeline(OverlayLatencyTrace.EndReason.MONITORING_DISABLED)
             cancelOverlayExpiry()
             serviceScope.launch {
                 captureCoordinator.reset()
                 mainScope.launch { overlayManager?.hideOverlay() }
+                closeAllLatencyTraces(OverlayLatencyTrace.EndReason.MONITORING_DISABLED)
                 eventCopy.recycle()
             }
             return
         }
 
-        val captureSession = beginOrCoalesceCaptureSession(eventAtMillis)
+        val captureSession = beginOrCoalesceCaptureSession(
+            eventAtMillis = eventAtMillis,
+            packageName = DriverAppPackagePolicy.describe(eventPackage),
+            eventType = event.eventType,
+            windowId = event.windowId
+        )
         val generation = captureSession.generation
+        captureSession.trace?.metric(
+            name = "capture.session",
+            durationMs = 0L,
+            details = "generation=$generation shouldStartBurst=${captureSession.shouldStartBurst}"
+        )
+        if (captureSession.trace != null) {
+            Log.w(
+                TAG,
+                "CALCMOT_ACCESSIBILITY_EVENT package=${DriverAppPackagePolicy.describe(eventPackage)} " +
+                    "eventType=${event.eventType} windowId=${event.windowId} traceId=${captureSession.trace.traceId}"
+            )
+        }
         AppDiagnostics.recordStage(this, AppDiagnostics.Stage.TREE_SCAN_SCHEDULED)
         if (!captureSession.shouldStartBurst) {
             eventCopy.recycle()
@@ -225,7 +323,48 @@ class UberAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun beginOrCoalesceCaptureSession(eventAtMillis: Long): CaptureSession {
+    private fun enterSafeIdleForBlockedUserApp(packageName: String?, eventType: Int) {
+        updateTrustedForeground(packageName = packageName, decision = PackageDecision.BLOCKED_USER_APP)
+        Log.w(
+            TAG,
+            "CALCMOT_SAFE_MODE state=CALCMOT_PAUSED_BLOCKED_USER_APP " +
+                "package=${DriverAppPackagePolicy.describe(packageName)} eventType=$eventType"
+        )
+        Log.w(
+            TAG,
+            "BANK_SAFE_MODE_ACTIVE package=${DriverAppPackagePolicy.describe(packageName)}"
+        )
+        Log.w(
+            TAG,
+            "OVERLAY_FORCE_HIDDEN_NON_ALLOWED_APP package=${DriverAppPackagePolicy.describe(packageName)}"
+        )
+        cancelCapturePipeline(OverlayLatencyTrace.EndReason.SAFE_MODE_BLOCKED_USER_APP)
+        cancelOverlayExpiry()
+        accessibilityPollingUntil = 0L
+        clearPendingCapture()
+        activeScanSessionGeneration = 0L
+        activeScanSessionStartedAtMillis = 0L
+        lastParsedOfferAudit = null
+        serviceScope.launch {
+            captureCoordinator.reset()
+        }
+        mainScope.launch {
+            overlayManager?.setForegroundPackage(packageName)
+        }
+    }
+
+    private fun updateTrustedForeground(packageName: String?, decision: PackageDecision) {
+        trustedForegroundPackageName = DriverAppPackagePolicy.normalize(packageName)
+        trustedForegroundDecision = decision
+        trustedForegroundSeenAtElapsed = SystemClock.elapsedRealtime()
+    }
+
+    private fun beginOrCoalesceCaptureSession(
+        eventAtMillis: Long,
+        packageName: String,
+        eventType: Int,
+        windowId: Int
+    ): CaptureSession {
         val now = System.currentTimeMillis()
         val canCoalesce = capturePipelineJob?.isActive == true &&
             activeScanSessionGeneration == captureGeneration &&
@@ -233,43 +372,142 @@ class UberAccessibilityService : AccessibilityService() {
 
         if (canCoalesce) {
             accessibilityPollingEventAtMillis = eventAtMillis
+            pendingCaptureAfterCurrent = true
+            pendingCaptureEventAtMillis = eventAtMillis
+            pendingCapturePackageName = packageName
+            pendingCaptureEventType = eventType
+            pendingCaptureWindowId = windowId
+            val activeTrace = latencyTraceForGeneration(activeScanSessionGeneration)
+            activeTrace?.metric(
+                name = "capture.coalesced",
+                durationMs = now - activeScanSessionStartedAtMillis,
+                details = "activeTraceId=${activeTrace.traceId} targetGeneration=$activeScanSessionGeneration " +
+                    "elapsedSinceSessionMs=${now - activeScanSessionStartedAtMillis} pendingAfterCurrent=true"
+            )
             return CaptureSession(
                 generation = activeScanSessionGeneration,
-                shouldStartBurst = false
+                shouldStartBurst = false,
+                trace = activeTrace
             )
         }
 
+        if (activeScanSessionGeneration == captureGeneration && activeScanSessionGeneration != 0L) {
+            latencyTraceForGeneration(captureGeneration)
+                ?.close(OverlayLatencyTrace.EndReason.TRACE_SUPERSEDED_BY_NEW_DRIVER_EVENT)
+        }
         capturePipelineJob?.cancel()
+        clearPendingCapture()
         captureGeneration += 1
         activeScanSessionGeneration = captureGeneration
         activeScanSessionStartedAtMillis = now
+        val latencyTrace = OverlayLatencyTrace.start(
+            packageName = packageName,
+            eventType = eventType,
+            windowId = windowId,
+            visualProbe = consumeRecentVisualProbe()
+        ).mark(OverlayLatencyTrace.Stage.T1_PACKAGE_ALLOWED_CONFIRMED)
+        latencyTracesByGeneration[captureGeneration] = latencyTrace
+        cleanupLatencyTraces()
         return CaptureSession(
             generation = captureGeneration,
-            shouldStartBurst = true
+            shouldStartBurst = true,
+            trace = latencyTrace
         )
     }
 
-    private fun cancelCapturePipeline() {
+    private fun cancelCapturePipeline(
+        endReason: OverlayLatencyTrace.EndReason = OverlayLatencyTrace.EndReason.NO_CANDIDATE_AFTER_TREE
+    ) {
         captureGeneration += 1
         activeScanSessionGeneration = 0L
         activeScanSessionStartedAtMillis = 0L
+        clearPendingCapture()
+        closeAllLatencyTraces(endReason)
         accessibilityPollingJob?.cancel()
         accessibilityPollingJob = null
         capturePipelineJob?.cancel()
         capturePipelineJob = null
     }
 
+    private fun clearPendingCapture() {
+        pendingCaptureAfterCurrent = false
+        pendingCaptureEventAtMillis = 0L
+        pendingCapturePackageName = null
+        pendingCaptureEventType = 0
+        pendingCaptureWindowId = 0
+    }
+
+    private fun startPendingCaptureAfterCurrentIfNeeded() {
+        if (!pendingCaptureAfterCurrent) return
+        val eventAtMillis = pendingCaptureEventAtMillis
+        val packageName = pendingCapturePackageName
+        val eventType = pendingCaptureEventType
+        val windowId = pendingCaptureWindowId
+        clearPendingCapture()
+
+        if (packageName.isNullOrBlank() || !DriverAppPackagePolicy.isDriverPackage(packageName)) return
+        if (!isCurrentForegroundPackageAllowed()) return
+        if (!AppSettings.isMonitoringEnabled(this)) return
+
+        val session = beginOrCoalesceCaptureSession(
+            eventAtMillis = eventAtMillis,
+            packageName = packageName,
+            eventType = eventType,
+            windowId = windowId
+        )
+        session.trace?.metric(
+            name = "capture.pendingAfterCurrent",
+            durationMs = 0L,
+            details = "generation=${session.generation} shouldStartBurst=${session.shouldStartBurst}"
+        )
+        if (!session.shouldStartBurst) return
+
+        capturePipelineJob = serviceScope.launch {
+            runCapturePipeline(event = null, eventAtMillis = eventAtMillis, generation = session.generation)
+        }
+    }
+
+    private fun closeAllLatencyTraces(reason: OverlayLatencyTrace.EndReason) {
+        latencyTracesByGeneration.values.forEach { trace ->
+            trace.close(reason)
+        }
+        latencyTracesByGeneration.clear()
+    }
+
     private fun isCurrentGeneration(generation: Long): Boolean {
         return generation == captureGeneration
     }
 
+    private fun latencyTraceForGeneration(generation: Long): OverlayLatencyTrace? {
+        return latencyTracesByGeneration[generation]
+    }
+
+    private fun cleanupLatencyTraces() {
+        val oldestGenerationToKeep = captureGeneration - 2
+        latencyTracesByGeneration.keys.removeIf { it < oldestGenerationToKeep }
+    }
+
+    private fun consumeRecentVisualProbe(): OverlayLatencyTrace.VisualProbe? {
+        val probe = latestVisualProbe ?: return null
+        val ageMs = SystemClock.elapsedRealtime() - probe.elapsedRealtime
+        return if (ageMs in 0..VISUAL_PROBE_MAX_AGE_MS) {
+            latestVisualProbe = null
+            probe
+        } else {
+            Log.w(TAG, "CALCMOT_LATENCY_VISUAL_PROBE_EXPIRED ageMs=$ageMs")
+            latestVisualProbe = null
+            null
+        }
+    }
+
     private suspend fun runCapturePipeline(
-        event: AccessibilityEvent,
+        event: AccessibilityEvent?,
         eventAtMillis: Long,
         generation: Long
     ) {
         coroutineScope {
-            if (handleEventPayloadCandidate(event, eventAtMillis)) return@coroutineScope
+            val trace = latencyTraceForGeneration(generation)
+            if (event != null && handleEventPayloadCandidate(event, eventAtMillis, trace)) return@coroutineScope
             val handledByTree = handleAccessibilityCandidateBurst(eventAtMillis, generation)
             if (!handledByTree && isCurrentGeneration(generation)) {
                 rejectCurrentFrame(
@@ -277,22 +515,30 @@ class UberAccessibilityService : AccessibilityService() {
                     source = OfferCaptureSource.ACCESSIBILITY_TREE,
                     rejectionReason = OfferCaptureRejectionReason.NOT_CARD_LIKE
                 )
+                trace?.close(OverlayLatencyTrace.EndReason.NO_CANDIDATE_AFTER_TREE)
             }
         }
         if (isCurrentGeneration(generation)) {
             activeScanSessionGeneration = 0L
             activeScanSessionStartedAtMillis = 0L
+            capturePipelineJob = null
+            startPendingCaptureAfterCurrentIfNeeded()
         }
     }
 
-    private suspend fun handleEventPayloadCandidate(event: AccessibilityEvent, eventAtMillis: Long): Boolean {
+    private suspend fun handleEventPayloadCandidate(
+        event: AccessibilityEvent,
+        eventAtMillis: Long,
+        trace: OverlayLatencyTrace?
+    ): Boolean {
         val snapshot = event.toAccessibilitySnapshot(eventAtMillis)
         if (snapshot.lines.isEmpty()) return false
 
-        val scanResult = extractCandidateFromSnapshot(snapshot)
+        val scanResult = extractCandidateFromSnapshot(snapshot, trace)
         return scanResult != null && handleAccessibilityScanResult(
             scanResult = scanResult,
-            label = "event-payload"
+            label = "event-payload",
+            trace = trace
         )
     }
 
@@ -307,12 +553,13 @@ class UberAccessibilityService : AccessibilityService() {
                 generationId = captureGeneration,
                 sourceKind = AccessibilitySnapshotSourceKind.EVENT_SOURCE
             )
-            val scanResult = extractCandidateFromSnapshot(snapshot)
+            val scanResult = extractCandidateFromSnapshot(snapshot, trace = null)
             if (scanResult != null) {
                 return runBlocking {
                     handleAccessibilityScanResult(
                         scanResult = scanResult,
-                        label = "event-source"
+                        label = "event-source",
+                        trace = null
                     )
                 }
             }
@@ -334,6 +581,9 @@ class UberAccessibilityService : AccessibilityService() {
                     mainScope.launch { overlayManager?.hideOverlay() }
                     return@launch
                 }
+                if (!isCurrentForegroundPackageAllowed()) {
+                    return@launch
+                }
 
                 val scanResult = extractCandidateFromAccessibilityTree(
                     eventAtMillis = accessibilityPollingEventAtMillis,
@@ -342,7 +592,8 @@ class UberAccessibilityService : AccessibilityService() {
                 if (scanResult != null) {
                     handleAccessibilityScanResult(
                         scanResult = scanResult,
-                        label = "accessibility-poll"
+                        label = "accessibility-poll",
+                        trace = latencyTraceForGeneration(captureGeneration)
                     )
                     if (scanResult is AccessibilityScanResult.InvalidContext) return@launch
                 }
@@ -365,6 +616,9 @@ class UberAccessibilityService : AccessibilityService() {
                     mainScope.launch { overlayManager?.hideOverlay() }
                     continue
                 }
+                if (!isCurrentForegroundPackageAllowed()) {
+                    continue
+                }
 
                 captureCoordinator.expireOverlayIfStale()
                     ?.let { applyCaptureDecision(it, "overlay-heartbeat-ttl") }
@@ -379,6 +633,7 @@ class UberAccessibilityService : AccessibilityService() {
         if (overlayManager?.isVisible != true) return
         if (now - lastWatchdogScanAtMillis < ACCESSIBILITY_WATCHDOG_SCAN_INTERVAL_MS) return
         if (capturePipelineJob?.isActive == true || accessibilityPollingJob?.isActive == true) return
+        if (!isCurrentForegroundPackageAllowed()) return
         if (!hasUberRootAvailable()) return
 
         lastWatchdogScanAtMillis = now
@@ -391,16 +646,26 @@ class UberAccessibilityService : AccessibilityService() {
 
         handleAccessibilityScanResult(
             scanResult = scanResult,
-            label = "accessibility-watchdog"
+            label = "accessibility-watchdog",
+            trace = latencyTraceForGeneration(captureGeneration)
         )
     }
 
     private fun hasUberRootAvailable(): Boolean {
-        if (rootInActiveWindow?.containsPackageName(UBER_DRIVER_PACKAGE) == true) return true
+        if (rootInActiveWindow?.containsAllowedDriverPackage() == true) return true
 
         return allInteractiveWindowsForScan().any { windowSource ->
-            windowSource.root?.containsPackageName(UBER_DRIVER_PACKAGE) == true
+            windowSource.root?.containsAllowedDriverPackage() == true
         }
+    }
+
+    private fun isCurrentForegroundPackageAllowed(): Boolean {
+        return trustedForegroundDecision == PackageDecision.DRIVER_APP &&
+            DriverAppPackagePolicy.isDriverPackage(trustedForegroundPackageName)
+    }
+
+    private fun canContinueDriverTreeScan(generation: Long): Boolean {
+        return isCurrentGeneration(generation) && isCurrentForegroundPackageAllowed()
     }
 
     private suspend fun handleAccessibilityCandidateBurst(
@@ -409,6 +674,7 @@ class UberAccessibilityService : AccessibilityService() {
     ): Boolean {
         var foundCandidate = false
         var previousDelay = 0L
+        val trace = latencyTraceForGeneration(generation)
         val delays = if (AccessibilityDebugConfig.ENABLE_TIMING_SWEEP) {
             AccessibilityDebugConfig.TIMING_SWEEP_DELAYS_MS
         } else {
@@ -416,9 +682,17 @@ class UberAccessibilityService : AccessibilityService() {
         }
 
         delays.forEachIndexed { attempt, targetDelay ->
-            if (!isCurrentGeneration(generation)) return false
+            if (!canContinueDriverTreeScan(generation)) return false
+            val sleepStart = SystemClock.elapsedRealtime()
             delay(targetDelay - previousDelay)
+            val actualSleepMs = SystemClock.elapsedRealtime() - sleepStart
             previousDelay = targetDelay
+            trace?.metric(
+                name = "burst.delay",
+                durationMs = actualSleepMs,
+                details = "generation=$generation attempt=${attempt + 1}/${delays.size} targetDelayMs=$targetDelay"
+            )
+            if (!canContinueDriverTreeScan(generation)) return false
 
             val scanResult = extractCandidateFromAccessibilityTree(
                 eventAtMillis = eventAtMillis,
@@ -441,7 +715,8 @@ class UberAccessibilityService : AccessibilityService() {
                     }
                     handleAccessibilityScanResult(
                         scanResult = scanResult,
-                        label = "accessibility-burst"
+                        label = "accessibility-burst",
+                        trace = trace
                     )
                     return true
                 }
@@ -455,7 +730,7 @@ class UberAccessibilityService : AccessibilityService() {
                             "delay=${targetDelay}ms attempt=${attempt + 1}/${delays.size}"
                     )
                 }
-                if (handleAccessibilityScanResult(scanResult, "accessibility-burst")) {
+                if (handleAccessibilityScanResult(scanResult, "accessibility-burst", trace)) {
                     return true
                 }
             }
@@ -470,11 +745,39 @@ class UberAccessibilityService : AccessibilityService() {
         generationId: Long = captureGeneration,
         delayMs: Long = (System.currentTimeMillis() - eventAtMillis).coerceAtLeast(0L)
     ): AccessibilityScanResult? {
+        if (!canContinueDriverTreeScan(generationId)) return null
+        val trace = latencyTraceForGeneration(generationId)
         AppDiagnostics.recordStage(this, AppDiagnostics.Stage.TREE_SCAN_RUNNING)
         val calcMotOverlayRemovedForScan = removeOverlayWindowsBeforeScanIfNeeded()
+        if (!canContinueDriverTreeScan(generationId)) return null
+        trace?.mark(OverlayLatencyTrace.Stage.T2_ROOT_READ_START)
+        Log.w(TAG, "CALCMOT_ROOT_READ stage=start generation=$generationId delay=${delayMs}ms")
+        val rootReadStartedAt = SystemClock.elapsedRealtime()
         val rootNull = rootInActiveWindow == null
         val windowCount = runCatching { windows.size }.getOrDefault(0)
-        val roots = accessibilityRootSources()
+        val roots = accessibilityRootSources(trace)
+        if (!canContinueDriverTreeScan(generationId)) {
+            Log.w(
+                TAG,
+                "CALCMOT_TREE_EXTRACT_ABORTED_NON_DRIVER_FOREGROUND generation=$generationId " +
+                    "delay=${delayMs}ms"
+            )
+            return null
+        }
+        trace?.metric(
+            name = "root.totalRead",
+            durationMs = SystemClock.elapsedRealtime() - rootReadStartedAt,
+            details = "generation=$generationId rootNull=$rootNull windowCount=$windowCount rootCount=${roots.size}"
+        )
+        trace?.mark(
+            OverlayLatencyTrace.Stage.T3_ROOT_READ_END,
+            reason = "rootCount=${roots.size} rootPackages=${roots.joinToString(separator = ",") { it.root.packageName?.toString().orEmpty() }}"
+        )
+        Log.w(
+            TAG,
+            "CALCMOT_ROOT_READ stage=end generation=$generationId rootNull=$rootNull " +
+                "windowCount=$windowCount rootCount=${roots.size}"
+        )
         if (roots.isEmpty()) {
             AppDiagnostics.recordStage(this, AppDiagnostics.Stage.CARD_UNCERTAIN)
             val emptySnapshot = emptyAccessibilitySnapshot(
@@ -484,7 +787,7 @@ class UberAccessibilityService : AccessibilityService() {
                 generationId = generationId,
                 delayMs = delayMs
             )
-            val emptyInspection = OfferTreeExtractor.inspect(emptySnapshot)
+            val emptyInspection = inspectOfferTree(emptySnapshot, trace)
             AppDiagnostics.recordTreeInspection(this, emptySnapshot, emptyInspection)
             accessibilityTreeLab.record(emptySnapshot, emptyInspection)
             captureLearningLab.recordTreeInspection(emptySnapshot, emptyInspection)
@@ -520,31 +823,46 @@ class UberAccessibilityService : AccessibilityService() {
                         "Uber foreground package, timing, and rootInActiveWindow/window availability."
                 )
             }
+            logNoCandidateAfterTreeDetails(
+                trace = trace,
+                generationId = generationId,
+                rootNull = rootNull,
+                windowCount = windowCount,
+                roots = emptyList(),
+                snapshotsToInspect = emptyList(),
+                rejectedReasons = emptyList(),
+                bestRejectionReason = failure.label,
+                combinedWindowsRan = false
+            )
             return null
         }
 
         val rejectedReasons = mutableListOf<String>()
         var weakInvalidContextReason: OfferCaptureRejectionReason? = null
-        val snapshots = roots.map { rootSource ->
-            rootSource.root.toAccessibilitySnapshot(
-                sourceName = rootSource.name,
-                eventAtMillis = eventAtMillis,
-                windowCount = rootSource.windowCount,
-                rootCount = roots.size,
-                generationId = generationId,
-                sourceKind = rootSource.sourceKind
-            )
-        }
-        val snapshotsToInspect = snapshots + listOfNotNull(snapshots.toCombinedSnapshotOrNull(eventAtMillis))
+        trace?.mark(OverlayLatencyTrace.Stage.T4_TREE_EXTRACT_START)
+        val snapshotsToInspect = mutableListOf<AccessibilityTreeSnapshot>()
+        var combinedWindowsRan = false
 
-        snapshotsToInspect.forEach { snapshot ->
+        fun inspectSnapshot(snapshot: AccessibilityTreeSnapshot): AccessibilityScanResult? {
             AppDiagnostics.recordStage(this, AppDiagnostics.Stage.TREE_SNAPSHOT_CAPTURED)
-            val inspection = OfferTreeExtractor.inspect(snapshot)
+            val inspectStartedAt = SystemClock.elapsedRealtime()
+            val inspection = inspectOfferTree(snapshot, trace)
+            trace?.metric(
+                name = "tree.inspect",
+                durationMs = SystemClock.elapsedRealtime() - inspectStartedAt,
+                details = "source=${snapshot.sourceName} nodeCount=${snapshot.nodeCount} lineCount=${snapshot.lines.size}"
+            )
             AppDiagnostics.recordTreeInspection(this, snapshot, inspection)
             accessibilityTreeLab.record(snapshot, inspection)
             captureLearningLab.recordTreeInspection(snapshot, inspection)
 
+            val parseStartedAt = SystemClock.elapsedRealtime()
             val candidate = inspection.offerText?.let(OfferParser::parse)
+            trace?.metric(
+                name = "candidate.parse",
+                durationMs = SystemClock.elapsedRealtime() - parseStartedAt,
+                details = "source=${snapshot.sourceName} complete=${inspection.isCompleteOffer} candidate=${candidate != null}"
+            )
             if (BuildConfig.DEBUG) {
                 Log.w(
                     TAG,
@@ -562,10 +880,14 @@ class UberAccessibilityService : AccessibilityService() {
                 weakInvalidContextReason = weakInvalidContextReason ?: reason
             }
             if (candidate != null) {
+                trace
+                    ?.withCandidate(candidate)
+                    ?.mark(OverlayLatencyTrace.Stage.T6_CANDIDATE_PARSED)
+                    ?.mark(OverlayLatencyTrace.Stage.T7_CANDIDATE_COMPLETE)
                 val trustedSingleFrame = inspection.canBypassStabilityGate()
                 if (shouldIgnorePostReconnectCandidate(candidate, trustedSingleFrame, snapshot.sourceName)) {
                     rejectedReasons += "${snapshot.sourceName}:POST_RECONNECT_STALE_CANDIDATE"
-                    return@forEach
+                    return null
                 }
                 recordSuspectValueChangeIfNeeded(
                     candidate = candidate,
@@ -595,7 +917,70 @@ class UberAccessibilityService : AccessibilityService() {
             }
             recordTreeCaptureRejectionIfUseful(inspection)
             rejectedReasons += "${snapshot.sourceName}:${inspection.rejectionReason}"
+            return null
         }
+
+        roots.forEach { rootSource ->
+            if (!canContinueDriverTreeScan(generationId)) return null
+            val snapshotStartedAt = SystemClock.elapsedRealtime()
+            val snapshot = rootSource.root.toAccessibilitySnapshot(
+                sourceName = rootSource.name,
+                eventAtMillis = eventAtMillis,
+                windowCount = rootSource.windowCount,
+                rootCount = roots.size,
+                generationId = generationId,
+                sourceKind = rootSource.sourceKind,
+                trace = trace
+            )
+            trace?.metric(
+                name = "tree.snapshot",
+                durationMs = SystemClock.elapsedRealtime() - snapshotStartedAt,
+                details = "source=${rootSource.name} nodeCount=${snapshot.nodeCount} lineCount=${snapshot.lines.size} truncated=${snapshot.truncated}"
+            )
+            if (!canContinueDriverTreeScan(generationId)) return null
+            snapshotsToInspect += snapshot
+            inspectSnapshot(snapshot)?.let { result ->
+                trace?.mark(
+                    OverlayLatencyTrace.Stage.T5_TREE_EXTRACT_END,
+                    reason = "snapshotCount=${snapshotsToInspect.size} early=true"
+                )
+                Log.w(
+                    TAG,
+                    "CALCMOT_TREE_EXTRACT generation=$generationId delay=${delayMs}ms " +
+                        "rootCount=${roots.size} snapshotCount=${snapshotsToInspect.size} early=true"
+                )
+                return result
+            }
+        }
+
+        if (!canContinueDriverTreeScan(generationId)) return null
+        snapshotsToInspect.toCombinedSnapshotOrNull(eventAtMillis)?.let { combinedSnapshot ->
+            combinedWindowsRan = true
+            snapshotsToInspect += combinedSnapshot
+            if (!canContinueDriverTreeScan(generationId)) return null
+            inspectSnapshot(combinedSnapshot)?.let { result ->
+                trace?.mark(
+                    OverlayLatencyTrace.Stage.T5_TREE_EXTRACT_END,
+                    reason = "snapshotCount=${snapshotsToInspect.size} combined=true"
+                )
+                Log.w(
+                    TAG,
+                    "CALCMOT_TREE_EXTRACT generation=$generationId delay=${delayMs}ms " +
+                        "rootCount=${roots.size} snapshotCount=${snapshotsToInspect.size} combined=true"
+                )
+                return result
+            }
+        }
+
+        trace?.mark(
+            OverlayLatencyTrace.Stage.T5_TREE_EXTRACT_END,
+            reason = "snapshotCount=${snapshotsToInspect.size}"
+        )
+        Log.w(
+            TAG,
+            "CALCMOT_TREE_EXTRACT generation=$generationId delay=${delayMs}ms " +
+                "rootCount=${roots.size} snapshotCount=${snapshotsToInspect.size}"
+        )
 
         weakInvalidContextReason?.let { reason ->
             if (BuildConfig.DEBUG) {
@@ -613,7 +998,7 @@ class UberAccessibilityService : AccessibilityService() {
                 .thenBy { it.nodes.count { node -> !node.textRaw.isNullOrBlank() } }
                 .thenBy { it.nodeCount }
         )
-        val currentBestInspection = currentBestSnapshot?.let(OfferTreeExtractor::inspect)
+        val currentBestInspection = currentBestSnapshot?.let { inspectOfferTree(it, trace) }
         val currentFailure = AccessibilityFailureClassifier.classify(
             serviceActive = true,
             uberForeground = true,
@@ -624,6 +1009,17 @@ class UberAccessibilityService : AccessibilityService() {
             contentDescriptionNodeCount = currentBestSnapshot?.nodes?.count { !it.contentDescriptionRaw.isNullOrBlank() } ?: 0,
             inspection = currentBestInspection,
             parserSucceeded = false
+        )
+        logNoCandidateAfterTreeDetails(
+            trace = trace,
+            generationId = generationId,
+            rootNull = rootNull,
+            windowCount = windowCount,
+            roots = roots,
+            snapshotsToInspect = snapshotsToInspect,
+            rejectedReasons = rejectedReasons,
+            bestRejectionReason = currentFailure.label,
+            combinedWindowsRan = combinedWindowsRan
         )
         showDebugHeartbeat(
             uberForeground = true,
@@ -654,6 +1050,38 @@ class UberAccessibilityService : AccessibilityService() {
         return null
     }
 
+    private fun logNoCandidateAfterTreeDetails(
+        trace: OverlayLatencyTrace?,
+        generationId: Long,
+        rootNull: Boolean,
+        windowCount: Int,
+        roots: List<AccessibilityRootSource>,
+        snapshotsToInspect: List<AccessibilityTreeSnapshot>,
+        rejectedReasons: List<String>,
+        bestRejectionReason: String,
+        combinedWindowsRan: Boolean
+    ) {
+        val topSources = snapshotsToInspect
+            .take(5)
+            .joinToString(separator = ",") { it.sourceName }
+            .ifBlank { "none" }
+        Log.w(
+            TAG,
+            "CALCMOT_NO_CANDIDATE_AFTER_TREE_DETAILS " +
+                "traceId=${trace?.traceId ?: "none"} generation=$generationId " +
+                "package=${trace?.packageNameForDiagnostics() ?: DriverAppPackagePolicy.describe(trustedForegroundPackageName)} " +
+                "eventType=${trace?.eventTypeForDiagnostics() ?: -1} " +
+                "windowId=${trace?.windowIdForDiagnostics() ?: -1} " +
+                "rootCount=${roots.size} " +
+                "driverRootCount=${roots.count { it.isDriverRoot }} " +
+                "unverifiedRootCount=${roots.count { !it.isDriverRoot }} " +
+                "rootInActiveWindowExists=${!rootNull} windowsExists=${windowCount > 0} " +
+                "topSources=$topSources bestRejectionReason=$bestRejectionReason " +
+                "combinedWindowsRan=$combinedWindowsRan " +
+                "rejectedReasons=${rejectedReasons.take(MAX_ACCESSIBILITY_LOG_REASONS).joinToString(separator = ",").ifBlank { "none" }}"
+        )
+    }
+
     private suspend fun removeOverlayWindowsBeforeScanIfNeeded(): Boolean {
         if (!AccessibilityDebugConfig.ENABLE_ZERO_OVERLAY_DURING_SCAN) return false
         if (overlayManager?.isVisible == true) return false
@@ -668,54 +1096,93 @@ class UberAccessibilityService : AccessibilityService() {
         return removed
     }
 
-    private fun accessibilityRootSources(): List<AccessibilityRootSource> {
-        val currentWindows = allInteractiveWindowsForScan()
+    private fun accessibilityRootSources(trace: OverlayLatencyTrace? = null): List<AccessibilityRootSource> {
+        val windowsSizeStartedAt = SystemClock.elapsedRealtime()
+        val initialWindowCount = runCatching { windows.size }.getOrDefault(0)
+        trace?.metric(
+            name = "root.windowsSize",
+            durationMs = SystemClock.elapsedRealtime() - windowsSizeStartedAt,
+            details = "windowCount=$initialWindowCount"
+        )
+        val activeRootsStartedAt = SystemClock.elapsedRealtime()
+        val activeRoots = activeWindowRootsForScan()
+            .map { activeRoot ->
+                val isDriverRoot = activeRoot.root.containsAllowedDriverPackage()
+                val packageHint = if (isDriverRoot) "driver" else "unverified"
+                AccessibilityRootSource(
+                    name = "$packageHint-${activeRoot.debugName}",
+                    root = activeRoot.root,
+                    windowCount = initialWindowCount,
+                    sourceKind = AccessibilitySnapshotSourceKind.ROOT_IN_ACTIVE_WINDOW,
+                    isDriverRoot = isDriverRoot,
+                    isActiveOrFocused = true
+                )
+            }
+        trace?.metric(
+            name = "root.activeRoots",
+            durationMs = SystemClock.elapsedRealtime() - activeRootsStartedAt,
+            details = "count=${activeRoots.size} driverCount=${activeRoots.count { it.isDriverRoot }}"
+        )
+
+        val activeDriverRoots = activeRoots.filter { it.isDriverRoot }
+        if (activeDriverRoots.isNotEmpty()) {
+            return activeDriverRoots.distinctAccessibilityRoots()
+        }
+
+        val allWindowsStartedAt = SystemClock.elapsedRealtime()
+        val currentWindows = allInteractiveWindowsForScan(trace)
+        trace?.metric(
+            name = "root.allInteractiveWindows",
+            durationMs = SystemClock.elapsedRealtime() - allWindowsStartedAt,
+            details = "count=${currentWindows.size}"
+        )
         val windowRoots = currentWindows
             .mapIndexedNotNull { index, windowSource ->
                 val root = windowSource.root ?: return@mapIndexedNotNull null
-                val packageHint = if (root.packageName?.toString() == UBER_DRIVER_PACKAGE) {
-                    "uber"
-                } else {
-                    "unverified"
-                }
+                val isDriverRoot = root.containsAllowedDriverPackage()
+                val packageHint = if (isDriverRoot) "driver" else "unverified"
                 AccessibilityRootSource(
                     name = "window-$index-$packageHint-${windowSource.debugName}",
                     root = root,
                     windowCount = currentWindows.size,
-                    sourceKind = AccessibilitySnapshotSourceKind.WINDOW_ROOT
+                    sourceKind = AccessibilitySnapshotSourceKind.WINDOW_ROOT,
+                    isDriverRoot = isDriverRoot,
+                    isActiveOrFocused = windowSource.isActive || windowSource.isFocused
                 )
             }
 
-        val activeRoots = activeWindowRootsForScan()
-            .map { activeRoot ->
-                val packageHint = if (activeRoot.root.packageName?.toString() == UBER_DRIVER_PACKAGE) {
-                    "uber"
-                } else {
-                    "unverified"
-                }
-                AccessibilityRootSource(
-                    name = "$packageHint-${activeRoot.debugName}",
-                    root = activeRoot.root,
-                    windowCount = currentWindows.size,
-                    sourceKind = AccessibilitySnapshotSourceKind.ROOT_IN_ACTIVE_WINDOW
-                )
-            }
+        val driverWindowRoots = (
+            windowRoots.filter { it.isDriverRoot && it.isActiveOrFocused } +
+                windowRoots.filter { it.isDriverRoot && !it.isActiveOrFocused }
+            ).distinctAccessibilityRoots()
+        if (driverWindowRoots.isNotEmpty()) return driverWindowRoots
 
-        return (windowRoots + activeRoots)
-            .distinctBy {
-                val bounds = Rect()
-                runCatching { it.root.getBoundsInScreen(bounds) }
-                "${it.sourceKind}|${it.root.packageName}|${it.root.className}|${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}|${it.name}"
-            }
+        return (activeRoots + windowRoots.filter { !it.isDriverRoot })
+            .distinctAccessibilityRoots()
     }
 
-    private fun allInteractiveWindowsForScan(): List<AccessibilityWindowSource> {
+    private fun List<AccessibilityRootSource>.distinctAccessibilityRoots(): List<AccessibilityRootSource> {
+        return distinctBy {
+            val bounds = Rect()
+            runCatching { it.root.getBoundsInScreen(bounds) }
+            "${it.sourceKind}|${it.root.packageName}|${it.root.className}|${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}"
+        }
+    }
+
+    private fun allInteractiveWindowsForScan(trace: OverlayLatencyTrace? = null): List<AccessibilityWindowSource> {
+        val currentDisplayStartedAt = SystemClock.elapsedRealtime()
         val fromCurrentDisplay = runCatching { windows }
             .getOrDefault(emptyList())
             .mapIndexed { index, window ->
                 window.toAccessibilityWindowSource(displayLabel = "current", index = index)
             }
+        trace?.metric(
+            name = "root.windowsCurrentDisplay",
+            durationMs = SystemClock.elapsedRealtime() - currentDisplayStartedAt,
+            details = "count=${fromCurrentDisplay.size}"
+        )
 
+        val allDisplaysStartedAt = SystemClock.elapsedRealtime()
         val fromAllDisplays = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             runCatching {
                 val sparseWindows = windowsOnAllDisplays
@@ -732,10 +1199,18 @@ class UberAccessibilityService : AccessibilityService() {
         } else {
             emptyList()
         }
+        trace?.metric(
+            name = "root.windowsOnAllDisplays",
+            durationMs = SystemClock.elapsedRealtime() - allDisplaysStartedAt,
+            details = "count=${fromAllDisplays.size}"
+        )
 
         return (fromAllDisplays + fromCurrentDisplay)
             .filter { it.root != null }
-            .distinctBy { it.identityKey }
+            .distinctBy {
+                val root = it.root
+                "${it.identityKey}|${root?.packageName}|${root?.className}"
+            }
             .sortedWith(compareByDescending<AccessibilityWindowSource> { it.layer }.thenBy { it.debugName })
     }
 
@@ -797,7 +1272,7 @@ class UberAccessibilityService : AccessibilityService() {
         )
     }
 
-    private fun AccessibilityNodeInfo.containsPackageName(packageName: String): Boolean {
+    private fun AccessibilityNodeInfo.containsAllowedDriverPackage(): Boolean {
         val queue = java.util.ArrayDeque<AccessibilityNodeInfo>()
         queue.add(this)
         var visited = 0
@@ -805,7 +1280,7 @@ class UberAccessibilityService : AccessibilityService() {
         while (queue.isNotEmpty() && visited < PACKAGE_SCAN_NODE_LIMIT) {
             val node = queue.removeFirst()
             visited += 1
-            if (node.packageName?.toString() == packageName) return true
+            if (DriverAppPackagePolicy.isAllowedDriverPackage(node.packageName)) return true
 
             for (index in 0 until node.childCount) {
                 node.getChild(index)?.let(queue::add)
@@ -847,9 +1322,45 @@ class UberAccessibilityService : AccessibilityService() {
         )
     }
 
-    private fun extractCandidateFromSnapshot(snapshot: AccessibilityTreeSnapshot): AccessibilityScanResult? {
-        val inspection = OfferTreeExtractor.inspect(snapshot)
+    private fun inspectOfferTree(
+        snapshot: AccessibilityTreeSnapshot,
+        trace: OverlayLatencyTrace?
+    ): TreeOfferInspection {
+        return OfferTreeExtractor.inspect(
+            snapshot = snapshot,
+            includeAuditFields = false
+        ) { name, durationMs, details ->
+                trace?.metric(
+                    name = "tree.inspect.$name",
+                    durationMs = durationMs,
+                    details = "source=${snapshot.sourceName} $details"
+                )
+            }
+    }
+
+    private fun extractCandidateFromSnapshot(
+        snapshot: AccessibilityTreeSnapshot,
+        trace: OverlayLatencyTrace?
+    ): AccessibilityScanResult? {
+        trace?.mark(OverlayLatencyTrace.Stage.T4_TREE_EXTRACT_START)
+        val inspectStartedAt = SystemClock.elapsedRealtime()
+        val inspection = inspectOfferTree(snapshot, trace)
+        trace?.metric(
+            name = "tree.inspect",
+            durationMs = SystemClock.elapsedRealtime() - inspectStartedAt,
+            details = "source=${snapshot.sourceName} nodeCount=${snapshot.nodeCount} lineCount=${snapshot.lines.size}"
+        )
+        val parseStartedAt = SystemClock.elapsedRealtime()
         val candidate = inspection.offerText?.let(OfferParser::parse)
+        trace?.metric(
+            name = "candidate.parse",
+            durationMs = SystemClock.elapsedRealtime() - parseStartedAt,
+            details = "source=${snapshot.sourceName} complete=${inspection.isCompleteOffer} candidate=${candidate != null}"
+        )
+        trace?.mark(
+            OverlayLatencyTrace.Stage.T5_TREE_EXTRACT_END,
+            reason = "snapshot=${snapshot.sourceName}"
+        )
 
         if (BuildConfig.DEBUG) {
             Log.w(
@@ -870,6 +1381,10 @@ class UberAccessibilityService : AccessibilityService() {
         }
 
         if (candidate != null) {
+            trace
+                ?.withCandidate(candidate)
+                ?.mark(OverlayLatencyTrace.Stage.T6_CANDIDATE_PARSED)
+                ?.mark(OverlayLatencyTrace.Stage.T7_CANDIDATE_COMPLETE)
             val typeLabel = if (inspection.isRadar) "ACTIONABLE_RADAR_CARD" else "ACTIONABLE_MAIN_CARD"
             if (BuildConfig.DEBUG) {
                 Log.w(TAG, "OFFER_DETECTED: type=$typeLabel fingerprint=${candidate.fingerprint}")
@@ -1081,15 +1596,23 @@ class UberAccessibilityService : AccessibilityService() {
         windowCount: Int,
         rootCount: Int,
         generationId: Long = captureGeneration,
-        sourceKind: AccessibilitySnapshotSourceKind = AccessibilitySnapshotSourceKind.UNKNOWN
+        sourceKind: AccessibilitySnapshotSourceKind = AccessibilitySnapshotSourceKind.UNKNOWN,
+        trace: OverlayLatencyTrace? = null
     ): AccessibilityTreeSnapshot {
         AppDiagnostics.recordStage(this@UberAccessibilityService, AppDiagnostics.Stage.TREE_REFRESH_REQUESTED)
+        val refreshStartedAt = SystemClock.elapsedRealtime()
         runCatching { refresh() }
             .onSuccess {
                 AppDiagnostics.recordStage(this@UberAccessibilityService, AppDiagnostics.Stage.TREE_REFRESHED)
             }
+        trace?.metric(
+            name = "tree.refresh",
+            durationMs = SystemClock.elapsedRealtime() - refreshStartedAt,
+            details = "source=$sourceName"
+        )
         val lines = mutableListOf<AccessibleLine>()
         val nodes = mutableListOf<AccessibleNodeSnapshot>()
+        val dfsStartedAt = SystemClock.elapsedRealtime()
         val walkResult = DebugTreeWalker.walkDepthFirst(
             root = this,
             maxDepth = if (AccessibilityDebugConfig.ENABLE_ACCESSIBILITY_DEEP_DEBUG) {
@@ -1110,7 +1633,16 @@ class UberAccessibilityService : AccessibilityService() {
             childCount = { node -> node.childCount },
             childAt = { node, index -> node.getChild(index) }
         )
+        val dfsMs = SystemClock.elapsedRealtime() - dfsStartedAt
+        val dfsSignals = walkResult.visited.toDfsSignalStats()
+        trace?.metric(
+            name = "tree.dfs",
+            durationMs = dfsMs,
+            details = "source=$sourceName visited=${walkResult.visited.size} nodesPerMs=${walkResult.visited.size.perMs(dfsMs)} truncated=${walkResult.truncated} duplicateNodeSkips=${walkResult.duplicateNodeSkips} maxDepthReached=${walkResult.maxDepthReached} visitedBeforeFirstFare=${dfsSignals.visitedBeforeFirstFare} visitedBeforeFirstCandidateSignal=${dfsSignals.visitedBeforeFirstCandidateSignal} visitedAfterCandidateSignal=${dfsSignals.visitedAfterCandidateSignal}"
+        )
         val snapshotIdsByPath = mutableMapOf<String, Int>()
+        val snapshotTimings = SnapshotPropertyTimings()
+        val collectStartedAt = SystemClock.elapsedRealtime()
         walkResult.visited.forEach { visit ->
             collectAccessibleNodeSnapshot(
                 node = visit.node,
@@ -1119,9 +1651,17 @@ class UberAccessibilityService : AccessibilityService() {
                 nodes = nodes,
                 parentSnapshotId = visit.path.parentPath()?.let(snapshotIdsByPath::get),
                 generationId = generationId,
-                sourceKind = sourceKind
+                sourceKind = sourceKind,
+                timings = snapshotTimings
             ).also { snapshotIdsByPath[visit.path] = it }
         }
+        val collectMs = SystemClock.elapsedRealtime() - collectStartedAt
+        trace?.metric(
+            name = "tree.collectNodes",
+            durationMs = collectMs,
+            details = "source=$sourceName nodeCount=${nodes.size} lineCount=${lines.size} nodesPerMs=${nodes.size.perMs(collectMs)}"
+        )
+        snapshotTimings.log(trace, sourceName)
         val displayMetrics = resources.displayMetrics
 
         return AccessibilityTreeSnapshot(
@@ -1152,10 +1692,13 @@ class UberAccessibilityService : AccessibilityService() {
         nodes: MutableList<AccessibleNodeSnapshot>,
         parentSnapshotId: Int?,
         generationId: Long,
-        sourceKind: AccessibilitySnapshotSourceKind
+        sourceKind: AccessibilitySnapshotSourceKind,
+        timings: SnapshotPropertyTimings? = null
     ): Int {
         val bounds = Rect()
+        val boundsStartedAt = System.nanoTime()
         node.getBoundsInScreen(bounds)
+        timings?.let { it.boundsNanos += System.nanoTime() - boundsStartedAt }
         val screenBounds = ScreenBounds(
             left = bounds.left,
             top = bounds.top,
@@ -1163,29 +1706,24 @@ class UberAccessibilityService : AccessibilityService() {
             bottom = bounds.bottom
         )
         val nodeSnapshotId = System.identityHashCode(node)
+        val textStartedAt = System.nanoTime()
         val textRaw = node.text?.toString()
+        timings?.let { it.textNanos += System.nanoTime() - textStartedAt }
+        val contentDescriptionStartedAt = System.nanoTime()
         val contentDescriptionRaw = node.contentDescription?.toString()
-        val stateDescriptionRaw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            node.stateDescription?.toString()
-        } else {
-            null
-        }
-        val paneTitleRaw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            node.paneTitle?.toString()
-        } else {
-            null
-        }
-        val tooltipTextRaw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            node.tooltipText?.toString()
-        } else {
-            null
-        }
-        val hintTextRaw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            node.hintText?.toString()
-        } else {
-            null
-        }
+        timings?.let { it.contentDescriptionNanos += System.nanoTime() - contentDescriptionStartedAt }
+        val stateGroupStartedAt = System.nanoTime()
+        val stateDescriptionRaw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) node.stateDescription?.toString() else null
+        val paneTitleRaw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) node.paneTitle?.toString() else null
+        val tooltipTextRaw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) node.tooltipText?.toString() else null
+        val hintTextRaw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) node.hintText?.toString() else null
+        timings?.let { it.statePaneTooltipHintNanos += System.nanoTime() - stateGroupStartedAt }
+        val extrasStartedAt = System.nanoTime()
         val extrasSummary = node.extrasSummary()
+        timings?.let { it.extrasNanos += System.nanoTime() - extrasStartedAt }
+        val viewIdStartedAt = System.nanoTime()
+        val viewIdResourceName = node.viewIdResourceName
+        timings?.let { it.viewIdNanos += System.nanoTime() - viewIdStartedAt }
 
         nodes += AccessibleNodeSnapshot(
             snapshotId = nodeSnapshotId,
@@ -1207,7 +1745,7 @@ class UberAccessibilityService : AccessibilityService() {
             hintTextRaw = hintTextRaw,
             tooltipTextRaw = tooltipTextRaw,
             extrasSummary = extrasSummary,
-            viewIdResourceName = node.viewIdResourceName,
+            viewIdResourceName = viewIdResourceName,
             boundsInScreen = screenBounds,
             visibleToUser = node.isVisibleToUser,
             clickable = node.isClickable,
@@ -1225,7 +1763,8 @@ class UberAccessibilityService : AccessibilityService() {
                 depth = visit.depth,
                 bounds = screenBounds,
                 nodeSnapshotId = nodeSnapshotId,
-                parentSnapshotId = parentSnapshotId
+                parentSnapshotId = parentSnapshotId,
+                viewIdResourceName = viewIdResourceName
             )
         }
 
@@ -1238,7 +1777,8 @@ class UberAccessibilityService : AccessibilityService() {
         depth: Int,
         bounds: ScreenBounds,
         nodeSnapshotId: Int?,
-        parentSnapshotId: Int?
+        parentSnapshotId: Int?,
+        viewIdResourceName: String?
     ): AccessibleLine {
         return AccessibleLine(
             text = text,
@@ -1324,6 +1864,67 @@ class UberAccessibilityService : AccessibilityService() {
             .takeIf { it.isNotBlank() }
     }
 
+    private fun List<br.com.calcmot.processor.DebugTreeVisit<AccessibilityNodeInfo>>.toDfsSignalStats(): DfsSignalStats {
+        var firstFareIndex: Int? = null
+        var firstCandidateSignalIndex: Int? = null
+        var sawFare = false
+        var sawTripBlock = false
+        var sawAction = false
+
+        forEachIndexed { index, visit ->
+            val text = visit.node.quickSignalText()
+            if (text.isBlank()) return@forEachIndexed
+            val normalized = TextNormalizer.searchKey(text)
+            if (!sawFare && FarePriceExtractor.containsPrimaryFare(text)) {
+                sawFare = true
+                firstFareIndex = index
+            }
+            if (!sawTripBlock && normalized.contains("km") && durationSignalRegex.containsMatchIn(normalized)) {
+                sawTripBlock = true
+            }
+            if (!sawAction && (normalized.contains("aceitar") || normalized.contains("selecionar"))) {
+                sawAction = true
+            }
+            if (firstCandidateSignalIndex == null && sawFare && sawTripBlock && sawAction) {
+                firstCandidateSignalIndex = index
+            }
+        }
+
+        val visitedCount = size
+        val beforeFare = firstFareIndex?.plus(1) ?: -1
+        val beforeCandidate = firstCandidateSignalIndex?.plus(1) ?: -1
+        val afterCandidate = firstCandidateSignalIndex?.let { (visitedCount - it - 1).coerceAtLeast(0) } ?: -1
+        return DfsSignalStats(
+            visitedBeforeFirstFare = beforeFare,
+            visitedBeforeFirstCandidateSignal = beforeCandidate,
+            visitedAfterCandidateSignal = afterCandidate
+        )
+    }
+
+    private fun AccessibilityNodeInfo.quickSignalText(): String {
+        return listOfNotNull(
+            text?.toString(),
+            contentDescription?.toString()
+        ).joinToString(separator = " ")
+    }
+
+    private fun SnapshotPropertyTimings.log(trace: OverlayLatencyTrace?, sourceName: String) {
+        trace?.metric("tree.snapshot.bounds", boundsNanos.toMillis(), "source=$sourceName")
+        trace?.metric("tree.snapshot.text", textNanos.toMillis(), "source=$sourceName")
+        trace?.metric("tree.snapshot.contentDescription", contentDescriptionNanos.toMillis(), "source=$sourceName")
+        trace?.metric("tree.snapshot.extras", extrasNanos.toMillis(), "source=$sourceName")
+        trace?.metric("tree.snapshot.viewId", viewIdNanos.toMillis(), "source=$sourceName")
+        trace?.metric(
+            name = "tree.snapshot.statePaneTooltipHint",
+            durationMs = statePaneTooltipHintNanos.toMillis(),
+            details = "source=$sourceName"
+        )
+    }
+
+    private fun Long.toMillis(): Long {
+        return (this / 1_000_000L).coerceAtLeast(0L)
+    }
+
     private fun String.parentPath(): String? {
         val lastSlash = lastIndexOf('/')
         return if (lastSlash <= 0) null else substring(0, lastSlash)
@@ -1399,25 +2000,41 @@ class UberAccessibilityService : AccessibilityService() {
         candidate: OfferCandidate,
         source: OfferCaptureSource,
         label: String,
-        trustedSingleFrame: Boolean = false
+        trustedSingleFrame: Boolean = false,
+        trace: OverlayLatencyTrace? = null
     ): Boolean {
+        val stabilityStartedAt = SystemClock.elapsedRealtime()
         val decision = captureCoordinator.acceptCandidate(
             source = source,
             candidate = candidate,
             trustedSingleFrame = trustedSingleFrame
         )
+        trace?.metric(
+            name = "stability.evaluate",
+            durationMs = SystemClock.elapsedRealtime() - stabilityStartedAt,
+            details = "label=$label trustedSingleFrame=$trustedSingleFrame decision=${decision.javaClass.simpleName}"
+        )
+        Log.w(
+            TAG,
+            "CALCMOT_STABILITY_GATE label=$label source=$source trustedSingleFrame=$trustedSingleFrame " +
+                "decision=${decision.javaClass.simpleName} fingerprint=${candidate.fingerprint}"
+        )
+        if (decision is CaptureDecision.ShowOverlay) {
+            trace?.mark(OverlayLatencyTrace.Stage.T8_STABILITY_ACCEPTED)
+        }
         if (trustedSingleFrame && decision is CaptureDecision.ShowOverlay && BuildConfig.DEBUG) {
             Log.w(
                 TAG,
                 "OVERLAY_BYPASS_ACTIVATED: source=$source fingerprint=${candidate.fingerprint}"
             )
         }
-        return applyCaptureDecision(decision, label)
+        return applyCaptureDecision(decision, label, trace)
     }
 
     private suspend fun handleAccessibilityScanResult(
         scanResult: AccessibilityScanResult,
-        label: String
+        label: String,
+        trace: OverlayLatencyTrace?
     ): Boolean {
         return when (scanResult) {
             is AccessibilityScanResult.Candidate -> {
@@ -1425,7 +2042,8 @@ class UberAccessibilityService : AccessibilityService() {
                     candidate = scanResult.value.candidate,
                     source = OfferCaptureSource.ACCESSIBILITY_TREE,
                     label = label,
-                    trustedSingleFrame = scanResult.value.trustedSingleFrame
+                    trustedSingleFrame = scanResult.value.trustedSingleFrame,
+                    trace = trace
                 )
             }
 
@@ -1433,7 +2051,8 @@ class UberAccessibilityService : AccessibilityService() {
                 if (scanResult.reason.isImmediateInvalidContext()) {
                     forceHideOverlayForInvalidContext(
                         reason = scanResult.reason,
-                        label = label
+                        label = label,
+                        trace = trace
                     )
                 } else {
                     applyCaptureDecision(
@@ -1441,7 +2060,8 @@ class UberAccessibilityService : AccessibilityService() {
                             source = OfferCaptureSource.ACCESSIBILITY_TREE,
                             reason = scanResult.reason
                         ),
-                        label = label
+                        label = label,
+                        trace = trace
                     )
                 }
             }
@@ -1450,7 +2070,8 @@ class UberAccessibilityService : AccessibilityService() {
 
     private suspend fun forceHideOverlayForInvalidContext(
         reason: OfferCaptureRejectionReason,
-        label: String
+        label: String,
+        trace: OverlayLatencyTrace?
     ): Boolean {
         val decision = captureCoordinator.rejectFrame(
             source = OfferCaptureSource.ACCESSIBILITY_TREE,
@@ -1483,6 +2104,7 @@ class UberAccessibilityService : AccessibilityService() {
             overlayManager?.hideOverlay()
         }
 
+        trace?.close(OverlayLatencyTrace.EndReason.INVALID_CONTEXT)
         return true
     }
 
@@ -1491,7 +2113,17 @@ class UberAccessibilityService : AccessibilityService() {
             ShellOfferFrame.InvalidFrame -> handleShellInvalidFrame()
             is ShellOfferFrame.Candidate -> handleShellOfferCandidate(frame.candidate)
             is ShellOfferFrame.StableTrip -> handleShellStableTrip(frame.tripData)
+            is ShellOfferFrame.VisualProbe -> handleShellVisualProbe(frame.probe)
         }
+    }
+
+    private fun handleShellVisualProbe(probe: OverlayLatencyTrace.VisualProbe) {
+        latestVisualProbe = probe
+        Log.w(
+            TAG,
+            "CALCMOT_LATENCY_VISUAL_PROBE_RECEIVED elapsed=${probe.elapsedRealtime} " +
+                "label=${probe.label ?: "none"} source=${probe.source ?: "none"}"
+        )
     }
 
     private fun handleShellInvalidFrame() {
@@ -1533,15 +2165,24 @@ class UberAccessibilityService : AccessibilityService() {
         recordCaptureSuccess(OfferCaptureSource.UIAUTOMATOR_LAB, tripData)
         applyCaptureDecision(
             decision = captureCoordinator.acceptStableTrip(OfferCaptureSource.UIAUTOMATOR_LAB, tripData),
-            label = "uiautomator-shell-bridge"
+            label = "uiautomator-shell-bridge",
+            trace = null
         )
     }
 
-    private fun showOverlay(tripData: TripData) {
+    private fun showOverlay(tripData: TripData, trace: OverlayLatencyTrace?) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
+            if (isCurrentForegroundPackageAllowed()) {
+                overlayManager?.setForegroundPackage(trustedForegroundPackageName)
+            }
+            overlayManager?.setLatencyTrace(trace)
             overlayManager?.showOverlay(tripData)
         } else {
             runBlocking(Dispatchers.Main.immediate) {
+                if (isCurrentForegroundPackageAllowed()) {
+                    overlayManager?.setForegroundPackage(trustedForegroundPackageName)
+                }
+                overlayManager?.setLatencyTrace(trace)
                 overlayManager?.showOverlay(tripData)
             }
         }
@@ -1579,13 +2220,18 @@ class UberAccessibilityService : AccessibilityService() {
         applyCaptureDecision(decision, reason)
     }
 
-    private fun applyCaptureDecision(decision: CaptureDecision, label: String): Boolean {
+    private fun applyCaptureDecision(
+        decision: CaptureDecision,
+        label: String,
+        trace: OverlayLatencyTrace? = null
+    ): Boolean {
         return when (decision) {
             is CaptureDecision.WaitingForStability -> {
                 AppDiagnostics.recordStage(this, AppDiagnostics.Stage.FIRST_FRAME)
                 if (BuildConfig.DEBUG) {
                     Log.i(TAG, "Offer candidate accepted as first frame [$label]: ${decision.candidate.fingerprint}")
                 }
+                trace?.close(OverlayLatencyTrace.EndReason.WAITING_FOR_STABILITY)
                 false
             }
 
@@ -1602,6 +2248,7 @@ class UberAccessibilityService : AccessibilityService() {
                 }
                 cancelOverlayExpiry()
                 mainScope.launch { overlayManager?.hideOverlay() }
+                trace?.close(OverlayLatencyTrace.EndReason.CARD_GONE)
                 false
             }
 
@@ -1612,7 +2259,11 @@ class UberAccessibilityService : AccessibilityService() {
                     Log.w(TAG, "OVERLAY_NEW_FINGERPRINT_SHOWN: fingerprint=${decision.overlayFingerprint}")
                     Log.w(TAG, "Stable offer confirmed [$label]: ${decision.tripData}")
                 }
-                showOverlay(decision.tripData)
+                trace
+                    ?.withTripData(decision.tripData)
+                    ?.mark(OverlayLatencyTrace.Stage.T9_OVERLAY_REQUESTED)
+                Log.w(TAG, "CALCMOT_OVERLAY_REQUEST fingerprint=${decision.overlayFingerprint}")
+                showOverlay(decision.tripData, trace)
                 scheduleOverlayExpiry(decision.overlayFingerprint)
                 true
             }
@@ -1631,6 +2282,7 @@ class UberAccessibilityService : AccessibilityService() {
                     Log.d(TAG, "OVERLAY_DUPLICATE_SKIPPED: fingerprint=${decision.overlayFingerprint}")
                 }
                 scheduleOverlayExpiry(decision.overlayFingerprint)
+                trace?.close(OverlayLatencyTrace.EndReason.RENEWED_VISIBLE_OVERLAY)
                 true
             }
 
@@ -1644,6 +2296,7 @@ class UberAccessibilityService : AccessibilityService() {
                 if (BuildConfig.DEBUG) {
                     Log.d(TAG, "Offer suppressed after user dismiss [$label]: ${decision.overlayFingerprint}")
                 }
+                trace?.close(OverlayLatencyTrace.EndReason.CARD_GONE)
                 false
             }
 
@@ -1666,6 +2319,7 @@ class UberAccessibilityService : AccessibilityService() {
                         "(${decision.invalidFrameStreak}/${decision.requiredInvalidFramesToReset}) [$label]"
                     )
                 }
+                trace?.close(OverlayLatencyTrace.EndReason.INVALID_CONTEXT)
                 false
             }
 
@@ -1697,6 +2351,13 @@ class UberAccessibilityService : AccessibilityService() {
                         overlayManager?.hideOverlay()
                     }
                 }
+                trace?.close(
+                    if (label == "overlay-ttl" || label == "overlay-heartbeat-ttl") {
+                        OverlayLatencyTrace.EndReason.CARD_GONE
+                    } else {
+                        OverlayLatencyTrace.EndReason.INVALID_CONTEXT
+                    }
+                )
                 false
             }
         }
@@ -1762,6 +2423,10 @@ class UberAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun AccessibilityEvent.isForegroundDefiningEvent(): Boolean {
+        return eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+    }
+
     private fun Int.debugEventName(): String {
         return when (this) {
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> "TYPE_WINDOW_CONTENT_CHANGED"
@@ -1773,6 +2438,11 @@ class UberAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_ANNOUNCEMENT -> "TYPE_ANNOUNCEMENT"
             else -> "event_$this"
         }
+    }
+
+    private fun Int.perMs(durationMs: Long): String {
+        if (durationMs <= 0L) return this.toString()
+        return "%.2f".format(java.util.Locale.US, this.toDouble() / durationMs.toDouble())
     }
 
     private companion object {
@@ -1787,7 +2457,7 @@ class UberAccessibilityService : AccessibilityService() {
         const val ACCESSIBILITY_POLL_INTERVAL_MS = 250L
         const val REQUIRED_INVALID_FRAMES_TO_RESET = 2
         const val OVERLAY_TTL_MS = 5_000L
-        const val ACCESSIBILITY_SCAN_SESSION_COALESCE_MS = 2_500L
+        const val ACCESSIBILITY_SCAN_SESSION_COALESCE_MS = 250L
         const val MAX_EXTRAS_TEXT_VALUES = 24
         const val MAX_EXTRAS_VALUE_LENGTH = 160
         const val MAX_ACCESSIBILITY_TREE_DEPTH = 80
@@ -1795,17 +2465,35 @@ class UberAccessibilityService : AccessibilityService() {
         const val PACKAGE_SCAN_NODE_LIMIT = 5_000
         const val SUSPECT_VALUE_CHANGE_WINDOW_MS = 15_000L
         const val SUSPECT_VALUE_EPSILON = 0.05
-        val ACCESSIBILITY_BURST_DELAYS_MS = longArrayOf(120L, 240L, 420L, 700L, 1_000L, 1_500L, 2_200L)
+        const val VISUAL_PROBE_MAX_AGE_MS = 5_000L
+        val ACCESSIBILITY_BURST_DELAYS_MS = longArrayOf(0L, 80L, 160L, 300L, 500L, 750L, 1_000L)
+        val durationSignalRegex = Regex("""\b[0-9]{1,3}\s*(h|hora|min|minuto)\b""")
     }
 
     private data class CaptureSession(
         val generation: Long,
-        val shouldStartBurst: Boolean
+        val shouldStartBurst: Boolean,
+        val trace: OverlayLatencyTrace?
     )
 
     private data class AccessibilityCandidate(
         val candidate: OfferCandidate,
         val trustedSingleFrame: Boolean
+    )
+
+    private data class DfsSignalStats(
+        val visitedBeforeFirstFare: Int,
+        val visitedBeforeFirstCandidateSignal: Int,
+        val visitedAfterCandidateSignal: Int
+    )
+
+    private data class SnapshotPropertyTimings(
+        var boundsNanos: Long = 0L,
+        var textNanos: Long = 0L,
+        var contentDescriptionNanos: Long = 0L,
+        var extrasNanos: Long = 0L,
+        var viewIdNanos: Long = 0L,
+        var statePaneTooltipHintNanos: Long = 0L
     )
 
     private sealed interface AccessibilityScanResult {
@@ -1824,7 +2512,9 @@ class UberAccessibilityService : AccessibilityService() {
         val name: String,
         val root: AccessibilityNodeInfo,
         val windowCount: Int,
-        val sourceKind: AccessibilitySnapshotSourceKind
+        val sourceKind: AccessibilitySnapshotSourceKind,
+        val isDriverRoot: Boolean,
+        val isActiveOrFocused: Boolean
     )
 
     private data class AccessibilityWindowSource(
