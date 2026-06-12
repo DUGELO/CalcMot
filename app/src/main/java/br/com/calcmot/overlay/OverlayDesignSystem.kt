@@ -80,6 +80,11 @@ object CalcMotTypography {
         fontWeight = FontWeight.Bold
     )
 
+    val MetaImpactValue = TextStyle(
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Bold
+    )
+
     val ImpactSubMessage = TextStyle(
         fontSize = 11.sp,
         fontWeight = FontWeight.Medium
@@ -92,9 +97,9 @@ object CalcMotSpacing {
     val Md = 12.dp
     val Lg = 16.dp
 
-    val OverlayPadding = 9.dp
+    val OverlayPadding = 8.dp
     val MetricGap = 4.dp
-    val SectionGap = 5.dp
+    val SectionGap = 4.dp
 }
 
 object CalcMotShape {
@@ -116,7 +121,7 @@ enum class OverlayOfferQuality(
 ) {
     GREAT("ÓTIMA", "Muito acima da meta", CalcMotColors.Great, CalcMotColors.TextPrimary),
     GOOD("BOA", "Dentro da meta", CalcMotColors.Good, CalcMotColors.TextPrimary),
-    WARNING("ATENÇÃO", "No limite", CalcMotColors.Warning, Color(0xFF181818)),
+    WARNING("MÉDIA", "No limite", CalcMotColors.Warning, Color(0xFF181818)),
     BAD("RUIM", "Abaixo da meta", CalcMotColors.Bad, CalcMotColors.TextPrimary);
 
     companion object {
@@ -160,6 +165,7 @@ fun CalcMotOverlayContainer(
 @Composable
 fun OfferDecisionHeader(
     quality: OverlayOfferQuality,
+    showMeaning: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -181,14 +187,16 @@ fun OfferDecisionHeader(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Text(
-            text = quality.meaning,
-            modifier = Modifier.padding(start = CalcMotSpacing.Sm),
-            color = CalcMotColors.TextPrimary,
-            style = CalcMotTypography.ImpactMessage,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        if (showMeaning) {
+            Text(
+                text = quality.meaning,
+                modifier = Modifier.padding(start = CalcMotSpacing.Sm),
+                color = CalcMotColors.TextPrimary,
+                style = CalcMotTypography.ImpactMessage,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -233,10 +241,9 @@ fun FinancialImpactLine(
     Text(
         text = impact.decisionImpactLine(),
         modifier = modifier
-            .fillMaxWidth()
-            .padding(top = 1.dp),
+            .fillMaxWidth(),
         color = quality.accentColor,
-        style = CalcMotTypography.ImpactMessage,
+        style = CalcMotTypography.MetaImpactValue,
         textAlign = TextAlign.Center,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis
@@ -292,24 +299,38 @@ fun OverlayMetricSummary(
 }
 
 private fun OfferFinancialImpact.decisionImpactLine(): String {
-    val value = formatMoney(abs(finalImpact))
+    val anchor = impactAnchor()
+    val value = formatCompactMoney(abs(finalImpact))
     return if (finalImpact >= 0.0) {
-        "+$value acima da meta"
+        if (finalImpact > 0.0 && finalImpact < 1.0) {
+            "Na meta"
+        } else {
+            "$anchor · +$value"
+        }
     } else {
-        "-$value ${negativeImpactLabel()}"
+        "$anchor · -$value"
     }
 }
 
-private fun OfferFinancialImpact.negativeImpactLabel(): String {
+private fun OfferFinancialImpact.impactAnchor(): String {
     return when (classification) {
         OfferClassification.WARNING -> when (finalMetric) {
-            ImpactMetric.KM -> "abaixo por km"
-            ImpactMetric.HOUR -> "abaixo por hora"
+            ImpactMetric.KM -> "KM"
+            ImpactMetric.HOUR -> "TEMPO"
         }
-        else -> "abaixo da meta"
+        else -> "META"
     }
 }
 
 private fun formatMoney(value: Double): String {
     return String.format(Locale.forLanguageTag("pt-BR"), "R$ %.2f", value)
+}
+
+private fun formatCompactMoney(value: Double): String {
+    val rounded = kotlin.math.round(value)
+    return if (value >= 10.0 || abs(value - rounded) < 0.005) {
+        String.format(Locale.forLanguageTag("pt-BR"), "R$ %.0f", rounded)
+    } else {
+        formatMoney(value)
+    }
 }

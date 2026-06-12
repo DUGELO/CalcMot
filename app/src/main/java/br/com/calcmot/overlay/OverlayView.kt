@@ -23,12 +23,9 @@ fun OverlayView(
     CalcMotOverlayContainer(
         quality = quality
     ) {
-        OfferDecisionHeader(quality = quality)
-        OverlayMetricSummary(
-            perKm = brCurrencyPerUnit(perKm, "km"),
-            perHour = brCurrencyPerUnit(perHour, "h"),
-            duration = "${tripData.minutosTotais} min",
-            quality = quality
+        OfferDecisionHeader(
+            quality = quality,
+            showMeaning = financialImpact == null
         )
         financialImpact?.let {
             FinancialImpactLine(
@@ -36,6 +33,12 @@ fun OverlayView(
                 quality = quality
             )
         }
+        OverlayMetricSummary(
+            perKm = brCurrencyPerUnit(perKm, "km"),
+            perHour = brCurrencyPerHour(perHour),
+            duration = "${tripData.minutosTotais} min",
+            quality = quality
+        )
     }
 }
 
@@ -53,9 +56,18 @@ private fun brCurrencyPerUnit(value: Double, unit: String): String {
     return String.format(Locale.forLanguageTag("pt-BR"), "R$ %.2f/%s", value, unit)
 }
 
+private fun brCurrencyPerHour(value: Double): String {
+    val rounded = kotlin.math.round(value)
+    return if (kotlin.math.abs(value - rounded) < 0.005) {
+        String.format(Locale.forLanguageTag("pt-BR"), "R$ %.0f/h", rounded)
+    } else {
+        brCurrencyPerUnit(value, "h")
+    }
+}
+
 enum class TripQuality(val text: String) {
     GOOD("BOA"),
-    MEDIUM("ATENÇÃO"),
+    MEDIUM("MÉDIA"),
     BAD("RUIM");
 
     fun toOverlayOfferQuality(): OverlayOfferQuality {

@@ -435,7 +435,7 @@ private fun ProfitabilitySettingsCard(
         ) {
             Text(text = "Lucro líquido no overlay", style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
             Text(
-                text = "Essa régua classifica BOA, ATENÇÃO ou RUIM depois de descontar os custos do carro.",
+                text = "Essa régua classifica BOA, MÉDIA ou RUIM depois de descontar os custos do carro.",
                 style = CalcMotTypography.Body,
                 color = CalcMotColors.TextSecondary
             )
