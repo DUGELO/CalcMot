@@ -22,6 +22,15 @@ class DriverAppPackagePolicyTest {
     }
 
     @Test
+    fun `driver app identity is resolved without mixing uber and 99`() {
+        assertEquals(DriverApp.UBER, DriverAppPackagePolicy.driverAppForPackage("com.ubercab.driver"))
+        assertEquals(DriverApp.UBER, DriverAppPackagePolicy.driverAppForPackage("com.ubercab"))
+        assertEquals(DriverApp.NINETY_NINE, DriverAppPackagePolicy.driverAppForPackage("com.app99.driver"))
+        assertEquals(DriverApp.NINETY_NINE, DriverAppPackagePolicy.driverAppForPackage("br.com.taxis99"))
+        assertEquals(DriverApp.UNKNOWN, DriverAppPackagePolicy.driverAppForPackage("com.example.notes"))
+    }
+
+    @Test
     fun `own package is not a driver package`() {
         assertEquals(PackageDecision.OWN_APP, DriverAppPackagePolicy.classify("br.com.calcmot"))
         assertFalse(DriverAppPackagePolicy.isDriverPackage("br.com.calcmot"))

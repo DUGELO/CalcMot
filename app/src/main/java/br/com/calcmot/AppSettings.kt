@@ -22,6 +22,7 @@ object AppSettings {
     private const val KEY_DRIVER_GOAL_MIN_VALUE_PER_KM = "driver_goal_min_value_per_km"
     private const val KEY_DRIVER_GOAL_MIN_VALUE_PER_HOUR = "driver_goal_min_value_per_hour"
     private const val KEY_DRIVER_GOAL_MODE = "driver_goal_mode"
+    private const val KEY_LAST_DRIVER_APP = "last_driver_app"
 
     fun isMonitoringEnabled(context: Context): Boolean {
         return context.applicationContext
@@ -161,6 +162,22 @@ object AppSettings {
             .putFloat(KEY_DRIVER_GOAL_MIN_VALUE_PER_KM, normalized.minValuePerKm.toFloat())
             .putFloat(KEY_DRIVER_GOAL_MIN_VALUE_PER_HOUR, normalized.minValuePerHour.toFloat())
             .putString(KEY_DRIVER_GOAL_MODE, normalized.mode.name)
+            .apply()
+    }
+
+    fun getLastDriverApp(context: Context): DriverApp {
+        val rawValue = context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_LAST_DRIVER_APP, DriverApp.UBER.id)
+        return DriverApp.fromId(rawValue).takeIf { it != DriverApp.UNKNOWN } ?: DriverApp.UBER
+    }
+
+    fun setLastDriverApp(context: Context, driverApp: DriverApp) {
+        if (driverApp == DriverApp.UNKNOWN) return
+        context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_LAST_DRIVER_APP, driverApp.id)
             .apply()
     }
 }

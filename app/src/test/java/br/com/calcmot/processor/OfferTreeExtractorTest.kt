@@ -1,5 +1,6 @@
 package br.com.calcmot.processor
 
+import br.com.calcmot.DriverApp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -31,6 +32,22 @@ class OfferTreeExtractorTest {
             val tripData = candidate!!.toTripData()
             assertNotNull("${fixture.source} should produce sane trip data", tripData)
             fixture.assertCandidate(candidate)
+        }
+    }
+
+    @Test
+    fun `all 39 uber fixtures keep identical results through multiapp dispatch`() {
+        capturedTreeOffers.forEach { fixture ->
+            val snapshot = fixture.toSnapshot()
+            val legacyInspection = OfferTreeExtractor.inspect(snapshot)
+            val dispatchedInspection = DriverOfferTreeExtractor.inspect(snapshot)
+
+            assertEquals("${fixture.source} inspection", legacyInspection, dispatchedInspection)
+            assertEquals(
+                "${fixture.source} candidate",
+                OfferParser.parse(legacyInspection.offerText!!),
+                DriverOfferParser.parse(DriverApp.UBER, dispatchedInspection.offerText!!)
+            )
         }
     }
 

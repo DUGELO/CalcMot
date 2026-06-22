@@ -3,10 +3,16 @@ param(
     [string]$RecentOracleSessionDir = ".tmp\uiautomator-bridge\20260602-124331",
     [string]$ProductionLogPath = ".tmp\production-watch.log",
     [string]$OutputDir = ".tmp\qa-master",
-    [string]$DriverPackageName = "com.ubercab.driver"
+    [ValidateSet("uber", "99")]
+    [string]$DriverApp = "uber",
+    [string]$DriverPackageName = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($DriverPackageName)) {
+    $DriverPackageName = if ($DriverApp -eq "99") { "com.app99.driver" } else { "com.ubercab.driver" }
+}
 
 function Normalize-QAText {
     param([string]$Text)

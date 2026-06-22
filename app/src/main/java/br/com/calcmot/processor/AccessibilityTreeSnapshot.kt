@@ -1,5 +1,8 @@
 package br.com.calcmot.processor
 
+import br.com.calcmot.DriverApp
+import br.com.calcmot.DriverAppPackagePolicy
+
 data class AccessibilityTreeSnapshot(
     val sourceName: String,
     val capturedAtMillis: Long,
@@ -12,6 +15,7 @@ data class AccessibilityTreeSnapshot(
     val rootPackageName: String?,
     val rootClassName: String?,
     val lines: List<AccessibleLine>,
+    val driverApp: DriverApp = DriverAppPackagePolicy.driverAppForPackage(rootPackageName),
     val nodes: List<AccessibleNodeSnapshot> = emptyList(),
     val generationId: Long = 0L,
     val scanId: String = sourceName,

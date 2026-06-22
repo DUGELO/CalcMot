@@ -7,7 +7,7 @@ Este roteiro valida o CalcMot no fluxo real de uso: instalar, ativar, deixar em 
 - Celular conectado via USB com depuracao autorizada.
 - Android Platform Tools disponivel em `LOCALAPPDATA\Android\Sdk\platform-tools`.
 - Build debug gerado por `.\gradlew.bat assembleDebug`.
-- App de motorista instalado no aparelho.
+- Uber Driver ou 99 Motorista instalado no aparelho.
 
 ## Execucao
 
@@ -40,10 +40,26 @@ $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 & $adb logcat -s UberReader OverlayManager
 ```
 
-6. Abrir o app de motorista:
+6. Abrir o app de motorista.
+
+Uber:
 
 ```powershell
 & $adb shell monkey -p com.ubercab.driver 1
+```
+
+99:
+
+```powershell
+& $adb shell monkey -p com.app99.driver 1
+```
+
+Os scripts aceitam a seleção explícita:
+
+```powershell
+.\scripts\run-production-e2e-qa.ps1 -DriverApp uber
+.\scripts\run-production-e2e-qa.ps1 -DriverApp 99
+.\scripts\capture-accessibility-lab.ps1 -DriverApp 99
 ```
 
 7. Quando uma oferta aparecer, classificar o resultado:
@@ -62,6 +78,7 @@ $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 - O overlay aparece somente com card completo e estavel.
 - O overlay nao aparece em mapa, popup, numeros soltos ou card incompleto.
 - O overlay nao reaproveita dados da oferta anterior.
+- Alternar Uber -> 99 ou 99 -> Uber limpa estabilidade e overlay antes da nova captura.
 - A posicao `Alto` fica acima do card sem cobrir o texto essencial da oferta.
 - Nenhum log de release deve expor card bruto, endereco ou valor.
 

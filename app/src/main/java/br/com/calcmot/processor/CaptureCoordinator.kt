@@ -1,5 +1,6 @@
 package br.com.calcmot.processor
 
+import br.com.calcmot.DriverApp
 import br.com.calcmot.model.OfferCandidate
 import br.com.calcmot.model.OfferCaptureRejectionReason
 import br.com.calcmot.model.OfferCaptureSource
@@ -21,14 +22,17 @@ class CaptureCoordinator(
     private var suppressedFingerprint: String? = null
     private var suppressedUntilMillis: Long = 0L
     private var invalidFrameStreak = 0
+    private var activeDriverApp: DriverApp = DriverApp.UBER
 
     fun acceptCandidate(
         source: OfferCaptureSource,
         candidate: OfferCandidate,
-        trustedSingleFrame: Boolean = false
+        trustedSingleFrame: Boolean = false,
+        driverApp: DriverApp = DriverApp.UBER
     ): CaptureDecision {
+        switchDriverApp(driverApp)
         val now = clockMillis()
-        val nextOverlayFingerprint = candidate.overlayFingerprint()
+        val nextOverlayFingerprint = scopedOverlayFingerprint(driverApp, candidate.overlayFingerprint())
         invalidFrameStreak = 0
         lastValidCandidateAtMillis = now
 
@@ -91,9 +95,14 @@ class CaptureCoordinator(
         )
     }
 
-    fun acceptStableTrip(source: OfferCaptureSource, tripData: TripData): CaptureDecision {
+    fun acceptStableTrip(
+        source: OfferCaptureSource,
+        tripData: TripData,
+        driverApp: DriverApp = DriverApp.UBER
+    ): CaptureDecision {
+        switchDriverApp(driverApp)
         val now = clockMillis()
-        val overlayFingerprint = tripData.overlayFingerprint()
+        val overlayFingerprint = scopedOverlayFingerprint(driverApp, tripData.overlayFingerprint())
         invalidFrameStreak = 0
         lastValidCandidateAtMillis = now
         if (currentOverlayFingerprint == overlayFingerprint) {
@@ -171,6 +180,13 @@ class CaptureCoordinator(
 
     fun currentOverlayFingerprint(): String? = currentOverlayFingerprint
 
+    fun switchDriverApp(driverApp: DriverApp): Boolean {
+        if (driverApp == DriverApp.UNKNOWN || driverApp == activeDriverApp) return false
+        resetState(clearSuppression = true)
+        activeDriverApp = driverApp
+        return true
+    }
+
     fun reset(): CaptureDecision.HideOverlay {
         resetState(clearSuppression = true)
         return CaptureDecision.HideOverlay(
@@ -200,6 +216,10 @@ class CaptureCoordinator(
             suppressedFingerprint = null
             suppressedUntilMillis = 0L
         }
+    }
+
+    private fun scopedOverlayFingerprint(driverApp: DriverApp, fingerprint: String): String {
+        return if (driverApp == DriverApp.UBER) fingerprint else "${driverApp.id}|$fingerprint"
     }
 
     private companion object {

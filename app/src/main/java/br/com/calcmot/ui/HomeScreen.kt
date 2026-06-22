@@ -2,6 +2,7 @@ package br.com.calcmot.ui
 
 import android.content.Intent
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,6 +50,7 @@ import br.com.calcmot.AppDiagnostics
 import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
 import br.com.calcmot.BuildConfig
+import br.com.calcmot.DriverAppLauncher
 import br.com.calcmot.OverlayPositionPreference
 import br.com.calcmot.ui.design.components.CalcMotButton
 import br.com.calcmot.ui.design.components.CalcMotButtonVariant
@@ -134,9 +136,13 @@ fun HomeScreen(
                         diagnosticsRefreshKey++
                     },
                     onOpenDriverApp = {
-                        context.packageManager
-                            .getLaunchIntentForPackage(DRIVER_PACKAGE)
-                            ?.let(context::startActivity)
+                        if (DriverAppLauncher.launchPreferred(context) == null) {
+                            Toast.makeText(
+                                context,
+                                "Instale a Uber Driver ou 99 Motorista para continuar.",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
                     },
                     onEditGoal = { navigate(HomeDestination.FINANCE) },
                     onOpenHelp = { navigate(HomeDestination.HELP) },
@@ -619,8 +625,6 @@ private enum class HomeStatus(
         description = "Ative uma vez no Android para o CalcMot calcular ofertas nos apps de motorista."
     )
 }
-
-private const val DRIVER_PACKAGE = "com.ubercab.driver"
 
 private val OverlayPositionPreference.testTag: String
     get() = when (this) {

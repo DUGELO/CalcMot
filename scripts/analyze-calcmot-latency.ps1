@@ -2,7 +2,9 @@ param(
     [string]$InputPath,
     [string]$AdbPath = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe",
     [string]$OutputDir = "build\reports\calcmot-latency",
-    [int]$MinTraceCount = 1
+    [int]$MinTraceCount = 1,
+    [ValidateSet("all", "uber", "99")]
+    [string]$DriverApp = "all"
 )
 
 $ErrorActionPreference = "Stop"
@@ -238,7 +240,12 @@ $closedNonVisibleRows = @(
 $unclosedRows = @($rows | Where-Object { $_.closed -ne $true })
 $candidateRows = @($rows | Where-Object { $_.candidateComplete -eq $true })
 $noCandidateRows = @($rows | Where-Object { $_.endReason -eq "NO_CANDIDATE_AFTER_TREE" })
-$driverRows = @($rows | Where-Object { $_.package -in @("com.ubercab.driver", "com.ubercab", "br.com.taxis99", "com.app99.driver") })
+$selectedDriverPackages = switch ($DriverApp) {
+    "uber" { @("com.ubercab.driver", "com.ubercab") }
+    "99" { @("com.app99.driver", "br.com.taxis99") }
+    default { @("com.ubercab.driver", "com.ubercab", "br.com.taxis99", "com.app99.driver") }
+}
+$driverRows = @($rows | Where-Object { $_.package -in $selectedDriverPackages })
 $safeModeDuringDriverTraceRows = @($driverRows | Where-Object { Is-SafeModeReason $_.endReason })
 $candidateFoundRate = if ($rows.Count -gt 0) { [Math]::Round(($candidateRows.Count * 100.0) / $rows.Count, 1) } else { -1 }
 $noCandidateRate = if ($rows.Count -gt 0) { [Math]::Round(($noCandidateRows.Count * 100.0) / $rows.Count, 1) } else { -1 }

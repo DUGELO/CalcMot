@@ -2,7 +2,8 @@ package br.com.calcmot.model
 
 enum class OfferCaptureSource(val id: String) {
     UIAUTOMATOR_LAB("uiautomator_lab"),
-    ACCESSIBILITY_TREE("accessibility_tree");
+    ACCESSIBILITY_TREE("accessibility_tree"),
+    NINETY_NINE_OCR("ninety_nine_ocr");
 
     companion object {
         fun fromId(id: String?): OfferCaptureSource? {

@@ -1,5 +1,6 @@
 package br.com.calcmot.processor
 
+import br.com.calcmot.DriverApp
 import br.com.calcmot.model.OfferCandidate
 import br.com.calcmot.model.OfferCaptureRejectionReason
 import br.com.calcmot.model.OfferCaptureSource
@@ -103,6 +104,41 @@ class CaptureCoordinatorTest {
         val decision = coordinator.acceptCandidate(OfferCaptureSource.UIAUTOMATOR_LAB, candidate)
 
         assertTrue(decision is CaptureDecision.ShowOverlay)
+    }
+
+    @Test
+    fun `same numeric offer from another driver app starts a fresh stability session`() {
+        val coordinator = CaptureCoordinator(requiredMatchingFrames = 2)
+        val candidate = offer(price = 10.0)
+
+        coordinator.acceptCandidate(
+            OfferCaptureSource.ACCESSIBILITY_TREE,
+            candidate,
+            driverApp = DriverApp.UBER
+        )
+        val uberStable = coordinator.acceptCandidate(
+            OfferCaptureSource.ACCESSIBILITY_TREE,
+            candidate,
+            driverApp = DriverApp.UBER
+        )
+        val first99 = coordinator.acceptCandidate(
+            OfferCaptureSource.ACCESSIBILITY_TREE,
+            candidate,
+            driverApp = DriverApp.NINETY_NINE
+        )
+        val second99 = coordinator.acceptCandidate(
+            OfferCaptureSource.ACCESSIBILITY_TREE,
+            candidate,
+            driverApp = DriverApp.NINETY_NINE
+        )
+
+        assertTrue(uberStable is CaptureDecision.ShowOverlay)
+        assertTrue(first99 is CaptureDecision.WaitingForStability)
+        assertTrue(second99 is CaptureDecision.ShowOverlay)
+        assertEquals(
+            "99|${candidate.overlayFingerprint()}",
+            (second99 as CaptureDecision.ShowOverlay).overlayFingerprint
+        )
     }
 
     @Test

@@ -11,12 +11,8 @@ enum class PackageDecision {
 object DriverAppPackagePolicy {
     const val OWN_PACKAGE = "br.com.calcmot"
 
-    val allowedDriverPackages: Set<String> = setOf(
-        "com.ubercab.driver",
-        "com.ubercab",
-        "br.com.taxis99",
-        "com.app99.driver"
-    )
+    val allowedDriverPackages: Set<String> = DriverApp.supported
+        .flatMapTo(linkedSetOf()) { it.packageNames }
 
     private val transientSystemPackages: Set<String> = setOf(
         "android",
@@ -81,6 +77,14 @@ object DriverAppPackagePolicy {
 
     fun isDriverPackage(packageName: CharSequence?): Boolean {
         return classify(packageName) == PackageDecision.DRIVER_APP
+    }
+
+    fun driverAppForPackage(packageName: CharSequence?): DriverApp {
+        return DriverApp.fromPackage(packageName)
+    }
+
+    fun packagesFor(driverApp: DriverApp): List<String> {
+        return driverApp.packageNames
     }
 
     fun isCaptureBlockedUserApp(packageName: CharSequence?): Boolean {

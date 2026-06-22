@@ -23,3 +23,7 @@ captures/
 *.tar
 *.apk
 *.aab
+.gradle-user/
+.kotlin/
+*.tmp-*.png
+*.mp4

@@ -51,6 +51,10 @@ class OfferCaptureOutcomeTest {
             OfferCaptureSource.fromId("uiautomator_lab")
         )
         assertEquals(
+            OfferCaptureSource.NINETY_NINE_OCR,
+            OfferCaptureSource.fromId("ninety_nine_ocr")
+        )
+        assertEquals(
             OfferCaptureRejectionReason.INCOMPLETE_TIME_DISTANCE_BLOCKS,
             OfferCaptureRejectionReason.fromId("incomplete_time_distance_blocks")
         )

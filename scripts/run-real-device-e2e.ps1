@@ -1,6 +1,9 @@
 param(
     [string]$AdbPath = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe",
-    [string]$ApkPath = "app\build\outputs\apk\debug\app-debug.apk"
+    [string]$ApkPath = "app\build\outputs\apk\debug\app-debug.apk",
+    [ValidateSet("uber", "99")]
+    [string]$DriverApp = "uber",
+    [string]$DriverPackageName = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,6 +14,10 @@ if (!(Test-Path -LiteralPath $AdbPath)) {
 
 if (!(Test-Path -LiteralPath $ApkPath)) {
     throw "APK not found at $ApkPath. Run .\gradlew.bat assembleDebug first."
+}
+
+if ([string]::IsNullOrWhiteSpace($DriverPackageName)) {
+    $DriverPackageName = if ($DriverApp -eq "99") { "com.app99.driver" } else { "com.ubercab.driver" }
 }
 
 Write-Host "Connected devices:"
@@ -29,6 +36,9 @@ Write-Host ""
 
 Write-Host "Clearing logcat..."
 & $AdbPath logcat -c
+
+Write-Host "Opening driver app: $DriverPackageName"
+& $AdbPath shell monkey -p $DriverPackageName 1 | Out-Host
 
 Write-Host "Filtered logs: UberReader OverlayManager"
 & $AdbPath logcat -s UberReader OverlayManager

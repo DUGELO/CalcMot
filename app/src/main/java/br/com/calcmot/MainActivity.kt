@@ -2,11 +2,16 @@ package br.com.calcmot
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.media.projection.MediaProjectionManager
 import android.os.Bundle
+import android.os.Build
 import android.provider.Settings
 import android.text.TextUtils
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
+import androidx.core.content.ContextCompat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -18,11 +23,24 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import br.com.calcmot.accessibility.UberAccessibilityService
+import br.com.calcmot.ninetynine.NinetyNineProjectionService
 import br.com.calcmot.ui.HomeScreen
 import br.com.calcmot.ui.OnboardingScreen
 import br.com.calcmot.ui.theme.MetricaTheme
 
 class MainActivity : ComponentActivity() {
+    private var projectionRequestStarted = false
+    private val projectionPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != RESULT_OK || result.data == null) return@registerForActivityResult
+        val serviceIntent = Intent(this, NinetyNineProjectionService::class.java)
+            .setAction(NinetyNineProjectionService.ACTION_START)
+            .putExtra(NinetyNineProjectionService.EXTRA_RESULT_CODE, result.resultCode)
+            .putExtra(NinetyNineProjectionService.EXTRA_RESULT_DATA, result.data)
+        ContextCompat.startForegroundService(this, serviceIntent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -31,6 +49,21 @@ class MainActivity : ComponentActivity() {
                 CalcMotApp()
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        requestLegacyProjectionIfNeeded()
+    }
+
+    private fun requestLegacyProjectionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) return
+        if (projectionRequestStarted || NinetyNineProjectionService.isReady) return
+        if (!isAccessibilityServiceEnabled(this)) return
+
+        projectionRequestStarted = true
+        val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        projectionPermissionLauncher.launch(manager.createScreenCaptureIntent())
     }
 }
 

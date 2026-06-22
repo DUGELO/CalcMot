@@ -2,7 +2,9 @@ param(
     [int]$DurationSeconds = 900,
     [int]$IntervalSeconds = 2,
     [string]$PackageName = "br.com.calcmot",
-    [string]$DriverPackageName = "com.ubercab.driver",
+    [ValidateSet("uber", "99")]
+    [string]$DriverApp = "uber",
+    [string]$DriverPackageName = "",
     [string]$OutputDir = ".tmp\accessibility-lab",
     [int]$MaxSnapshotPull = 500,
     [bool]$ClearDeviceLabBeforeRun = $true
@@ -19,18 +21,31 @@ $ErrorActionPreference = "Continue"
 & $adb start-server 2>&1 | Out-Null
 $ErrorActionPreference = $previousErrorActionPreference
 
+if ([string]::IsNullOrWhiteSpace($DriverPackageName)) {
+    $DriverPackageName = if ($DriverApp -eq "99") { "com.app99.driver" } else { "com.ubercab.driver" }
+}
+
 $session = Get-Date -Format "yyyyMMdd-HHmmss"
 $sessionDir = Join-Path $OutputDir $session
 $uiautomatorDir = Join-Path $sessionDir "uiautomator"
 $screensDir = Join-Path $sessionDir "screens"
 $labDir = Join-Path $sessionDir "app-lab"
-New-Item -ItemType Directory -Force -Path $uiautomatorDir, $screensDir, $labDir | Out-Null
+$ninetyNineDiagnosticsDir = Join-Path $sessionDir "99-diagnostics"
+$logcatFile = Join-Path $sessionDir "calcmot-logcat.txt"
+New-Item -ItemType Directory -Force -Path $uiautomatorDir, $screensDir, $labDir, $ninetyNineDiagnosticsDir | Out-Null
 
 if ($ClearDeviceLabBeforeRun) {
     & $adb shell run-as $PackageName rm -rf files/accessibility-lab 2>$null | Out-Null
+    if ($DriverApp -eq "99") {
+        & $adb shell run-as $PackageName rm -rf files/99-accessibility 2>$null | Out-Null
+    }
 }
 
-& $adb shell monkey -p $DriverPackageName 1 | Out-Null
+if ($DriverApp -eq "99") {
+    & $adb shell am start -n "$DriverPackageName/com.didiglobal.driver.main.HomePageActivity" | Out-Null
+} else {
+    & $adb shell monkey -p $DriverPackageName 1 | Out-Null
+}
 
 $endAt = (Get-Date).AddSeconds($DurationSeconds)
 $iteration = 0
@@ -62,7 +77,10 @@ while ((Get-Date) -lt $endAt) {
     Start-Sleep -Seconds $IntervalSeconds
 }
 
-$remoteFiles = & $adb shell run-as $PackageName sh -c "find files/accessibility-lab -type f | tail -n $MaxSnapshotPull" 2>$null
+$remoteFiles = @(
+    & $adb shell run-as $PackageName find files/accessibility-lab -type f 2>$null |
+        Select-Object -Last $MaxSnapshotPull
+)
 if ($LASTEXITCODE -eq 0) {
     foreach ($remoteFile in $remoteFiles) {
         $cleanRemoteFile = $remoteFile.Trim()
@@ -83,9 +101,39 @@ if ($LASTEXITCODE -eq 0) {
     }
 }
 
+if ($DriverApp -eq "99") {
+    $remoteDiagnostics = @(
+        & $adb shell run-as $PackageName find files/99-accessibility -type f 2>$null |
+            Select-Object -Last $MaxSnapshotPull
+    )
+    if ($LASTEXITCODE -eq 0) {
+        foreach ($remoteFile in $remoteDiagnostics) {
+            $cleanRemoteFile = $remoteFile.Trim()
+            if ([string]::IsNullOrWhiteSpace($cleanRemoteFile)) { continue }
+
+            $relativePath = $cleanRemoteFile -replace "^.*files/99-accessibility/", ""
+            $relativePath = $relativePath -replace "^[\\/]+", ""
+            $localFile = Join-Path $ninetyNineDiagnosticsDir ($relativePath -replace "/", "\")
+            $localParent = [System.IO.Path]::GetDirectoryName($localFile)
+            [System.IO.Directory]::CreateDirectory($localParent) | Out-Null
+            $content = & $adb exec-out run-as $PackageName cat $cleanRemoteFile
+            [System.IO.File]::WriteAllText($localFile, ($content -join "`n"), [System.Text.Encoding]::UTF8)
+        }
+    }
+}
+
+& $adb logcat -d -v threadtime "CalcMot99:V" "UberReader:V" "*:S" |
+    Set-Content -LiteralPath $logcatFile -Encoding UTF8
+
 $uiFiles = Get-ChildItem -LiteralPath $uiautomatorDir -Filter "*.xml" -ErrorAction SilentlyContinue
 $labFiles = Get-ChildItem -LiteralPath $labDir -Filter "*.json" -Recurse -ErrorAction SilentlyContinue
 $screenFiles = Get-ChildItem -LiteralPath $screensDir -Filter "*.png" -ErrorAction SilentlyContinue
+$ninetyNineTimelineFiles = Get-ChildItem -LiteralPath $ninetyNineDiagnosticsDir -Filter "timeline.ndjson" -Recurse -ErrorAction SilentlyContinue
+$ninetyNineTimelineEntries = @(
+    $ninetyNineTimelineFiles |
+        ForEach-Object { Get-Content -LiteralPath $_.FullName -ErrorAction SilentlyContinue } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+)
 
 $uiCardLikeCount = 0
 $uiExamples = @()
@@ -158,6 +206,9 @@ $report = [ordered]@{
     appLabWithTwoBlocksCount = $withBlocks.Count
     appLabCompleteOfferCount = $completeTree.Count
     averageTreeCandidateLatencyMs = $averageLatency
+    ninetyNineTimelineFileCount = $ninetyNineTimelineFiles.Count
+    ninetyNineTimelineEntryCount = $ninetyNineTimelineEntries.Count
+    logcatFile = $logcatFile
 }
 
 $reportJson = Join-Path $sessionDir "accessibility-lab-report.json"
@@ -186,6 +237,9 @@ $uiExampleText = if ($uiExamples.Count -gt 0) {
 - Internal snapshots with action button: $($withButton.Count)
 - Internal snapshots with two time/km blocks: $($withBlocks.Count)
 - internal_tree_complete_cards: $($completeTree.Count)
+- 99 timeline files: $($ninetyNineTimelineFiles.Count)
+- 99 timeline entries: $($ninetyNineTimelineEntries.Count)
+- Structured logcat: $logcatFile
 - overlay_shown: not measured by this collector
 - missed_cards: $([Math]::Max(0, $uiCardLikeCount - $completeTree.Count))
 - average_latency_ms: $averageLatency
@@ -200,6 +254,7 @@ Use the PNG/XML/JSON files in this folder to manually review any mismatch:
 - screenshot has card + UIAutomator has card + app snapshot missing card = service timing/root problem.
 - screenshot has card + UIAutomator missing card = accessibility tree probably cannot see that card.
 - UIAutomator/app snapshot partial = improve refresh, node mapping, content descriptions or parser scoring.
+- `99-diagnostics/**/timeline.ndjson` records event -> session -> roots -> snapshot -> parser result transitions.
 "@ | Set-Content -LiteralPath $reportMd -Encoding UTF8
 
 Write-Host "Lab session saved to $sessionDir"

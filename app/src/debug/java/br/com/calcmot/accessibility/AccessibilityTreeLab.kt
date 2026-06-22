@@ -1,6 +1,7 @@
 package br.com.calcmot.accessibility
 
 import android.content.Context
+import br.com.calcmot.DriverApp
 import br.com.calcmot.processor.AccessibilityTreeSnapshot
 import br.com.calcmot.processor.AccessibilityExploratoryParser
 import br.com.calcmot.processor.TreeOfferInspection
@@ -18,9 +19,10 @@ class AccessibilityTreeLab(context: Context) {
     private val enabled = context.applicationContext
         .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         .getBoolean(KEY_RAW_TREE_SNAPSHOTS_ENABLED, false)
-    private val sessionDir = if (enabled) {
+    private val filesDir = context.applicationContext.filesDir
+    private var sessionDir: File? = if (enabled) {
         File(
-            context.applicationContext.filesDir,
+            filesDir,
             "accessibility-lab/session-${System.currentTimeMillis()}"
         ).apply {
             mkdirs()
@@ -30,7 +32,14 @@ class AccessibilityTreeLab(context: Context) {
     }
 
     fun record(snapshot: AccessibilityTreeSnapshot, inspection: TreeOfferInspection) {
-        val targetDir = sessionDir ?: return
+        val targetDir = sessionDir ?: if (snapshot.driverApp == DriverApp.NINETY_NINE) {
+            File(filesDir, "accessibility-lab/session-${System.currentTimeMillis()}").apply {
+                mkdirs()
+                sessionDir = this
+            }
+        } else {
+            return
+        }
         val nextSequence = sequence.incrementAndGet()
         if (nextSequence > MAX_SNAPSHOTS_PER_SESSION) return
 

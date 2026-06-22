@@ -8,11 +8,13 @@ import java.io.File
 class ReleaseReadinessTest {
 
     @Test
-    fun `manifest does not request unused overlay or foreground permissions`() {
+    fun `manifest requests only the foreground permission required by legacy 99 projection`() {
         val manifest = projectFile("app/src/main/AndroidManifest.xml").readText()
 
         assertFalse(manifest.contains("android.permission.SYSTEM_ALERT_WINDOW"))
-        assertFalse(manifest.contains("android.permission.FOREGROUND_SERVICE"))
+        assertTrue(manifest.contains("android.permission.FOREGROUND_SERVICE"))
+        assertTrue(manifest.contains("android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"))
+        assertTrue(manifest.contains("android:foregroundServiceType=\"mediaProjection\""))
     }
 
     @Test
@@ -24,47 +26,58 @@ class ReleaseReadinessTest {
     }
 
     @Test
-    fun `visual capture runtime is fully removed from production source`() {
-        val mainSources = projectFile("app/src/main").walkTopDown()
+    fun `manifest declares package visibility for every supported driver app`() {
+        val manifest = projectFile("app/src/main/AndroidManifest.xml").readText()
+
+        DriverApp.supported.flatMap { it.packageNames }.forEach { packageName ->
+            assertTrue("Manifest must query $packageName", manifest.contains("<package android:name=\"$packageName\""))
+        }
+    }
+
+    @Test
+    fun `visual capture runtime is isolated to the 99 engine and never enters uber parsing`() {
+        val ninetyNineSources = projectFile("app/src/main/java/br/com/calcmot/ninetynine").walkTopDown()
             .filter { it.isFile }
             .joinToString(separator = "\n") { it.readText(Charsets.UTF_8) }
+        val uberParserSources = listOf(
+            "app/src/main/java/br/com/calcmot/processor/OfferParser.kt",
+            "app/src/main/java/br/com/calcmot/processor/OfferTreeExtractor.kt"
+        ).joinToString(separator = "\n") { projectFile(it).readText(Charsets.UTF_8) }
         val buildFile = projectFile("app/build.gradle.kts").readText()
         val accessibilityConfig = projectFile("app/src/main/res/xml/accessibility_service_config.xml").readText()
+        val accessibilityConfigV30 =
+            projectFile("app/src/main/res/xml-v30/accessibility_service_config.xml").readText()
+        val service = projectFile(
+            "app/src/main/java/br/com/calcmot/accessibility/UberAccessibilityService.kt"
+        ).readText()
         val overlay = projectFile("app/src/main/java/br/com/calcmot/overlay/OverlayManager.kt")
             .readText()
         val overlayStateMachine = projectFile("app/src/main/java/br/com/calcmot/overlay/OverlayStateMachine.kt")
             .readText()
-        val forbiddenRuntimeTokens = listOf(
+        val requiredRuntimeTokens = listOf(
             "TextRecognizer",
             "TextRecognition",
             "InputImage",
-            "OfferFrameValidator",
-            "OcrFrame",
-            "OcrLine",
-            "OCR_CROP",
-            "SCREENSHOT_FAILED",
-            "OCRDump",
-            "OfferCropCalculator",
-            "CropRect",
-            "ocr-full",
-            "full-fallback",
             "MediaProjection",
-            "takeScreenshot",
-            "canTakeScreenshot"
-        )
-        val forbiddenDependencyTokens = listOf(
-            "mlkit",
-            "text-recognition",
-            "kotlinx-coroutines-play-services"
+            "takeScreenshot"
         )
 
-        forbiddenRuntimeTokens.forEach { token ->
-            assertFalse("$token must not exist in main source", mainSources.contains(token))
+        requiredRuntimeTokens.forEach { token ->
+            assertTrue("$token must exist in the isolated 99 source", ninetyNineSources.contains(token))
+            assertFalse("$token must never enter Uber parsers", uberParserSources.contains(token))
         }
-        forbiddenDependencyTokens.forEach { token ->
-            assertFalse("$token must not exist in Gradle dependencies", buildFile.contains(token))
-        }
+        assertTrue(buildFile.contains("com.google.mlkit:text-recognition:16.0.1"))
         assertFalse(accessibilityConfig.contains("canTakeScreenshot"))
+        assertTrue(accessibilityConfigV30.contains("android:canTakeScreenshot=\"true\""))
+        assertTrue(service.contains("trustedForegroundDriverApp == DriverApp.NINETY_NINE"))
+        assertTrue(service.contains("handleNinetyNineVisualCapture"))
+        assertTrue(service.contains("OfferCaptureSource.NINETY_NINE_OCR"))
+        assertTrue(service.contains("PowerManager"))
+        assertTrue(service.contains("hasVisibleNinetyNineRoot"))
+        assertTrue(ninetyNineSources.contains("AtomicBoolean"))
+        assertTrue(ninetyNineSources.contains("ACTIVE_UNCHANGED_OCR_INTERVAL_MS = 3_000L"))
+        assertTrue(ninetyNineSources.contains("IDLE_UNCHANGED_OCR_INTERVAL_MS = 6_000L"))
+        assertTrue(ninetyNineSources.contains("NinetyNineProjectionService"))
         assertTrue(overlay.contains("BuildConfig.DEBUG"))
         assertTrue(overlayStateMachine.contains("OverlayUiState"))
     }
@@ -79,6 +92,9 @@ class ReleaseReadinessTest {
             .readText()
         val debugToggles = projectFile("app/src/main/java/br/com/calcmot/accessibility/AccessibilityDebugConfig.kt")
             .readText()
+        val eventPolicy = projectFile(
+            "app/src/main/java/br/com/calcmot/accessibility/DriverAccessibilityEventPolicy.kt"
+        ).readText()
 
         assertTrue(mainConfig.contains("android:isAccessibilityTool=\"true\""))
         assertTrue(debugConfig.contains("android:isAccessibilityTool=\"true\""))
@@ -88,7 +104,7 @@ class ReleaseReadinessTest {
         assertTrue(service.contains("removeOverlayWindowsForScan"))
         assertTrue(service.contains("overlayManager?.isVisible == true"))
         assertTrue(service.contains("ACCESSIBILITY_SCAN_SESSION_COALESCE_MS"))
-        assertTrue(service.contains("0L, 80L, 160L, 300L, 500L, 750L, 1_000L"))
+        assertTrue(eventPolicy.contains("0L, 80L, 160L, 300L, 500L, 750L, 1_000L"))
         assertTrue(service.contains("ACCESSIBILITY_HEARTBEAT_INTERVAL_MS = 1_000L"))
         assertTrue(service.contains("ACCESSIBILITY_SCAN_SESSION_COALESCE_MS = 250L"))
         assertTrue(service.contains("pendingCaptureAfterCurrent"))
@@ -117,7 +133,36 @@ class ReleaseReadinessTest {
         assertTrue(service.contains("visitedBeforeFirstCandidateSignal"))
         assertFalse(service.contains("activeLatencyTrace"))
         assertTrue(service.contains("activeDriverRoots.isNotEmpty()"))
-        assertTrue(service.contains("private fun TreeOfferInspection.canBypassStabilityGate(): Boolean {\n        return isCompleteOffer && hasActionButton\n    }"))
+        assertTrue(
+            service.contains(
+                "activeDriverRoots.isNotEmpty() && trustedForegroundDriverApp == DriverApp.UBER"
+            )
+        )
+        assertTrue(
+            service.contains(
+                "return (activeDriverRoots + driverWindowRoots).distinctAccessibilityRoots()"
+            )
+        )
+        assertTrue(service.contains("trustedForegroundDriverApp == DriverApp.UBER && isCompleteOffer && hasActionButton"))
+        assertTrue(service.contains("switchDriverAppIfNeeded"))
+        assertTrue(service.contains("DriverOfferParser.parse"))
+        assertTrue(service.contains("DriverOfferTreeExtractor.inspect"))
+        assertTrue(service.contains("configureRuntimeProfileForDriverApp"))
+        assertTrue(service.contains("DriverAccessibilityEventPolicy.eventTypesFor(driverApp)"))
+        assertTrue(service.contains("ninetyNineSemanticBridgeProbe.requestSemantics"))
+        assertTrue(service.contains("trustedForegroundDriverApp == DriverApp.NINETY_NINE"))
+        assertTrue(service.contains("bootstrapNinetyNineForegroundFromActiveRoot"))
+        assertTrue(service.contains("runFocusedNinetyNineHeartbeatScanIfNeeded"))
+        assertTrue(service.contains("label = \"99-heartbeat\""))
+        assertTrue(
+            service.contains(
+                "if (trustedForegroundDriverApp == DriverApp.NINETY_NINE) {\n" +
+                    "                    runFocusedNinetyNineHeartbeatScanIfNeeded()\n" +
+                    "                    continue\n" +
+                    "                }\n" +
+                    "                runFocusedUberWatchdogScanIfNeeded()"
+            )
+        )
         assertFalse(service.contains("accessibility-continuous-poll"))
         assertTrue(service.contains("if (BuildConfig.DEBUG) {\n            ShellOfferBridge.register(shellOfferHandler)"))
         assertTrue(service.contains("if (BuildConfig.DEBUG) {\n            ShellOfferBridge.unregister(shellOfferHandler)"))
@@ -152,10 +197,50 @@ class ReleaseReadinessTest {
             .readText()
 
         assertTrue(debugLab.contains("accessibility-lab/session-"))
+        assertTrue(debugLab.contains("snapshot.driverApp == DriverApp.NINETY_NINE"))
         assertTrue(debugLab.contains("writeText"))
         assertFalse(releaseLab.contains("accessibility-lab/session-"))
         assertFalse(releaseLab.contains("writeText"))
         assertFalse(releaseLab.contains("\"lines\""))
+    }
+
+    @Test
+    fun `99 verbose diagnostics are debug only and release implementation is empty`() {
+        val debugDiagnostics = projectFile(
+            "app/src/debug/java/br/com/calcmot/accessibility/NinetyNineAccessibilityDiagnostics.kt"
+        ).readText()
+        val releaseDiagnostics = projectFile(
+            "app/src/release/java/br/com/calcmot/accessibility/NinetyNineAccessibilityDiagnostics.kt"
+        ).readText()
+
+        assertTrue(debugDiagnostics.contains("99-accessibility/session-"))
+        assertTrue(debugDiagnostics.contains("CALCMOT_99_"))
+        assertTrue(debugDiagnostics.contains("SEMANTIC_BRIDGE"))
+        assertTrue(debugDiagnostics.contains("timeline.ndjson"))
+        assertFalse(releaseDiagnostics.contains("99-accessibility/session-"))
+        assertFalse(releaseDiagnostics.contains("CALCMOT_99_"))
+        assertFalse(releaseDiagnostics.contains("timeline.ndjson"))
+    }
+
+    @Test
+    fun `99 touch exploration probe exists only in debug source set`() {
+        val debugConfig = projectFile("app/src/debug/res/xml/accessibility_service_config.xml").readText()
+        val mainConfig = projectFile("app/src/main/res/xml/accessibility_service_config.xml").readText()
+        val debugProbe = projectFile(
+            "app/src/debug/java/br/com/calcmot/accessibility/NinetyNineSemanticBridgeProbe.kt"
+        ).readText()
+        val releaseProbe = projectFile(
+            "app/src/release/java/br/com/calcmot/accessibility/NinetyNineSemanticBridgeProbe.kt"
+        ).readText()
+
+        assertTrue(debugConfig.contains("android:canRequestTouchExplorationMode=\"true\""))
+        assertFalse(mainConfig.contains("canRequestTouchExplorationMode"))
+        assertTrue(debugProbe.contains("FLAG_REQUEST_TOUCH_EXPLORATION_MODE.inv()"))
+        assertTrue(debugProbe.contains("ACTION_ACCESSIBILITY_FOCUS"))
+        assertTrue(debugProbe.contains("main_flutter_flutter_root"))
+        assertTrue(debugProbe.contains("flutter_deal_gesture_container"))
+        assertFalse(releaseProbe.contains("FLAG_REQUEST_TOUCH_EXPLORATION_MODE"))
+        assertFalse(releaseProbe.contains("ACTION_ACCESSIBILITY_FOCUS"))
     }
 
     @Test

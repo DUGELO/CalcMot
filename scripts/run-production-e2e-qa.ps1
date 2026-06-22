@@ -4,7 +4,9 @@ param(
     [int]$IntervalMilliseconds = 700,
     [int]$ScreenRecordSegmentSeconds = 180,
     [string]$PackageName = "br.com.calcmot",
-    [string]$DriverPackageName = "com.ubercab.driver",
+    [ValidateSet("uber", "99")]
+    [string]$DriverApp = "uber",
+    [string]$DriverPackageName = "",
     [string]$OutputDir = ".tmp\qa-production-e2e",
     [string]$AdbPath = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe",
     [switch]$SkipOpenDriver,
@@ -155,6 +157,10 @@ if (!(Test-Path -LiteralPath $AdbPath)) {
     throw "ADB not found at $AdbPath"
 }
 
+if ([string]::IsNullOrWhiteSpace($DriverPackageName)) {
+    $DriverPackageName = if ($DriverApp -eq "99") { "com.app99.driver" } else { "com.ubercab.driver" }
+}
+
 $session = Get-Date -Format "yyyyMMdd-HHmmss"
 $sessionDir = Join-Path $OutputDir $session
 $oracleRoot = Join-Path $sessionDir "oracle"
@@ -244,6 +250,7 @@ try {
         -MaxUniqueCards $MaxUniqueCards `
         -IntervalMilliseconds $IntervalMilliseconds `
         -PackageName $PackageName `
+        -DriverApp $DriverApp `
         -DriverPackageName $DriverPackageName `
         -OutputDir $oracleRoot `
         -OracleOnly `

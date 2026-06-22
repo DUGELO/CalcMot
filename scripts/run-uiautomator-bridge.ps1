@@ -3,7 +3,9 @@ param(
     [int]$MaxUniqueCards = 0,
     [int]$IntervalMilliseconds = 900,
     [string]$PackageName = "br.com.calcmot",
-    [string]$DriverPackageName = "com.ubercab.driver",
+    [ValidateSet("uber", "99")]
+    [string]$DriverApp = "uber",
+    [string]$DriverPackageName = "",
     [string]$OutputDir = ".tmp\uiautomator-bridge",
     [switch]$ShowExtractedText,
     [switch]$CaptureScreenshots,
@@ -674,6 +676,10 @@ $previousErrorActionPreference = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 & $adb start-server 2>&1 | Out-Null
 $ErrorActionPreference = $previousErrorActionPreference
+
+if ([string]::IsNullOrWhiteSpace($DriverPackageName)) {
+    $DriverPackageName = if ($DriverApp -eq "99") { "com.app99.driver" } else { "com.ubercab.driver" }
+}
 
 $session = Get-Date -Format "yyyyMMdd-HHmmss"
 $sessionDir = Join-Path $OutputDir $session
