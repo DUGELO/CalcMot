@@ -89,11 +89,12 @@ Foi implementado um bootstrap exclusivo da 99 pelo root ativo e um heartbeat de 
 
 ## Limite de producao
 
-O contrato do projeto proibe OCR, screenshots e MediaProjection em producao. Assim:
+O contrato atual permite OCR, screenshots e MediaProjection somente na pipeline isolada da 99. Assim:
 
-- as imagens sao evidencia e dataset de laboratorio;
-- imagens nao sao convertidas em candidatos no app;
+- a Uber continua sem OCR, screenshots ou MediaProjection na pipeline de captura;
+- imagens da 99 nao sao persistidas por padrao;
+- OCR bruto fica restrito ao modo diagnostico explicitamente ativado;
 - logcat, intents internos e `order_info` nao sao fontes de producao;
-- o parser da 99 continua aceitando somente texto realmente publicado pela acessibilidade.
+- o resultado da 99 deve virar `OfferCandidate` e seguir os calculos atuais do CalcMot, sem percentual.
 
-Para suporte completo sem OCR, a 99 precisa publicar tarifa, tempo e distancia pela arvore semantica Android durante o card.
+Se a 99 publicar tarifa, tempo e distancia pela arvore semantica Android no futuro, essa fonte podera complementar ou substituir o OCR sem alterar a pipeline da Uber.

@@ -2,6 +2,8 @@ package br.com.calcmot.ui.design.previews
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -45,11 +47,23 @@ private fun CalcMotDesignSystemPreview() {
                 )
             )
             CalcMotCard {
-                CalcMotButton(
-                    text = "Abrir app de motorista",
-                    onClick = {},
-                    modifier = Modifier.padding(CalcMotSpacing.CardPadding)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(CalcMotSpacing.CardPadding),
+                    horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)
+                ) {
+                    CalcMotButton(
+                        text = "Abrir Uber",
+                        onClick = {},
+                        modifier = Modifier.weight(1f)
+                    )
+                    CalcMotButton(
+                        text = "Abrir 99",
+                        onClick = {},
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
     }

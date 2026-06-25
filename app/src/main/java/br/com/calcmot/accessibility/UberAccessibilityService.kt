@@ -25,13 +25,13 @@ import br.com.calcmot.model.TripData
 import br.com.calcmot.model.isImmediateInvalidContext
 import br.com.calcmot.model.isInvalidContext
 import br.com.calcmot.ninetynine.AccessibilityScreenshotCaptureSource
-import br.com.calcmot.ninetynine.MediaProjectionCaptureSource
 import br.com.calcmot.ninetynine.NinetyNineCaptureEngine
 import br.com.calcmot.ninetynine.NinetyNineCaptureResult
 import br.com.calcmot.ninetynine.NinetyNineCaptureSkipReason
 import br.com.calcmot.ninetynine.NinetyNineExtractionRejection
 import br.com.calcmot.ninetynine.NinetyNineExtractionResult
 import br.com.calcmot.ninetynine.NinetyNineRecognitionConfig
+import br.com.calcmot.ninetynine.UnsupportedNinetyNineCaptureSource
 import br.com.calcmot.overlay.IOverlayManager
 import br.com.calcmot.overlay.OverlayManager
 import br.com.calcmot.processor.AccessibilityTreeSnapshot
@@ -276,6 +276,17 @@ class UberAccessibilityService : AccessibilityService() {
             }
 
             PackageDecision.DRIVER_APP -> Unit
+        }
+
+        val activeFocusedDriverApp = activeFocusedDriverAppForGuard()
+        if (activeFocusedDriverApp != DriverApp.UNKNOWN && activeFocusedDriverApp != eventDriverApp) {
+            Log.w(
+                TAG,
+                "CALCMOT_BACKGROUND_DRIVER_EVENT_IGNORED " +
+                    "package=${DriverAppPackagePolicy.describe(eventPackage)} " +
+                    "activeDriver=${activeFocusedDriverApp.id} eventType=${event.eventType}"
+            )
+            return
         }
 
         switchDriverAppIfNeeded(eventDriverApp, eventPackage)
@@ -825,6 +836,11 @@ class UberAccessibilityService : AccessibilityService() {
                 when (val extraction = result.result) {
                     is NinetyNineExtractionResult.Candidate -> {
                         recordCaptureSuccess(OfferCaptureSource.NINETY_NINE_OCR, extraction.value)
+                        Log.w(
+                            TAG,
+                            "CALCMOT_99_OCR_CANDIDATE label=$label " +
+                                "fingerprint=${extraction.value.fingerprint} trustedSingleFrame=true"
+                        )
                         if (BuildConfig.DEBUG) {
                             ninetyNineDiagnostics.recordOcrResult(
                                 status = "candidate",
@@ -836,7 +852,7 @@ class UberAccessibilityService : AccessibilityService() {
                             candidate = extraction.value,
                             source = OfferCaptureSource.NINETY_NINE_OCR,
                             label = label,
-                            trustedSingleFrame = false,
+                            trustedSingleFrame = true,
                             trace = trace
                         )
                     }
@@ -844,6 +860,10 @@ class UberAccessibilityService : AccessibilityService() {
                     is NinetyNineExtractionResult.Rejected -> {
                         val rejectionReason = extraction.reason.toCaptureRejectionReason()
                         recordCaptureRejection(OfferCaptureSource.NINETY_NINE_OCR, rejectionReason)
+                        Log.w(
+                            TAG,
+                            "CALCMOT_99_OCR_REJECTED label=$label reason=${extraction.reason.name}"
+                        )
                         if (BuildConfig.DEBUG) {
                             ninetyNineDiagnostics.recordOcrResult(
                                 status = "rejected",
@@ -861,6 +881,10 @@ class UberAccessibilityService : AccessibilityService() {
                     result.reason != NinetyNineCaptureSkipReason.BUSY &&
                     result.reason != NinetyNineCaptureSkipReason.UNCHANGED_FRAME
                 ) {
+                    Log.w(
+                        TAG,
+                        "CALCMOT_99_OCR_SKIPPED label=$label reason=${result.reason.name}"
+                    )
                     recordCaptureRejection(
                         OfferCaptureSource.NINETY_NINE_OCR,
                         OfferCaptureRejectionReason.INVALID_FRAME
@@ -887,7 +911,7 @@ class UberAccessibilityService : AccessibilityService() {
             captureSource = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 AccessibilityScreenshotCaptureSource(this)
             } else {
-                MediaProjectionCaptureSource()
+                UnsupportedNinetyNineCaptureSource
             }
         ).also { ninetyNineCaptureEngine = it }
     }
@@ -981,6 +1005,26 @@ class UberAccessibilityService : AccessibilityService() {
         return allInteractiveWindowsForScan().any { window ->
             (window.isActive || window.isFocused) &&
                 DriverApp.NINETY_NINE.ownsPackage(window.root?.packageName)
+        }
+    }
+
+    private fun activeFocusedDriverAppForGuard(): DriverApp {
+        driverAppFromRoot(rootInActiveWindow)?.let { return it }
+        return allInteractiveWindowsForScan()
+            .asSequence()
+            .filter { it.isActive || it.isFocused }
+            .mapNotNull { driverAppFromRoot(it.root) }
+            .firstOrNull()
+            ?: DriverApp.UNKNOWN
+    }
+
+    private fun driverAppFromRoot(root: AccessibilityNodeInfo?): DriverApp? {
+        root ?: return null
+        DriverAppPackagePolicy.driverAppForPackage(root.packageName)
+            .takeIf { it != DriverApp.UNKNOWN }
+            ?.let { return it }
+        return DriverApp.supported.firstOrNull { driverApp ->
+            root.containsDriverPackage(driverApp)
         }
     }
 

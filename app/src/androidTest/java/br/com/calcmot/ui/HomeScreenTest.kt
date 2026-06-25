@@ -53,18 +53,20 @@ class HomeScreenTest {
     }
 
     @Test
-    fun readyHomeHasTwoMainCardsAndOnePrimaryAction() {
+    fun readyHomeHasTwoMainCardsAndExplicitDriverActions() {
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
 
         composeRule.onNodeWithTag(UiTestTags.HOME_SCREEN).assertIsDisplayed()
         composeRule.onNodeWithText("Calculador de ganhos").assertIsDisplayed()
         composeRule.onNodeWithText("Pronto para calcular").assertIsDisplayed()
-        composeRule.onNodeWithText("Abrir app de motorista").assertIsDisplayed()
+        composeRule.onNodeWithText("Abrir Uber").assertIsDisplayed()
+        composeRule.onNodeWithText("Abrir 99").assertIsDisplayed()
         composeRule.onNodeWithText("Meta").assertIsDisplayed()
         composeRule.onNodeWithText("Editar meta").assertIsDisplayed()
         composeRule.onAllNodesWithTag(UiTestTags.HOME_HERO_CARD).assertCountEquals(1)
         composeRule.onAllNodesWithTag(UiTestTags.HOME_GOAL_CARD).assertCountEquals(1)
-        composeRule.onAllNodesWithTag(UiTestTags.HOME_PRIMARY_ACTION).assertCountEquals(1)
+        composeRule.onAllNodesWithTag(UiTestTags.OPEN_UBER_DRIVER_BUTTON).assertCountEquals(1)
+        composeRule.onAllNodesWithTag(UiTestTags.OPEN_99_DRIVER_BUTTON).assertCountEquals(1)
         composeRule.onAllNodesWithTag(UiTestTags.MONITORING_SWITCH).assertCountEquals(0)
         composeRule.onAllNodesWithTag(UiTestTags.SAFETY_SUMMARY_CARD).assertCountEquals(0)
         composeRule.onAllNodesWithTag(UiTestTags.OVERLAY_PREVIEW).assertCountEquals(0)
@@ -96,7 +98,8 @@ class HomeScreenTest {
         composeRule.onNodeWithText("Ligar cálculo automático").assertIsDisplayed()
         composeRule.onAllNodesWithTag(UiTestTags.HOME_PRIMARY_ACTION).assertCountEquals(1)
         composeRule.onAllNodesWithTag(UiTestTags.MONITORING_SWITCH).assertCountEquals(0)
-        composeRule.onAllNodesWithTag(UiTestTags.OPEN_DRIVER_APP_BUTTON).assertCountEquals(0)
+        composeRule.onAllNodesWithTag(UiTestTags.OPEN_UBER_DRIVER_BUTTON).assertCountEquals(0)
+        composeRule.onAllNodesWithTag(UiTestTags.OPEN_99_DRIVER_BUTTON).assertCountEquals(0)
     }
 
     @Test

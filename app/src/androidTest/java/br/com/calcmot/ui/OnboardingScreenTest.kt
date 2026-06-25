@@ -1,8 +1,8 @@
 package br.com.calcmot.ui
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -31,25 +31,36 @@ class OnboardingScreenTest {
         }
 
         composeRule.onNodeWithTag(UiTestTags.ONBOARDING_SCREEN).assertIsDisplayed()
-        composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_DISCLOSURE)
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeRule.onNodeWithText("Veja se a corrida compensa antes de aceitar.").assertIsDisplayed()
-        composeRule.onNodeWithText("Calcula R$/km e R$/h.", substring = true)
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeRule.onNodeWithText("fora dos apps de motorista", substring = true)
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeRule.onAllNodesWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertCountEquals(1)
-        composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON)
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertIsEnabled()
+        composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_DISCLOSURE).assertIsDisplayed()
+        composeRule.onNodeWithText("CalcMot").assertIsDisplayed()
+        composeRule.onNodeWithText("Semáforo de lucro para motoristas").assertIsDisplayed()
+        composeRule.onNodeWithText("Decida corridas com", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Veja rapidamente se a corrida", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Calcule R$/km e R$/h").assertIsDisplayed()
+        composeRule.onNodeWithText("Veja Boa, Média ou Ruim").assertIsDisplayed()
+        composeRule.onNodeWithText("Tenha resposta rápida", substring = true).assertIsDisplayed()
+        composeRule.onAllNodesWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertCountEquals(0)
         composeRule.onAllNodesWithTag(UiTestTags.FINISH_ONBOARDING_BUTTON).assertCountEquals(0)
-        composeRule.onNodeWithText("Depois de ativar a permissão", substring = true)
+
+        composeRule.onNodeWithTag(UiTestTags.ONBOARDING_NEXT_BUTTON).performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_PERMISSION_ITEM).assertIsDisplayed()
+        composeRule.onNodeWithText("Ative o CalcMot no Android").assertIsDisplayed()
+        composeRule.onNodeWithText("Escolha CalcMot na lista.").assertIsDisplayed()
+        composeRule.onNodeWithText("Aplicativos instalados", substring = true)
             .performScrollTo()
             .assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertIsEnabled()
+
+        composeRule.onNodeWithTag(UiTestTags.ONBOARDING_NEXT_BUTTON).performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_CONFIRMATION_PAGE).assertIsDisplayed()
+        composeRule.onNodeWithText("Depois de ativar a permissao", substring = true)
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.REFRESH_PERMISSIONS_BUTTON).assertIsEnabled()
     }
 
     @Test
@@ -63,7 +74,7 @@ class OnboardingScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Permissão ativa", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Permissao ativa", substring = true).assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.FINISH_ONBOARDING_BUTTON).assertIsEnabled()
     }
 
@@ -78,8 +89,11 @@ class OnboardingScreenTest {
             }
         }
 
+        composeRule.onNodeWithTag(UiTestTags.ONBOARDING_NEXT_BUTTON)
+            .performClick()
+        composeRule.waitForIdle()
+
         composeRule.onNodeWithTag(UiTestTags.PRIVACY_LINK)
-            .performScrollTo()
             .performClick()
 
         composeRule.onNodeWithTag(UiTestTags.PRIVACY_POLICY_SCREEN).assertIsDisplayed()

@@ -69,13 +69,11 @@ A infraestrutura e o parser conservador da 99 estão implementados. Ele exige:
 
 Ganhos, saldo, histórico, bônus e cards incompletos são rejeitados.
 
-O parser cobre os dois formatos visuais reais observados.
-
-Na segunda chamada, a notificação de disponibilidade apareceu na árvore de acessibilidade. O cartão completo foi aberto às `19:54:40`, mas a sessão detalhada de captura começou às `19:54:46`. Assim, essa execução não autoriza concluir que o cartão completo seja inacessível; a coleta perdeu a janela crítica.
+O parser cobre os formatos visuais reais observados, mas a captura final da 99 nao depende da arvore semantica para os valores. A arvore da 99 e usada para pacote, janela, limites e gatilhos; tarifa, tempo e distancia vem do OCR isolado.
 
 Também foi corrigida, exclusivamente para a 99, a agregação de múltiplas janelas interativas. A Uber conserva o caminho anterior e possui teste de prontidão que fixa essa separação.
 
-O overlay, a troca segura entre apps, a descoberta de package e o parser estão validados. O projeto não declara 100% de acerto na 99 enquanto uma captura simultânea do cartão real não confirmar a origem semântica de todos os campos.
+O overlay, a troca segura entre apps, a descoberta de package, o OCR, o sanitizer e o parser da 99 estao validados com fixtures reais anonimizados e testes instrumentados no aparelho. O resultado da 99 alimenta o `OfferCandidate` existente e segue os mesmos calculos atuais do CalcMot, sem percentual.
 
 ## Comandos
 

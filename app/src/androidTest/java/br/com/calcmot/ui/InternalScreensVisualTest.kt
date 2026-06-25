@@ -61,7 +61,8 @@ class InternalScreensVisualTest {
         composeRule.onNodeWithText("Calculador de ganhos").assertIsDisplayed()
         composeRule.onAllNodesWithTag(UiTestTags.HOME_HERO_CARD).assertCountEquals(1)
         composeRule.onAllNodesWithTag(UiTestTags.HOME_GOAL_CARD).assertCountEquals(1)
-        composeRule.onAllNodesWithTag(UiTestTags.HOME_PRIMARY_ACTION).assertCountEquals(1)
+        composeRule.onAllNodesWithTag(UiTestTags.OPEN_UBER_DRIVER_BUTTON).assertCountEquals(1)
+        composeRule.onAllNodesWithTag(UiTestTags.OPEN_99_DRIVER_BUTTON).assertCountEquals(1)
         assertNoCommonUserFacingForbiddenTerms()
         captureScreen("home_ready")
     }

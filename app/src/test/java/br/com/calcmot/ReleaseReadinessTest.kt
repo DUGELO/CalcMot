@@ -8,13 +8,14 @@ import java.io.File
 class ReleaseReadinessTest {
 
     @Test
-    fun `manifest requests only the foreground permission required by legacy 99 projection`() {
+    fun `manifest does not request foreground media projection permissions`() {
         val manifest = projectFile("app/src/main/AndroidManifest.xml").readText()
 
         assertFalse(manifest.contains("android.permission.SYSTEM_ALERT_WINDOW"))
-        assertTrue(manifest.contains("android.permission.FOREGROUND_SERVICE"))
-        assertTrue(manifest.contains("android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"))
-        assertTrue(manifest.contains("android:foregroundServiceType=\"mediaProjection\""))
+        assertFalse(manifest.contains("android.permission.FOREGROUND_SERVICE"))
+        assertFalse(manifest.contains("android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"))
+        assertFalse(manifest.contains("android:foregroundServiceType=\"mediaProjection\""))
+        assertFalse(manifest.contains("NinetyNineProjectionService"))
     }
 
     @Test
@@ -32,6 +33,14 @@ class ReleaseReadinessTest {
         DriverApp.supported.flatMap { it.packageNames }.forEach { packageName ->
             assertTrue("Manifest must query $packageName", manifest.contains("<package android:name=\"$packageName\""))
         }
+    }
+
+    @Test
+    fun `release keeps r8 disabled while bundled ml kit ocr is used`() {
+        val buildFile = projectFile("app/build.gradle.kts").readText()
+
+        assertTrue(buildFile.contains("implementation(\"com.google.mlkit:text-recognition:16.0.1\")"))
+        assertTrue(buildFile.contains("isMinifyEnabled = false"))
     }
 
     @Test
@@ -58,7 +67,6 @@ class ReleaseReadinessTest {
             "TextRecognizer",
             "TextRecognition",
             "InputImage",
-            "MediaProjection",
             "takeScreenshot"
         )
 
@@ -77,15 +85,45 @@ class ReleaseReadinessTest {
         assertTrue(ninetyNineSources.contains("AtomicBoolean"))
         assertTrue(ninetyNineSources.contains("ACTIVE_UNCHANGED_OCR_INTERVAL_MS = 3_000L"))
         assertTrue(ninetyNineSources.contains("IDLE_UNCHANGED_OCR_INTERVAL_MS = 6_000L"))
-        assertTrue(ninetyNineSources.contains("NinetyNineProjectionService"))
+        assertTrue(ninetyNineSources.contains("UnsupportedNinetyNineCaptureSource"))
+        assertFalse(ninetyNineSources.contains("MediaProjection"))
+        assertFalse(ninetyNineSources.contains("NinetyNineProjectionService"))
         assertTrue(overlay.contains("BuildConfig.DEBUG"))
         assertTrue(overlayStateMachine.contains("OverlayUiState"))
+    }
+
+    @Test
+    fun `99 ocr candidate bypasses stability gate without changing tree capture`() {
+        val service = projectFile(
+            "app/src/main/java/br/com/calcmot/accessibility/UberAccessibilityService.kt"
+        ).readText()
+        val ninetyNineOcrCandidateBlock = Regex(
+            """source = OfferCaptureSource\.NINETY_NINE_OCR,[\s\S]*?trustedSingleFrame = true"""
+        )
+        val treeCaptureBlock = Regex(
+            """source = OfferCaptureSource\.ACCESSIBILITY_TREE,[\s\S]*?trustedSingleFrame = scanResult\.value\.trustedSingleFrame"""
+        )
+
+        assertTrue(ninetyNineOcrCandidateBlock.containsMatchIn(service))
+        assertTrue(treeCaptureBlock.containsMatchIn(service))
+        assertFalse(
+            service.contains(
+                "source = OfferCaptureSource.ACCESSIBILITY_TREE,\n" +
+                    "                            label = label,\n" +
+                    "                            trustedSingleFrame = true"
+            )
+        )
     }
 
     @Test
     fun `accessibility tool declaration is enabled for no ocr tree capture`() {
         val mainConfig = projectFile("app/src/main/res/xml/accessibility_service_config.xml").readText()
         val debugConfig = projectFile("app/src/debug/res/xml/accessibility_service_config.xml").readText()
+        val onboarding = projectFile("app/src/main/java/br/com/calcmot/ui/OnboardingScreen.kt").readText()
+        val home = projectFile("app/src/main/java/br/com/calcmot/ui/HomeScreen.kt").readText()
+        val settingsNavigator = projectFile(
+            "app/src/main/java/br/com/calcmot/ui/AccessibilitySettingsNavigator.kt"
+        ).readText()
         val service = projectFile("app/src/main/java/br/com/calcmot/accessibility/UberAccessibilityService.kt")
             .readText()
         val offerTreeExtractor = projectFile("app/src/main/java/br/com/calcmot/processor/OfferTreeExtractor.kt")
@@ -98,6 +136,13 @@ class ReleaseReadinessTest {
 
         assertTrue(mainConfig.contains("android:isAccessibilityTool=\"true\""))
         assertTrue(debugConfig.contains("android:isAccessibilityTool=\"true\""))
+        assertTrue(onboarding.contains("openAccessibilitySettings(context)"))
+        assertTrue(onboarding.contains("Aplicativos instalados"))
+        assertTrue(onboarding.contains("O Android bloqueia molduras de outros apps nessa tela por seguranca"))
+        assertTrue(home.contains("openAccessibilitySettings(context)"))
+        assertTrue(settingsNavigator.contains("Settings.ACTION_ACCESSIBILITY_SETTINGS"))
+        assertTrue(settingsNavigator.contains("\":settings:show_fragment_args\""))
+        assertTrue(settingsNavigator.contains("\":settings:fragment_args_key\""))
         assertTrue(service.contains("configureRuntimeAccessibilityInfo"))
         assertTrue(service.contains("FLAG_RETRIEVE_INTERACTIVE_WINDOWS"))
         assertTrue(service.contains("FLAG_INCLUDE_NOT_IMPORTANT_VIEWS"))
@@ -116,6 +161,8 @@ class ReleaseReadinessTest {
         assertTrue(service.contains("CALCMOT_OWN_PACKAGE_EVENT_IGNORED"))
         assertTrue(service.contains("CALCMOT_TRANSIENT_SYSTEM_EVENT_IGNORED"))
         assertTrue(service.contains("CALCMOT_UNKNOWN_PACKAGE_EVENT_IGNORED"))
+        assertTrue(service.contains("activeFocusedDriverAppForGuard"))
+        assertTrue(service.contains("CALCMOT_BACKGROUND_DRIVER_EVENT_IGNORED"))
         assertTrue(service.contains("CALCMOT_ROOT_READ"))
         assertTrue(service.contains("OverlayLatencyTrace"))
         assertTrue(service.contains("latencyTracesByGeneration"))
@@ -389,6 +436,7 @@ class ReleaseReadinessTest {
             "app/src/main/java/br/com/calcmot/ui/HomeScreen.kt",
             "app/src/main/java/br/com/calcmot/ui/FinanceScreen.kt",
             "app/src/main/java/br/com/calcmot/ui/OnboardingScreen.kt",
+            "app/src/main/java/br/com/calcmot/ui/AccessibilitySettingsNavigator.kt",
             "app/src/main/java/br/com/calcmot/ui/PrivacyPolicyScreen.kt",
             "app/src/main/java/br/com/calcmot/overlay/OverlayView.kt",
             "app/src/main/java/br/com/calcmot/ui/theme/Theme.kt",

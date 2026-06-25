@@ -51,9 +51,9 @@ class AccessibilityScreenshotCaptureSource(
         }
 }
 
-class MediaProjectionCaptureSource : NinetyNineCaptureSource {
+object UnsupportedNinetyNineCaptureSource : NinetyNineCaptureSource {
     override suspend fun capture(targetBounds: Rect): Bitmap? {
-        return NinetyNineProjectionService.capture(targetBounds)
+        return null
     }
 }
 

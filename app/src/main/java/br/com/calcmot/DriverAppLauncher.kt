@@ -28,16 +28,15 @@ object DriverAppLauncher {
 
     fun resolve(
         installedApps: List<InstalledDriverApp>,
-        preferredDriverApp: DriverApp
+        driverApp: DriverApp
     ): InstalledDriverApp? {
-        return installedApps.firstOrNull { it.driverApp == preferredDriverApp }
-            ?: installedApps.firstOrNull()
+        return installedApps.firstOrNull { it.driverApp == driverApp }
     }
 
-    fun launchPreferred(context: Context): DriverApp? {
+    fun launch(context: Context, driverApp: DriverApp): DriverApp? {
         val resolved = resolve(
             installedApps = installedApps(context),
-            preferredDriverApp = AppSettings.getLastDriverApp(context)
+            driverApp = driverApp
         ) ?: return null
 
         resolved.launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

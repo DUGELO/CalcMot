@@ -1,7 +1,5 @@
 package br.com.calcmot.ui
 
-import android.content.Intent
-import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -50,6 +48,7 @@ import br.com.calcmot.AppDiagnostics
 import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
 import br.com.calcmot.BuildConfig
+import br.com.calcmot.DriverApp
 import br.com.calcmot.DriverAppLauncher
 import br.com.calcmot.OverlayPositionPreference
 import br.com.calcmot.ui.design.components.CalcMotButton
@@ -129,17 +128,17 @@ fun HomeScreen(
                     permissionState = permissionState,
                     onMonitoringChange = ::setMonitoringEnabled,
                     onOpenAccessibility = {
-                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        openAccessibilitySettings(context)
                     },
                     onPermissionsRefresh = {
                         onPermissionsRefresh()
                         diagnosticsRefreshKey++
                     },
-                    onOpenDriverApp = {
-                        if (DriverAppLauncher.launchPreferred(context) == null) {
+                    onOpenDriverApp = { driverApp ->
+                        if (DriverAppLauncher.launch(context, driverApp) == null) {
                             Toast.makeText(
                                 context,
-                                "Instale a Uber Driver ou 99 Motorista para continuar.",
+                                "${driverApp.displayName} nao esta instalado.",
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
@@ -159,7 +158,7 @@ fun HomeScreen(
                     onMonitoringChange = ::setMonitoringEnabled,
                     onOverlayPositionChange = ::setOverlayPosition,
                     onOpenAccessibility = {
-                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        openAccessibilitySettings(context)
                     },
                     onOpenGoal = { navigate(HomeDestination.FINANCE) },
                     onOpenPrivacy = { navigate(HomeDestination.PRIVACY) },
@@ -262,7 +261,7 @@ private fun HomeContent(
     onMonitoringChange: (Boolean) -> Unit,
     onOpenAccessibility: () -> Unit,
     onPermissionsRefresh: () -> Unit,
-    onOpenDriverApp: () -> Unit,
+    onOpenDriverApp: (DriverApp) -> Unit,
     onEditGoal: () -> Unit,
     onOpenHelp: () -> Unit,
     onOpenPrivacy: () -> Unit
@@ -325,7 +324,7 @@ private fun CalcMotHeroStatus(
     onMonitoringChange: (Boolean) -> Unit,
     onOpenAccessibility: () -> Unit,
     onPermissionsRefresh: () -> Unit,
-    onOpenDriverApp: () -> Unit
+    onOpenDriverApp: (DriverApp) -> Unit
 ) {
     ElevatedCard(modifier = Modifier.testTag(UiTestTags.HOME_HERO_CARD)) {
         Column(
@@ -375,13 +374,26 @@ private fun CalcMotHeroStatus(
                 }
 
                 HomeStatus.READY -> {
-                    Button(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag(UiTestTags.HOME_PRIMARY_ACTION),
-                        onClick = onOpenDriverApp
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Abrir app de motorista")
+                        Button(
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag(UiTestTags.OPEN_UBER_DRIVER_BUTTON),
+                            onClick = { onOpenDriverApp(DriverApp.UBER) }
+                        ) {
+                            Text("Abrir Uber")
+                        }
+                        OutlinedButton(
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag(UiTestTags.OPEN_99_DRIVER_BUTTON),
+                            onClick = { onOpenDriverApp(DriverApp.NINETY_NINE) }
+                        ) {
+                            Text("Abrir 99")
+                        }
                     }
                 }
 
@@ -462,17 +474,27 @@ private fun SettingsScreen(
                 )
             }
         )
-        if (!permissionState.hasAccessibilityService) {
-            Button(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .testTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON),
-                onClick = onOpenAccessibility
-            ) {
-                Text("Ativar permissão")
+        HorizontalDivider()
+        ListItem(
+            headlineContent = { Text("Acessibilidade do Android") },
+            supportingContent = {
+                Text(
+                    if (permissionState.hasAccessibilityService) {
+                        "Ativa. Abra apenas se quiser revisar a permissao."
+                    } else {
+                        "Pendente. Necessaria para ler ofertas visiveis."
+                    }
+                )
+            },
+            trailingContent = {
+                TextButton(
+                    modifier = Modifier.testTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON),
+                    onClick = onOpenAccessibility
+                ) {
+                    Text(if (permissionState.hasAccessibilityService) "Abrir" else "Ativar")
+                }
             }
-        }
+        )
         HorizontalDivider()
         ListItem(
             headlineContent = { Text("Posição do aviso") },
