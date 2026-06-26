@@ -46,21 +46,26 @@ class OnboardingScreenTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_PERMISSION_ITEM).assertIsDisplayed()
-        composeRule.onNodeWithText("Ative o CalcMot no Android").assertIsDisplayed()
-        composeRule.onNodeWithText("Escolha CalcMot na lista.").assertIsDisplayed()
-        composeRule.onNodeWithText("Aplicativos instalados", substring = true)
+        composeRule.onNodeWithText("Permissão de acessibilidade").assertIsDisplayed()
+        composeRule.onNodeWithText("Como o CalcMot usa essa permissão").assertIsDisplayed()
+        composeRule.onNodeWithText("Identifica valor, distância e tempo", substring = true)
             .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertIsDisplayed()
-        composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertIsEnabled()
+        composeRule.onNodeWithTag(UiTestTags.ONBOARDING_NEXT_BUTTON).assertIsDisplayed()
+        composeRule.onNodeWithText("Continuar").assertIsDisplayed()
+        composeRule.onAllNodesWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertCountEquals(0)
 
         composeRule.onNodeWithTag(UiTestTags.ONBOARDING_NEXT_BUTTON).performClick()
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_CONFIRMATION_PAGE).assertIsDisplayed()
-        composeRule.onNodeWithText("Depois de ativar a permissao", substring = true)
-            .assertIsDisplayed()
-        composeRule.onNodeWithTag(UiTestTags.REFRESH_PERMISSIONS_BUTTON).assertIsEnabled()
+        composeRule.onNodeWithText("O que o CalcMot não faz").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Não aceita ou recusa corridas").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).assertIsEnabled()
+        composeRule.onNodeWithText("Entendo e quero ativar").assertIsDisplayed()
+        composeRule.onNodeWithText("Ver política de privacidade").assertIsDisplayed()
+        composeRule.onAllNodesWithTag(UiTestTags.ONBOARDING_BACK_BUTTON).assertCountEquals(0)
     }
 
     @Test
@@ -74,7 +79,7 @@ class OnboardingScreenTest {
             }
         }
 
-        composeRule.onNodeWithText("Permissao ativa", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_CONFIRMATION_PAGE).assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.FINISH_ONBOARDING_BUTTON).assertIsEnabled()
     }
 
@@ -89,6 +94,9 @@ class OnboardingScreenTest {
             }
         }
 
+        composeRule.onNodeWithTag(UiTestTags.ONBOARDING_NEXT_BUTTON)
+            .performClick()
+        composeRule.waitForIdle()
         composeRule.onNodeWithTag(UiTestTags.ONBOARDING_NEXT_BUTTON)
             .performClick()
         composeRule.waitForIdle()

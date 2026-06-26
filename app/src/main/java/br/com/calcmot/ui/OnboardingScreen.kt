@@ -25,9 +25,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Traffic
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
@@ -181,7 +184,24 @@ fun OnboardingScreen(
                     onPermissionsRefresh = onPermissionsRefresh
                 )
 
-                if (pagerState.currentPage > 0) {
+                if (pagerState.currentPage == lastPage) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        TextButton(
+                            modifier = Modifier.testTag(UiTestTags.PRIVACY_LINK),
+                            onClick = { showPrivacyPolicy = true }
+                        ) {
+                            Text(
+                                text = "Ver política de privacidade",
+                                color = CalcMotColors.BrandSecondary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                } else if (pagerState.currentPage > 1) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center
@@ -276,7 +296,26 @@ private fun OnboardingPage(
     permissionState: AppPermissionState
 ) {
     if (page.kind == OnboardingPageKind.INTRO) {
-        CalcMotOnboardingIntroPage(testTag = page.testTag)
+        CalcMotOnboardingCanonicalPage(
+            testTag = page.testTag,
+            card = PermissionPageCard.BENEFITS
+        )
+        return
+    }
+
+    if (page.kind == OnboardingPageKind.OPEN_SETTINGS) {
+        CalcMotOnboardingCanonicalPage(
+            testTag = page.testTag,
+            card = PermissionPageCard.USE
+        )
+        return
+    }
+
+    if (page.kind == OnboardingPageKind.LIMITATIONS) {
+        CalcMotOnboardingCanonicalPage(
+            testTag = page.testTag,
+            card = PermissionPageCard.LIMITATIONS
+        )
         return
     }
 
@@ -328,13 +367,6 @@ private fun OnboardingPage(
             }
         }
 
-        if (page.kind == OnboardingPageKind.OPEN_SETTINGS) {
-            AccessibilitySettingsCard()
-        }
-
-        if (page.kind == OnboardingPageKind.CONFIRM) {
-            AccessibilityStatusCard(permissionState)
-        }
     }
 }
 
@@ -369,7 +401,10 @@ private fun OnboardingInstruction(index: Int, text: String) {
 }
 
 @Composable
-private fun CalcMotOnboardingIntroPage(testTag: String) {
+private fun CalcMotOnboardingCanonicalPage(
+    testTag: String,
+    card: PermissionPageCard
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -381,7 +416,11 @@ private fun CalcMotOnboardingIntroPage(testTag: String) {
         CalcMotHeroLogo()
         Spacer(modifier = Modifier.height(20.dp))
         Text(
-            text = "Decida corridas com\nmais clareza",
+            text = when (card) {
+                PermissionPageCard.BENEFITS -> "Decida corridas com\nmais clareza"
+                PermissionPageCard.USE,
+                PermissionPageCard.LIMITATIONS -> "Permissão de\nacessibilidade"
+            },
             color = CalcMotColors.TextPrimary,
             fontSize = 29.sp,
             lineHeight = 35.sp,
@@ -390,7 +429,11 @@ private fun CalcMotOnboardingIntroPage(testTag: String) {
         )
         Spacer(modifier = Modifier.height(14.dp))
         Text(
-            text = "Veja rapidamente se a corrida\ncompensa antes de aceitar.",
+            text = when (card) {
+                PermissionPageCard.BENEFITS -> "Veja rapidamente se a corrida\ncompensa antes de aceitar."
+                PermissionPageCard.USE,
+                PermissionPageCard.LIMITATIONS -> "O CalcMot usa essa permissão para ajudar\nvocê a ler ofertas de corrida com mais clareza."
+            },
             color = CalcMotColors.TextSecondary,
             fontSize = 17.sp,
             lineHeight = 23.sp,
@@ -398,13 +441,31 @@ private fun CalcMotOnboardingIntroPage(testTag: String) {
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(36.dp))
-        CalcMotBenefitCard(modifier = Modifier.fillMaxWidth())
+        when (card) {
+            PermissionPageCard.BENEFITS -> CalcMotBenefitCard(modifier = Modifier.fillMaxWidth())
+            PermissionPageCard.USE -> CalcMotPermissionCard(
+                title = "Como o CalcMot usa essa permissão",
+                rows = permissionUseRows(),
+                modifier = Modifier.fillMaxWidth()
+            )
+            PermissionPageCard.LIMITATIONS -> CalcMotPermissionCard(
+                title = "O que o CalcMot não faz",
+                rows = permissionLimitationRows(),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
         Spacer(modifier = Modifier.height(4.dp))
     }
 }
 
 @Composable
-private fun CalcMotHeroLogo() {
+private fun CalcMotHeroLogo(
+    logoSize: androidx.compose.ui.unit.Dp = 132.dp,
+    wordmarkFontSize: androidx.compose.ui.unit.TextUnit = 39.sp,
+    wordmarkLineHeight: androidx.compose.ui.unit.TextUnit = 41.sp,
+    sloganFontSize: androidx.compose.ui.unit.TextUnit = 16.sp,
+    sloganLineHeight: androidx.compose.ui.unit.TextUnit = 21.sp
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -412,7 +473,7 @@ private fun CalcMotHeroLogo() {
             painter = painterResource(id = R.drawable.calcmot_logo_hero),
             contentDescription = "Logo CalcMot",
             modifier = Modifier
-                .size(132.dp),
+                .size(logoSize),
             contentScale = ContentScale.Fit
         )
         Spacer(modifier = Modifier.height(6.dp))
@@ -425,8 +486,8 @@ private fun CalcMotHeroLogo() {
                     append("Mot")
                 }
             },
-            fontSize = 39.sp,
-            lineHeight = 41.sp,
+            fontSize = wordmarkFontSize,
+            lineHeight = wordmarkLineHeight,
             fontWeight = FontWeight.Black,
             fontStyle = FontStyle.Italic,
             textAlign = TextAlign.Center
@@ -434,8 +495,8 @@ private fun CalcMotHeroLogo() {
         Text(
             text = "Semáforo de lucro para motoristas",
             color = CalcMotColors.TextSecondary,
-            fontSize = 16.sp,
-            lineHeight = 21.sp,
+            fontSize = sloganFontSize,
+            lineHeight = sloganLineHeight,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center
         )
@@ -452,7 +513,7 @@ private fun CalcMotBenefitCard(modifier: Modifier = Modifier) {
         border = BorderStroke(1.dp, CalcMotColors.HeroBorder)
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 22.dp, vertical = 20.dp)
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)
         ) {
             CalcMotBenefitRow(
                 icon = CalcMotBenefitIcon.GAUGE,
@@ -526,69 +587,74 @@ private fun CalcMotBenefitIconView(icon: CalcMotBenefitIcon) {
 }
 
 @Composable
-private fun AccessibilitySettingsCard() {
+private fun CalcMotPermissionCard(
+    title: String,
+    rows: List<PermissionRowData>,
+    modifier: Modifier = Modifier
+) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = CalcMotColors.HeroSurface,
+        contentColor = CalcMotColors.TextPrimary,
+        border = BorderStroke(1.dp, CalcMotColors.HeroBorder)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(horizontal = 22.dp, vertical = 20.dp)
         ) {
             Text(
-                text = "Na tela do Android",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold
+                text = title,
+                color = CalcMotColors.TextPrimary,
+                fontSize = 19.sp,
+                lineHeight = 24.sp,
+                fontWeight = FontWeight.Black
             )
-            Text(
-                text = "No Samsung testado, toque em Aplicativos instalados, depois CalcMot, ligue a chave e confirme em Permitir.",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Spacer(modifier = Modifier.height(18.dp))
+            rows.forEachIndexed { index, row ->
+                CalcMotPermissionRow(row = row)
+                if (index != rows.lastIndex) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 36.dp, top = 12.dp, bottom = 12.dp)
+                            .height(1.dp)
+                            .background(CalcMotColors.BorderSubtle)
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun AccessibilityStatusCard(permissionState: AppPermissionState) {
-    val active = permissionState.hasAccessibilityService
-    val containerColor = if (active) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant
-    }
-    val contentColor = if (active) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    Surface(
+private fun CalcMotPermissionRow(
+    row: PermissionRowData
+) {
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        color = containerColor,
-        contentColor = contentColor
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = if (active) "Permissao ativa" else "Ainda falta ativar",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = if (active) {
-                    "Tudo certo. Agora o CalcMot consegue ler as ofertas visiveis nos apps de motorista."
-                } else {
-                    "Depois de ativar a permissao, volte para ca e toque em Ja ativei."
-                },
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
+        Icon(
+            modifier = Modifier.size(36.dp),
+            imageVector = when (row.icon) {
+                PermissionRowIcon.VISIBILITY -> Icons.Filled.Visibility
+                PermissionRowIcon.CALCULATE -> Icons.Filled.Calculate
+                PermissionRowIcon.CHECK -> Icons.Filled.CheckCircle
+                PermissionRowIcon.SECURITY -> Icons.Filled.Security
+            },
+            contentDescription = null,
+            tint = CalcMotColors.HeroGlowGreen
+        )
+        Text(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 18.dp),
+            text = row.text,
+            color = CalcMotColors.TextPrimary,
+            fontSize = 16.sp,
+            lineHeight = 22.sp,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
@@ -599,7 +665,7 @@ private fun OnboardingPageIndicator(currentPage: Int, pageCount: Int) {
             .fillMaxWidth()
             .testTag(UiTestTags.ONBOARDING_PAGE_INDICATOR)
             .semantics {
-                contentDescription = "Etapa ${currentPage + 1} de $pageCount"
+                contentDescription = "Página ${currentPage + 1} de $pageCount"
             },
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
@@ -665,45 +731,23 @@ private fun OnboardingActions(
             }
 
             1 -> {
-                Button(
+                CalcMotOnboardingPrimaryButton(
+                    text = "Continuar",
+                    onClick = onNext,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 52.dp)
-                        .testTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON),
-                    onClick = onOpenAccessibilitySettings
-                ) {
-                    Text("Abrir Acessibilidade")
-                }
-                OutlinedButton(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                        .testTag(UiTestTags.ONBOARDING_NEXT_BUTTON),
-                    onClick = onNext
-                ) {
-                    Text("Ja abri, continuar")
-                }
+                        .testTag(UiTestTags.ONBOARDING_NEXT_BUTTON)
+                )
             }
 
             lastPage -> {
-                Button(
+                CalcMotOnboardingPrimaryButton(
+                    text = "Entendo e quero ativar",
+                    onClick = onOpenAccessibilitySettings,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 52.dp)
-                        .testTag(UiTestTags.REFRESH_PERMISSIONS_BUTTON),
-                    onClick = onPermissionsRefresh
-                ) {
-                    Text("Ja ativei")
-                }
-                OutlinedButton(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                        .testTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON),
-                    onClick = onOpenAccessibilitySettings
-                ) {
-                    Text("Abrir Configuracoes")
-                }
+                        .testTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON)
+                )
             }
 
             else -> {
@@ -719,26 +763,6 @@ private fun OnboardingActions(
             }
         }
 
-        if (currentPage > 0) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(
-                    modifier = Modifier.testTag(UiTestTags.ONBOARDING_BACK_BUTTON),
-                    onClick = onBack
-                ) {
-                    Text("Voltar")
-                }
-                Text(
-                    text = "Etapa ${currentPage + 1} de ${lastPage + 1}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.End
-                )
-            }
-        }
     }
 }
 
@@ -750,7 +774,7 @@ private fun CalcMotOnboardingPrimaryButton(
 ) {
     Box(
         modifier = modifier
-            .height(64.dp)
+            .height(60.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(
                 Brush.horizontalGradient(
@@ -806,26 +830,18 @@ private fun accessibilityOnboardingPages(): List<OnboardingPageData> {
         ),
         OnboardingPageData(
             stepLabel = "2",
-            title = "Ative o CalcMot no Android",
-            body = "Vamos abrir a tela oficial de Acessibilidade do aparelho. O Android bloqueia molduras de outros apps nessa tela por seguranca, entao siga os nomes abaixo.",
-            steps = listOf(
-                "Toque em Apps instalados ou Servicos instalados.",
-                "Escolha CalcMot na lista.",
-                "Ative Usar CalcMot e confirme em Permitir."
-            ),
+            title = "Permissão de acessibilidade",
+            body = "O CalcMot usa essa permissão para ajudar você a ler ofertas de corrida com mais clareza.",
+            steps = emptyList(),
             kind = OnboardingPageKind.OPEN_SETTINGS,
             testTag = UiTestTags.ACCESSIBILITY_PERMISSION_ITEM
         ),
         OnboardingPageData(
             stepLabel = "3",
-            title = "Volte para confirmar",
-            body = "Ao retornar das Configuracoes, o CalcMot confere automaticamente. Se ainda aparecer pendente, toque em Ja ativei.",
-            steps = listOf(
-                "Abra Uber ou 99 pelo botao do CalcMot.",
-                "Deixe uma oferta aparecer.",
-                "O aviso mostra R$/km, R$/h e a classificacao da corrida."
-            ),
-            kind = OnboardingPageKind.CONFIRM,
+            title = "Permissão de acessibilidade",
+            body = "O CalcMot usa essa permissão para ajudar você a ler ofertas de corrida com mais clareza.",
+            steps = emptyList(),
+            kind = OnboardingPageKind.LIMITATIONS,
             testTag = UiTestTags.ACCESSIBILITY_CONFIRMATION_PAGE
         )
     )
@@ -846,8 +862,52 @@ private enum class CalcMotBenefitIcon {
     CHECK
 }
 
+private data class PermissionRowData(
+    val icon: PermissionRowIcon,
+    val text: String
+)
+
+private enum class PermissionRowIcon {
+    VISIBILITY,
+    CALCULATE,
+    CHECK,
+    SECURITY
+}
+
+private fun permissionUseRows(): List<PermissionRowData> {
+    return listOf(
+        PermissionRowData(
+            icon = PermissionRowIcon.VISIBILITY,
+            text = "Identifica valor, distância e\ntempo visíveis na oferta"
+        ),
+        PermissionRowData(
+            icon = PermissionRowIcon.CALCULATE,
+            text = "Calcula R$/km e R$/h\nautomaticamente"
+        ),
+        PermissionRowData(
+            icon = PermissionRowIcon.CHECK,
+            text = "Mostra se a corrida está\nBoa, Média ou Ruim"
+        )
+    )
+}
+
+private fun permissionLimitationRows(): List<PermissionRowData> {
+    return listOf(
+        PermissionRowData(PermissionRowIcon.SECURITY, "Não toca na tela"),
+        PermissionRowData(PermissionRowIcon.SECURITY, "Não aceita ou recusa corridas"),
+        PermissionRowData(PermissionRowIcon.SECURITY, "Não controla outros apps"),
+        PermissionRowData(PermissionRowIcon.SECURITY, "Fora dos apps de motorista, fica em espera")
+    )
+}
+
+private enum class PermissionPageCard {
+    BENEFITS,
+    USE,
+    LIMITATIONS
+}
+
 private enum class OnboardingPageKind {
     INTRO,
     OPEN_SETTINGS,
-    CONFIRM
+    LIMITATIONS
 }
