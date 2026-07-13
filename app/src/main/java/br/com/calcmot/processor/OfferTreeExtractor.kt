@@ -683,7 +683,9 @@ object OfferTreeExtractor {
     private val compactOfferLineRegex = Regex("""^($durationTextPattern)\s*\(\s*($distanceTextPattern)\s*\)$""")
     private val durationMarkerRegex = Regex("""\b[0-9]{1,3}\s*(?:h|hora(?:s)?|min|minuto(?:s)?)\b|[0-9]{1,2}h\s*[0-9]{1,2}""")
     private val roadNumberRegex = Regex("""^\d{2,4}$""")
-    private val primaryFareSplitRegex = Regex("""(?i)(\+?\s*R\$\s*[0-9]+(?:[.,][0-9]{1,2})?)""")
+    private val primaryFareSplitRegex = Regex(
+        """(?i)(\+?\s*R\$\s*[0-9]+(?:[.,][0-9]{1,2})?)(?![0-9.,])(?!(?:\s*)(?:/\s*(?:km|h)\b|por\s+(?:km|hora)\b))"""
+    )
     private val tripSplitRegex = Regex("""(?i)\b(Viagem\s+de\b)""")
     private val actionSplitRegex = Regex("""(?i)\b(Aceitar|Selecionar)\b""")
     private const val MIN_CARD_LINES_WITHOUT_BUTTON = 3

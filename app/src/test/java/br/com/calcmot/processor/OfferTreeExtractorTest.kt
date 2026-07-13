@@ -386,6 +386,67 @@ class OfferTreeExtractorTest {
     }
 
     @Test
+    fun `uber estimated price per km never replaces the primary fare`() {
+        val decimalFareCard = snapshot(
+            line("UberX", top = 120, left = 56, right = 210),
+            line("R$ 9,30", top = 210, bottom = 300, left = 56, right = 360),
+            line("R$ 2,21/km est.", top = 315, bottom = 355, left = 56, right = 270),
+            line("4,93 (788)", top = 370, left = 56, right = 260),
+            line("5 minutos (1.2 km) de distancia", top = 650, left = 112, right = 520),
+            line("Rua Vinte e Tres, Aguas Lindas de Goias", top = 710, left = 112, right = 650),
+            line("Viagem de 13 minutos (3.1 km)", top = 820, left = 112, right = 520),
+            line("Cidade do Entorno, Aguas Lindas de Goias", top = 880, left = 112, right = 650),
+            line("Selecionar", top = 1320, bottom = 1420, left = 56, right = 664)
+        )
+        val integerFareCard = snapshot(
+            line("UberX", top = 120, left = 56, right = 210),
+            line("R$ 7", top = 210, bottom = 300, left = 56, right = 300),
+            line("R$ 2,50/km est.", top = 315, bottom = 355, left = 56, right = 270),
+            line("4,91 (486)", top = 370, left = 56, right = 260),
+            line("4 minutos (1.0 km) de distancia", top = 650, left = 112, right = 520),
+            line("Av. JK, Aguas Lindas de Goias", top = 710, left = 112, right = 650),
+            line("Viagem de 9 minutos (1.8 km)", top = 820, left = 112, right = 520),
+            line("Jardim dos Pinheiros, Aguas Lindas de Goias", top = 880, left = 112, right = 650),
+            line("Selecionar", top = 1320, bottom = 1420, left = 56, right = 664)
+        )
+
+        listOf(
+            decimalFareCard to ExpectedLiveCard(
+                fare = 9.30,
+                fingerprint = "9.30|1.2|5|3.1|13",
+                totalDistance = 4.3,
+                totalTime = 18,
+                pricePerKm = 2.16,
+                pricePerHour = 31.0
+            ),
+            integerFareCard to ExpectedLiveCard(
+                fare = 7.0,
+                fingerprint = "7.00|1.0|4|1.8|9",
+                totalDistance = 2.8,
+                totalTime = 13,
+                pricePerKm = 2.5,
+                pricePerHour = 32.31
+            )
+        ).forEach { (card, expected) ->
+            val inspection = OfferTreeExtractor.inspect(card)
+            val candidate = inspection.offerText?.let(OfferParser::parse)
+
+            assertTrue(inspection.isCompleteOffer)
+            assertNotNull(candidate)
+            assertEquals(expected.fare, candidate!!.price, 0.01)
+            assertEquals(expected.fingerprint, candidate.fingerprint)
+
+            val tripData = candidate.toTripData()
+            assertNotNull(tripData)
+            assertEquals(expected.fare, tripData!!.valor, 0.01)
+            assertEquals(expected.totalDistance, tripData.distanciaKm, 0.01)
+            assertEquals(expected.totalTime, tripData.minutosTotais)
+            assertEquals(expected.pricePerKm, tripData.valorPorKm, 0.01)
+            assertEquals(expected.pricePerHour, tripData.valorPorHora, 0.01)
+        }
+    }
+
+    @Test
     fun `map marker eta inside card block does not override real pickup and trip times`() {
         val snapshot = snapshot(
             line("R$ 30,76", top = 210, bottom = 300, left = 56, right = 354),
@@ -620,6 +681,15 @@ class OfferTreeExtractorTest {
         assertTrue(inspection.fieldCandidates.none { it.fieldType == OfferFieldType.FARE })
     }
 }
+
+private data class ExpectedLiveCard(
+    val fare: Double,
+    val fingerprint: String,
+    val totalDistance: Double,
+    val totalTime: Int,
+    val pricePerKm: Double,
+    val pricePerHour: Double
+)
 
 private data class CapturedTreeOfferFixture(
     val source: String,

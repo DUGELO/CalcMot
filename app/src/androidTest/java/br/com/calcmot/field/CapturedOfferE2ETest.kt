@@ -98,6 +98,86 @@ class CapturedOfferE2ETest {
         }
     }
 
+    @Test
+    fun compactPriorityCardReachesOverlayOnAndroidRuntime() {
+        val compactCard = snapshot(
+            listOf(
+                line("Priority", top = 70, left = 56, right = 210),
+                line("Exclusivo", top = 70, left = 220, right = 390),
+                line("R$ 11,05", top = 130, bottom = 205, left = 56, right = 360),
+                line("4,95 (449)", top = 220, right = 260),
+                line("+R$ 1,79 incluido para prioridade de", top = 275, right = 650),
+                line("4 min (0.9 km)", top = 340, bottom = 380),
+                line("R. Bem-te-vi, Parque Pretoria, Franco da Rocha", top = 390, bottom = 430),
+                line("10 minutos (4.1 km)", top = 465, bottom = 505),
+                line("Av. Angelo Sestine, 119, Franco da Rocha", top = 515, bottom = 555),
+                line("Aceitar", top = 800, bottom = 880, left = 56, right = 664)
+            )
+        )
+
+        val validatedText = OfferTreeExtractor.extractOfferText(compactCard)
+        assertNotNull(validatedText)
+
+        val candidate = OfferParser.parse(validatedText!!)
+        assertNotNull(candidate)
+        assertEquals("11.05|0.9|4|4.1|10", candidate!!.fingerprint)
+
+        val gate = OfferStabilityGate(requiredMatchingFrames = 2)
+        assertNull(gate.accept(candidate))
+        val stableTrip = gate.accept(candidate)
+        assertNotNull(stableTrip)
+        assertEquals(11.05, stableTrip!!.valor, 0.01)
+        assertEquals(5.0, stableTrip.distanciaKm, 0.01)
+        assertEquals(14, stableTrip.minutosTotais)
+        assertEquals(2.21, stableTrip.valorPorKm, 0.01)
+        assertEquals(47.36, stableTrip.valorPorHora, 0.01)
+
+        val overlay = RecordingOverlayManager()
+        overlay.showOverlay(stableTrip)
+        assertTrue(overlay.showOverlayCalled)
+        assertEquals(stableTrip, overlay.lastTripData)
+    }
+
+    @Test
+    fun uberEstimatedPricePerKmDoesNotReplaceFareOnAndroidRuntime() {
+        val liveCard = snapshot(
+            listOf(
+                line("UberX", top = 70, left = 56, right = 210),
+                line("R$ 9,30", top = 130, bottom = 205, left = 56, right = 360),
+                line("R$ 2,21/km est.", top = 215, bottom = 250, left = 56, right = 270),
+                line("4,93 (788)", top = 260, bottom = 300, right = 260),
+                line("5 minutos (1.2 km) de distancia", top = 340, bottom = 380),
+                line("Rua Vinte e Tres, Aguas Lindas de Goias", top = 390, bottom = 430),
+                line("Viagem de 13 minutos (3.1 km)", top = 465, bottom = 505),
+                line("Cidade do Entorno, Aguas Lindas de Goias", top = 515, bottom = 555),
+                line("Selecionar", top = 800, bottom = 880, left = 56, right = 664)
+            )
+        )
+
+        val validatedText = OfferTreeExtractor.extractOfferText(liveCard)
+        assertNotNull(validatedText)
+
+        val candidate = OfferParser.parse(validatedText!!)
+        assertNotNull(candidate)
+        assertEquals(9.30, candidate!!.price, 0.01)
+        assertEquals("9.30|1.2|5|3.1|13", candidate.fingerprint)
+
+        val gate = OfferStabilityGate(requiredMatchingFrames = 2)
+        assertNull(gate.accept(candidate))
+        val stableTrip = gate.accept(candidate)
+        assertNotNull(stableTrip)
+        assertEquals(9.30, stableTrip!!.valor, 0.01)
+        assertEquals(4.3, stableTrip.distanciaKm, 0.01)
+        assertEquals(18, stableTrip.minutosTotais)
+        assertEquals(2.16, stableTrip.valorPorKm, 0.01)
+        assertEquals(31.0, stableTrip.valorPorHora, 0.01)
+
+        val overlay = RecordingOverlayManager()
+        overlay.showOverlay(stableTrip)
+        assertTrue(overlay.showOverlayCalled)
+        assertEquals(stableTrip, overlay.lastTripData)
+    }
+
     private class RecordingOverlayManager : IOverlayManager {
         var showOverlayCalled = false
         var hideOverlayCalled = false
