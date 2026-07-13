@@ -5,12 +5,13 @@ import android.graphics.Bitmap
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -20,6 +21,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.platform.app.InstrumentationRegistry
+import br.com.calcmot.AppDiagnostics
 import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
 import br.com.calcmot.OverlayPositionPreference
@@ -33,7 +35,7 @@ import org.junit.Test
 class InternalScreensVisualTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Before
     fun resetSettings() {
@@ -46,10 +48,10 @@ class InternalScreensVisualTest {
     @Test
     fun capturesHomeWithoutPermission() {
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = false))
-        composeRule.onNodeWithText("Falta ativar o cálculo automático").assertIsDisplayed()
-        composeRule.onAllNodesWithTag(UiTestTags.HOME_HERO_CARD).assertCountEquals(1)
-        composeRule.onAllNodesWithTag(UiTestTags.HOME_GOAL_CARD).assertCountEquals(1)
-        composeRule.onAllNodesWithTag(UiTestTags.HOME_PRIMARY_ACTION).assertCountEquals(1)
+        composeRule.onNodeWithTag(UiTestTags.HOME_PERMISSION_REQUIRED_SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithText("Como funciona").performScrollTo().assertIsDisplayed()
+        composeRule.onAllNodesWithTag(UiTestTags.HOME_PERMISSION_REQUIRED_PRIMARY_BUTTON).assertCountEquals(1)
+        composeRule.onAllNodesWithTag(UiTestTags.HOME_PRIMARY_ACTION).assertCountEquals(0)
         composeRule.onAllNodesWithTag(UiTestTags.MONITORING_SWITCH).assertCountEquals(0)
         assertNoCommonUserFacingForbiddenTerms()
         captureScreen("home_without_permission", forbidRedDominant = true)
@@ -58,7 +60,8 @@ class InternalScreensVisualTest {
     @Test
     fun capturesHomeReady() {
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
-        composeRule.onNodeWithText("Calculador de ganhos").assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.HOME_READY_SCREEN).assertIsDisplayed()
+        composeRule.onAllNodesWithText("Pronto para calcular").assertCountEquals(2)
         composeRule.onAllNodesWithTag(UiTestTags.HOME_HERO_CARD).assertCountEquals(1)
         composeRule.onAllNodesWithTag(UiTestTags.HOME_GOAL_CARD).assertCountEquals(1)
         composeRule.onAllNodesWithTag(UiTestTags.OPEN_UBER_DRIVER_BUTTON).assertCountEquals(1)
@@ -68,11 +71,57 @@ class InternalScreensVisualTest {
     }
 
     @Test
+    fun capturesDrawer() {
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_PANEL).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_HOME_ITEM).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_FINANCE_ITEM).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_SETTINGS_ITEM).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_HELP_ITEM).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_PRIVACY_ITEM).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_FEEDBACK_ITEM).assertIsDisplayed()
+        composeRule.onAllNodesWithText("Histórico").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Resultado").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Diagnóstico").assertCountEquals(0)
+        assertNoCommonUserFacingForbiddenTerms()
+        captureScreen("drawer")
+    }
+
+    @Test
+    fun capturesDiagnostics() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.setContent {
+            MetricaTheme {
+                DiagnosticsScreen(
+                    snapshot = AppDiagnostics.read(context),
+                    hasAccessibility = true,
+                    monitoringEnabled = true,
+                    goalPerKm = "R$ 1,80/km",
+                    goalPerHour = "R$ 35/h",
+                    onBack = {},
+                    onOpenDriverApp = {},
+                    onOpenHelp = {}
+                )
+            }
+        }
+        composeRule.onNodeWithTag(UiTestTags.DIAGNOSTICS_SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithText("Tudo pronto").assertIsDisplayed()
+        composeRule.onNodeWithText("Verifica", substring = true).assertIsDisplayed()
+        assertNoCommonUserFacingForbiddenTerms()
+        captureScreen("diagnostics_top")
+        composeRule.onNodeWithText("Teste", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Abrir app de motorista").performScrollTo().assertIsDisplayed()
+        assertNoCommonUserFacingForbiddenTerms()
+        captureScreen("diagnostics_bottom")
+    }
+
+    @Test
     fun capturesHomePaused() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         AppSettings.setMonitoringEnabled(context, false)
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
-        composeRule.onNodeWithText("Ligar cálculo automático").assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.HOME_PRIMARY_ACTION).performScrollTo().assertIsDisplayed()
         composeRule.onAllNodesWithTag(UiTestTags.MONITORING_SWITCH).assertCountEquals(0)
         composeRule.onAllNodesWithTag(UiTestTags.HOME_PRIMARY_ACTION).assertCountEquals(1)
         captureScreen("home_paused")
@@ -83,9 +132,7 @@ class InternalScreensVisualTest {
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
         composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
         composeRule.onNodeWithTag(UiTestTags.DRAWER_FINANCE_ITEM).performClick()
-        composeRule.onNodeWithTag(UiTestTags.FINANCE_SCREEN)
-            .performScrollToNode(hasText("Semáforo"))
-        composeRule.onNodeWithText("Semáforo").assertIsDisplayed()
+        composeRule.onNodeWithText("Como o semáforo usa sua meta").assertIsDisplayed()
         composeRule.onAllNodesWithText("Equilibrado").assertCountEquals(1)
         assertNoCommonUserFacingForbiddenTerms()
         captureScreen("goals")
@@ -103,18 +150,72 @@ class InternalScreensVisualTest {
     }
 
     @Test
+    fun capturesOverlayPosition() {
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_SETTINGS_ITEM).performClick()
+        composeRule.onNodeWithTag(UiTestTags.SETTINGS_POSITION_ROW).performScrollTo().performClick()
+        composeRule.onNodeWithTag(UiTestTags.OVERLAY_POSITION_SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithText("Escolha onde o aviso aparece").assertIsDisplayed()
+        assertNoCommonUserFacingForbiddenTerms()
+        captureScreen("overlay_position")
+    }
+
+    @Test
     fun capturesHelpAndPrivacy() {
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
         composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
         composeRule.onNodeWithTag(UiTestTags.DRAWER_HELP_ITEM).performClick()
         composeRule.onAllNodesWithTag(UiTestTags.FAQ_ITEM).assertCountEquals(5)
-        composeRule.onNodeWithText("O que significam as cores").assertIsDisplayed()
+        composeRule.onNodeWithText("O que o CalcMot faz?").assertIsDisplayed()
         assertNoCommonUserFacingForbiddenTerms()
         captureScreen("help")
 
         composeRule.onNodeWithTag(UiTestTags.HELP_PRIVACY_BUTTON).performScrollTo().performClick()
-        composeRule.onNodeWithText("O CalcMot calcula ofertas visíveis", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Sua decisão, seus dados").assertIsDisplayed()
+        composeRule.onNodeWithText("O que o CalcMot identifica").assertIsDisplayed()
         captureScreen("privacy")
+    }
+
+    @Test
+    fun capturesFeedbackSuccess() {
+        composeRule.setContent {
+            MetricaTheme {
+                FeedbackSuccessScreen(
+                    onBack = {},
+                    onHome = {},
+                    onSendAnotherFeedback = {}
+                )
+            }
+        }
+        composeRule.onNodeWithTag(UiTestTags.FEEDBACK_SUCCESS_SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithText("Feedback enviado").assertIsDisplayed()
+        assertNoCommonUserFacingForbiddenTerms()
+        captureScreen("feedback_success_top")
+
+        composeRule.onNodeWithText("Recebemos apenas o necessário").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.FEEDBACK_SUCCESS_HOME_BUTTON).performScrollTo().assertIsDisplayed()
+        assertNoCommonUserFacingForbiddenTerms()
+        captureScreen("feedback_success_bottom")
+    }
+
+    @Test
+    fun capturesFeedbackForm() {
+        composeRule.setContent {
+            MetricaTheme {
+                FeedbackScreen(
+                    onBack = {},
+                    onSubmit = {},
+                    onEmail = {}
+                )
+            }
+        }
+        composeRule.onNodeWithTag(UiTestTags.FEEDBACK_FORM_SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithText("Como podemos melhorar?").assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.FEEDBACK_TYPE_SUGGESTION).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.FEEDBACK_SUBMIT_BUTTON).performScrollTo().assertIsDisplayed()
+        assertNoCommonUserFacingForbiddenTerms()
+        captureScreen("feedback_form")
     }
 
     @Test

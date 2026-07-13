@@ -1,6 +1,7 @@
 package br.com.calcmot.processor
 
 import br.com.calcmot.DriverApp
+import br.com.calcmot.model.OfferCaptureSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -314,6 +315,74 @@ class OfferTreeExtractorTest {
 
         assertFalse(inspection.isCompleteOffer)
         assertEquals(TreeRejectionReason.INCOMPLETE_TIME_DISTANCE_BLOCKS, inspection.rejectionReason)
+    }
+
+    @Test
+    fun `compact priority card reaches trip data and overlay decision`() {
+        val snapshot = snapshot(
+            line("Priority", top = 120, left = 56, right = 220),
+            line("Exclusivo", top = 120, left = 230, right = 390),
+            line("R$ 11,05", top = 210, bottom = 300, left = 56, right = 360),
+            line("4,95 (449)", top = 330, left = 56, right = 260),
+            line("+R$ 1,79 incluido para prioridade de", top = 420, left = 56, right = 650),
+            line("4 min (0.9 km)", top = 650, left = 112, right = 360),
+            line("R. Bem-te-vi, Parque Pretoria, Franco da Rocha", top = 710, left = 112, right = 650),
+            line("10 minutos (4.1 km)", top = 820, left = 112, right = 420),
+            line("Av. Angelo Sestine, 119, Franco da Rocha", top = 880, left = 112, right = 650),
+            line("Aceitar", top = 1320, bottom = 1420, left = 56, right = 664)
+        )
+
+        val inspection = OfferTreeExtractor.inspect(snapshot)
+        val candidate = inspection.offerText?.let(OfferParser::parse)
+
+        assertTrue(inspection.isCompleteOffer)
+        assertTrue(inspection.hasActionButton)
+        assertNotNull(candidate)
+        assertEquals(11.05, candidate!!.price, 0.01)
+        assertEquals(0.9, candidate.pickupDistanceKm, 0.01)
+        assertEquals(4, candidate.pickupTimeMin)
+        assertEquals(4.1, candidate.tripDistanceKm, 0.01)
+        assertEquals(10, candidate.tripTimeMin)
+        assertEquals("11.05|0.9|4|4.1|10", candidate.fingerprint)
+
+        val tripData = candidate.toTripData()
+        assertNotNull(tripData)
+        assertEquals(5.0, tripData!!.distanciaKm, 0.01)
+        assertEquals(14, tripData.minutosTotais)
+        assertEquals(2.21, tripData.valorPorKm, 0.01)
+        assertEquals(47.36, tripData.valorPorHora, 0.01)
+
+        val decision = CaptureCoordinator(requiredMatchingFrames = 2).acceptCandidate(
+            source = OfferCaptureSource.ACCESSIBILITY_TREE,
+            candidate = candidate,
+            trustedSingleFrame = inspection.isCompleteOffer && inspection.hasActionButton,
+            driverApp = DriverApp.UBER
+        )
+        assertTrue(decision is CaptureDecision.ShowOverlay)
+    }
+
+    @Test
+    fun `compact pair requires action button and exactly two blocks`() {
+        val withoutButton = snapshot(
+            line("R$ 11,05", top = 210, bottom = 300),
+            line("4 min (0.9 km)", top = 650),
+            line("10 minutos (4.1 km)", top = 820)
+        )
+        val withExtraEta = snapshot(
+            line("R$ 11,05", top = 210, bottom = 300),
+            line("2 min (0.3 km)", top = 560),
+            line("4 min (0.9 km)", top = 650),
+            line("10 minutos (4.1 km)", top = 820),
+            line("Aceitar", top = 1320, bottom = 1420)
+        )
+
+        listOf(withoutButton, withExtraEta).forEach { unsafeSnapshot ->
+            val inspection = OfferTreeExtractor.inspect(unsafeSnapshot)
+
+            assertFalse(inspection.isCompleteOffer)
+            assertNull(inspection.offerText)
+            assertEquals(TreeRejectionReason.INCOMPLETE_TIME_DISTANCE_BLOCKS, inspection.rejectionReason)
+        }
     }
 
     @Test

@@ -128,7 +128,7 @@ fun OnboardingScreen(
     if (showPrivacyPolicy) {
         PrivacyPolicyScreen(
             onBack = { showPrivacyPolicy = false },
-            onSupport = { uriHandler.openUri("mailto:$CALCMOT_SUPPORT_EMAIL") }
+            onSupport = { uriHandler.openUri(CALCMOT_PRIVACY_POLICY_URL) }
         )
         return
     }

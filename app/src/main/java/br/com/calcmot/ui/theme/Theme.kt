@@ -3,6 +3,8 @@ package br.com.calcmot.ui.theme
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.graphics.Color
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
@@ -23,7 +25,12 @@ fun MetricaTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composabl
             if (activity != null) {
                 val window = activity.window
                 window.statusBarColor = colorScheme.background.toArgb()
+                window.navigationBarColor = Color.TRANSPARENT
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    window.isNavigationBarContrastEnforced = false
+                }
                 WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+                WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
             }
         }
     }

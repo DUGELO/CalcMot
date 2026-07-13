@@ -279,7 +279,10 @@ class UberAccessibilityService : AccessibilityService() {
         }
 
         val activeFocusedDriverApp = activeFocusedDriverAppForGuard()
-        if (activeFocusedDriverApp != DriverApp.UNKNOWN && activeFocusedDriverApp != eventDriverApp) {
+        if (activeFocusedDriverApp != DriverApp.UNKNOWN &&
+            activeFocusedDriverApp != eventDriverApp &&
+            !event.isForegroundDefiningEvent()
+        ) {
             Log.w(
                 TAG,
                 "CALCMOT_BACKGROUND_DRIVER_EVENT_IGNORED " +
@@ -302,7 +305,8 @@ class UberAccessibilityService : AccessibilityService() {
         if (eventDriverApp == DriverApp.NINETY_NINE) {
             ninetyNineDiagnostics.recordEvent(event, event.eventType.debugEventName())
         }
-        if (!event.isRelevantDriverEvent(eventDriverApp)) return
+        val isDriverAppSwitchRecoveryEvent = event.isDriverAppSwitchRecoveryEvent(eventDriverApp)
+        if (!event.isRelevantDriverEvent(eventDriverApp) && !isDriverAppSwitchRecoveryEvent) return
 
         val eventCopy = AccessibilityEvent.obtain(event)
         AppDiagnostics.recordEvent(this, event.eventType)
@@ -739,10 +743,10 @@ class UberAccessibilityService : AccessibilityService() {
                     continue
                 }
                 runCatching {
-                    bootstrapNinetyNineForegroundFromActiveRoot()
+                    bootstrapDriverForegroundFromActiveRoot()
                 }.onFailure { error ->
                     if (BuildConfig.DEBUG) {
-                        Log.e(TAG, "CALCMOT_99_FOREGROUND_BOOTSTRAP_FAILED", error)
+                        Log.e(TAG, "CALCMOT_DRIVER_FOREGROUND_BOOTSTRAP_FAILED", error)
                     }
                 }
                 if (!isCurrentForegroundPackageAllowed()) {
@@ -761,37 +765,61 @@ class UberAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun bootstrapNinetyNineForegroundFromActiveRoot() {
-        if (trustedForegroundDriverApp == DriverApp.NINETY_NINE &&
-            trustedForegroundDecision == PackageDecision.DRIVER_APP
+    private fun bootstrapDriverForegroundFromActiveRoot() {
+        if (trustedForegroundDecision == PackageDecision.DRIVER_APP &&
+            trustedForegroundDriverApp != DriverApp.UNKNOWN &&
+            hasUberRootAvailable()
         ) {
             return
         }
 
-        val rootPackage = rootInActiveWindow
+        val activeRoot = rootInActiveWindow
+        val rootDriverApp = driverAppFromRoot(activeRoot)
+        val rootPackage = activeRoot
             ?.packageName
             ?.toString()
-            ?.takeIf { DriverAppPackagePolicy.driverAppForPackage(it) == DriverApp.NINETY_NINE }
+            ?.takeIf { rootDriverApp != null && rootDriverApp != DriverApp.UNKNOWN }
         val interactiveWindows = if (rootPackage == null) allInteractiveWindowsForScan() else emptyList()
+        val activeWindowRoot = interactiveWindows
+            .firstOrNull { window ->
+                (window.isActive || window.isFocused) &&
+                    window.root.resolvedDriverApp() != DriverApp.UNKNOWN
+            }
+            ?.root
+        val activeDriverApp = rootDriverApp
+            ?: driverAppFromRoot(activeWindowRoot)
+            ?: DriverApp.UNKNOWN
         val activePackage = rootPackage
             ?: interactiveWindows
                 .firstOrNull { window ->
                     (window.isActive || window.isFocused) &&
-                        DriverApp.NINETY_NINE.ownsPackage(window.root?.packageName)
+                        window.root.resolvedDriverApp() != DriverApp.UNKNOWN
                 }
                 ?.root
                 ?.packageName
                 ?.toString()
             ?: return
+        if (activeDriverApp == DriverApp.UNKNOWN) return
 
-        switchDriverAppIfNeeded(DriverApp.NINETY_NINE, activePackage)
-        configureRuntimeProfileForDriverApp(DriverApp.NINETY_NINE)
-        AppSettings.setLastDriverApp(this, DriverApp.NINETY_NINE)
+        switchDriverAppIfNeeded(activeDriverApp, activePackage)
+        configureRuntimeProfileForDriverApp(activeDriverApp)
+        AppSettings.setLastDriverApp(this, activeDriverApp)
         updateTrustedForeground(activePackage, PackageDecision.DRIVER_APP)
         overlayManager?.setForegroundPackage(activePackage)
-        ninetyNineDiagnostics.recordServiceConfiguration(
-            "foreground-bootstrap=active-root package=${DriverAppPackagePolicy.describe(activePackage)}"
+        Log.w(
+            TAG,
+            "CALCMOT_DRIVER_FOREGROUND_BOOTSTRAP driver=${activeDriverApp.id} " +
+                "package=${DriverAppPackagePolicy.describe(activePackage)}"
         )
+        if (activeDriverApp == DriverApp.NINETY_NINE) {
+            ninetyNineDiagnostics.recordServiceConfiguration(
+                "foreground-bootstrap=active-root package=${DriverAppPackagePolicy.describe(activePackage)}"
+            )
+        }
+    }
+
+    private fun bootstrapNinetyNineForegroundFromActiveRoot() {
+        bootstrapDriverForegroundFromActiveRoot()
     }
 
     private suspend fun runFocusedNinetyNineHeartbeatScanIfNeeded() {
@@ -971,8 +999,12 @@ class UberAccessibilityService : AccessibilityService() {
 
     private suspend fun runFocusedUberWatchdogScanIfNeeded() {
         val now = System.currentTimeMillis()
-        if (overlayManager?.isVisible != true) return
-        if (now - lastWatchdogScanAtMillis < ACCESSIBILITY_WATCHDOG_SCAN_INTERVAL_MS) return
+        val scanInterval = if (overlayManager?.isVisible == true) {
+            ACCESSIBILITY_WATCHDOG_SCAN_INTERVAL_MS
+        } else {
+            UBER_FOREGROUND_RECOVERY_SCAN_INTERVAL_MS
+        }
+        if (now - lastWatchdogScanAtMillis < scanInterval) return
         if (capturePipelineJob?.isActive == true || accessibilityPollingJob?.isActive == true) return
         if (!isCurrentForegroundPackageAllowed()) return
         if (!hasUberRootAvailable()) return
@@ -1026,6 +1058,10 @@ class UberAccessibilityService : AccessibilityService() {
         return DriverApp.supported.firstOrNull { driverApp ->
             root.containsDriverPackage(driverApp)
         }
+    }
+
+    private fun AccessibilityNodeInfo?.resolvedDriverApp(): DriverApp {
+        return driverAppFromRoot(this) ?: DriverApp.UNKNOWN
     }
 
     private fun isCurrentForegroundPackageAllowed(): Boolean {
@@ -2841,6 +2877,12 @@ class UberAccessibilityService : AccessibilityService() {
         return DriverAccessibilityEventPolicy.isRelevant(driverApp, eventType)
     }
 
+    private fun AccessibilityEvent.isDriverAppSwitchRecoveryEvent(driverApp: DriverApp): Boolean {
+        return driverApp == DriverApp.UBER &&
+            trustedForegroundDriverApp != DriverApp.UBER &&
+            eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
+    }
+
     private fun AccessibilityEvent.isForegroundDefiningEvent(): Boolean {
         return eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
     }
@@ -2873,6 +2915,7 @@ class UberAccessibilityService : AccessibilityService() {
         const val EVENT_SOURCE_PARENT_ATTEMPTS = 8
         const val ACCESSIBILITY_HEARTBEAT_INTERVAL_MS = 1_000L
         const val ACCESSIBILITY_WATCHDOG_SCAN_INTERVAL_MS = 2_000L
+        const val UBER_FOREGROUND_RECOVERY_SCAN_INTERVAL_MS = 1_000L
         const val NINETY_NINE_HEARTBEAT_SCAN_INTERVAL_MS = 750L
         const val ACCESSIBILITY_POLL_WINDOW_MS = 2_500L
         const val ACCESSIBILITY_POLL_INTERVAL_MS = 250L

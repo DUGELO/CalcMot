@@ -110,7 +110,57 @@ class CaptureLearningLab(context: Context) {
                     field("fieldCandidateCount", inspection.fieldCandidates.size)
                     field("knownNodeMappingCount", inspection.knownNodeMappings.size)
                     field("fingerprint", null)
-                    field("containsRawText", false, trailingComma = false)
+                    field("containsRawText", true)
+                    append("\"rawLines\":[")
+                    snapshot.lines
+                        .filter { it.visibleToUser }
+                        .take(MAX_RAW_LINES_PER_SNAPSHOT)
+                        .forEachIndexed { index, line ->
+                            if (index > 0) append(",")
+                            append("{")
+                            field("text", line.text)
+                            field("source", line.source.name)
+                            field("packageName", line.packageName)
+                            field("viewId", line.viewId)
+                            field("top", line.bounds.top)
+                            field("bottom", line.bounds.bottom)
+                            field("left", line.bounds.left)
+                            field("right", line.bounds.right, trailingComma = false)
+                            append("}")
+                        }
+                    append("]")
+                    append(",\"rawNodes\":[")
+                    snapshot.nodes
+                        .filter {
+                            !it.textRaw.isNullOrBlank() ||
+                                !it.contentDescriptionRaw.isNullOrBlank() ||
+                                !it.stateDescriptionRaw.isNullOrBlank() ||
+                                !it.extrasSummary.isNullOrBlank() ||
+                                !it.viewIdResourceName.isNullOrBlank()
+                        }
+                        .take(MAX_RAW_NODES_PER_SNAPSHOT)
+                        .forEachIndexed { index, node ->
+                            if (index > 0) append(",")
+                            append("{")
+                            field("snapshotId", node.snapshotId)
+                            field("parentSnapshotId", node.parentSnapshotId ?: -1)
+                            field("textRaw", node.textRaw)
+                            field("contentDescriptionRaw", node.contentDescriptionRaw)
+                            field("stateDescriptionRaw", node.stateDescriptionRaw)
+                            field("paneTitleRaw", node.paneTitleRaw)
+                            field("hintTextRaw", node.hintTextRaw)
+                            field("tooltipTextRaw", node.tooltipTextRaw)
+                            field("extrasSummary", node.extrasSummary)
+                            field("viewIdResourceName", node.viewIdResourceName)
+                            field("className", node.className)
+                            field("packageName", node.packageName)
+                            field("top", node.boundsInScreen.top)
+                            field("bottom", node.boundsInScreen.bottom)
+                            field("left", node.boundsInScreen.left)
+                            field("right", node.boundsInScreen.right, trailingComma = false)
+                            append("}")
+                        }
+                    append("]")
                     append("}")
                 },
                 Charsets.UTF_8
@@ -192,5 +242,7 @@ class CaptureLearningLab(context: Context) {
 
     private companion object {
         const val MAX_EVENTS_PER_SESSION = 1_000
+        const val MAX_RAW_LINES_PER_SNAPSHOT = 80
+        const val MAX_RAW_NODES_PER_SNAPSHOT = 120
     }
 }

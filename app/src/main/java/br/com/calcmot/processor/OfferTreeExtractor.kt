@@ -386,6 +386,31 @@ object OfferTreeExtractor {
         return emptyList()
     }
 
+    private fun selectStrictCompactCardTripBlocks(
+        lines: List<AccessibleLine>,
+        priceLine: AccessibleLine,
+        buttonLine: AccessibleLine
+    ): List<TreeTripBlock> {
+        val compactBlocks = lines.mapIndexedNotNull { index, line ->
+            if (line.bounds.centerY <= priceLine.bounds.centerY ||
+                line.bounds.centerY >= buttonLine.bounds.centerY ||
+                line.source == AccessibleTextSource.VIEW_ID_RESOURCE_NAME ||
+                compactOfferLineRegex.matchEntire(normalize(line.text)) == null
+            ) {
+                return@mapIndexedNotNull null
+            }
+
+            TreeTripBlock(
+                startIndex = index,
+                endIndex = index,
+                text = line.text,
+                bounds = line.bounds
+            )
+        }
+
+        return compactBlocks.takeIf { it.size == REQUIRED_TRIP_BLOCKS }.orEmpty()
+    }
+
     private fun TreeTripBlock.looksLikePickupDistanceBlock(): Boolean {
         return pickupOfferLine() != null
     }
@@ -404,12 +429,25 @@ object OfferTreeExtractor {
         return "Viagem de ${match.groupValues[1]} (${match.groupValues[2]})"
     }
 
+    private fun TreeTripBlock.compactTimeDistance(): Pair<String, String>? {
+        val match = compactOfferLineRegex.matchEntire(normalize(text)) ?: return null
+        return match.groupValues[1] to match.groupValues[2]
+    }
+
     private fun buildOfferText(
         priceLine: AccessibleLine,
         orderedBlocks: List<TreeTripBlock>
     ): String {
-        val pickupLine = orderedBlocks.getOrNull(0)?.pickupOfferLine()
-        val tripLine = orderedBlocks.getOrNull(1)?.tripOfferLine()
+        val pickupBlock = orderedBlocks.getOrNull(0)
+        val tripBlock = orderedBlocks.getOrNull(1)
+        val pickupLine = pickupBlock?.pickupOfferLine()
+            ?: pickupBlock?.compactTimeDistance()?.let { (duration, distance) ->
+                "$duration ($distance) de distancia"
+            }
+        val tripLine = tripBlock?.tripOfferLine()
+            ?: tripBlock?.compactTimeDistance()?.let { (duration, distance) ->
+                "Viagem de $duration ($distance)"
+            }
         return buildList {
             add(priceLine.text)
             pickupLine?.let { add(it) }
@@ -454,7 +492,15 @@ object OfferTreeExtractor {
                 it.bounds.centerY > priceLine.bounds.centerY &&
                     it.bounds.centerY < cardBottom
             }
-        val cardTripBlocks = selectCardTripBlocks(candidateTripBlocks)
+        val cardTripBlocks = selectCardTripBlocks(candidateTripBlocks).ifEmpty {
+            buttonLine?.let {
+                selectStrictCompactCardTripBlocks(
+                    lines = lines,
+                    priceLine = priceLine,
+                    buttonLine = it
+                )
+            }.orEmpty()
+        }
         if (cardTripBlocks.size != REQUIRED_TRIP_BLOCKS) return null
 
         val orderedBlocks = cardTripBlocks.sortedBy { it.bounds.centerY }
@@ -634,6 +680,7 @@ object OfferTreeExtractor {
     private val distanceTextPattern = """[0-9]+(?:[.,][0-9]+)?\s*km"""
     private val pickupOfferLineRegex = Regex("""\b($durationTextPattern)\s*\(?\s*($distanceTextPattern)\s*\)?\s*de\s+distancia\b""")
     private val tripOfferLineRegex = Regex("""\bviagem\s+de\s+($durationTextPattern)\s*\(?\s*($distanceTextPattern)\s*\)?""")
+    private val compactOfferLineRegex = Regex("""^($durationTextPattern)\s*\(\s*($distanceTextPattern)\s*\)$""")
     private val durationMarkerRegex = Regex("""\b[0-9]{1,3}\s*(?:h|hora(?:s)?|min|minuto(?:s)?)\b|[0-9]{1,2}h\s*[0-9]{1,2}""")
     private val roadNumberRegex = Regex("""^\d{2,4}$""")
     private val primaryFareSplitRegex = Regex("""(?i)(\+?\s*R\$\s*[0-9]+(?:[.,][0-9]{1,2})?)""")

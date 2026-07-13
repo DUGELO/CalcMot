@@ -2,6 +2,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
+        <activity
+            android:name=".debug.PrototypePreviewActivity"
+            android:exported="true"
+            android:theme="@style/Theme.CalcMot">
+            <intent-filter>
+                <action android:name="br.com.calcmot.DEBUG_PROTOTYPE_PREVIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".debug.UiAutomatorProbeReceiver"
             android:exported="true">
