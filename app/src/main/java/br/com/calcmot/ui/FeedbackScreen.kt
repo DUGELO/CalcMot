@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -39,6 +41,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,13 +50,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,18 +69,21 @@ import androidx.compose.ui.unit.sp
 import br.com.calcmot.ui.design.theme.CalcMotTheme
 import br.com.calcmot.ui.design.tokens.CalcMotColors
 import br.com.calcmot.ui.design.tokens.CalcMotShape
+import kotlinx.coroutines.launch
 
 @Composable
 fun FeedbackScreen(
     onBack: () -> Unit,
-    onSubmit: () -> Unit,
-    onEmail: () -> Unit,
+    onSubmit: (FeedbackDraft) -> FeedbackSubmitResult,
     modifier: Modifier = Modifier,
     supportEmail: String = CALCMOT_SUPPORT_EMAIL
 ) {
-    var selectedType by remember { mutableStateOf(FeedbackType.SUGGESTION) }
-    var message by remember { mutableStateOf("") }
-    var includeAppInfo by remember { mutableStateOf(false) }
+    var selectedType by rememberSaveable { mutableStateOf(FeedbackType.SUGGESTION) }
+    var message by rememberSaveable { mutableStateOf("") }
+    var includeAppInfo by rememberSaveable { mutableStateOf(false) }
+    var messageError by rememberSaveable { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     Box(
         modifier = modifier
@@ -87,6 +97,7 @@ fun FeedbackScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(9.dp)
@@ -97,7 +108,11 @@ fun FeedbackScreen(
                 selectedType = selectedType,
                 onTypeSelected = { selectedType = it },
                 message = message,
-                onMessageChange = { message = it.take(MAX_FEEDBACK_LENGTH) },
+                onMessageChange = {
+                    message = it.take(MAX_FEEDBACK_LENGTH)
+                    messageError = null
+                },
+                messageError = messageError,
                 includeAppInfo = includeAppInfo,
                 onIncludeAppInfoChange = { includeAppInfo = it },
                 modifier = Modifier.fillMaxWidth()
@@ -108,7 +123,25 @@ fun FeedbackScreen(
                     .fillMaxWidth()
                     .heightIn(min = 58.dp)
                     .testTag(UiTestTags.FEEDBACK_SUBMIT_BUTTON),
-                onClick = onSubmit,
+                onClick = {
+                    val trimmedMessage = message.trim()
+                    if (trimmedMessage.isEmpty()) {
+                        messageError = "Escreva uma mensagem para continuar."
+                    } else {
+                        val result = onSubmit(
+                            FeedbackDraft(
+                                typeLabel = selectedType.label,
+                                message = trimmedMessage,
+                                includeAppInfo = includeAppInfo
+                            )
+                        )
+                        if (result == FeedbackSubmitResult.NO_EMAIL_APP) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Nenhum app de e-mail foi encontrado.")
+                            }
+                        }
+                    }
+                },
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = CalcMotColors.PrimaryActionBlue,
@@ -124,19 +157,6 @@ fun FeedbackScreen(
                 Text(
                     text = "Enviar feedback",
                     fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            TextButton(
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .testTag(UiTestTags.FEEDBACK_EMAIL_BUTTON),
-                onClick = onEmail
-            ) {
-                Text(
-                    text = "Enviar por e-mail",
-                    color = CalcMotColors.BrandSecondary,
-                    fontSize = 18.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -162,6 +182,13 @@ fun FeedbackScreen(
                 )
             }
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(16.dp)
+        )
     }
 }
 
@@ -267,6 +294,7 @@ private fun FeedbackFormCard(
     onTypeSelected: (FeedbackType) -> Unit,
     message: String,
     onMessageChange: (String) -> Unit,
+    messageError: String?,
     includeAppInfo: Boolean,
     onIncludeAppInfoChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
@@ -312,6 +340,7 @@ private fun FeedbackFormCard(
         OutlinedTextField(
             value = message,
             onValueChange = onMessageChange,
+            isError = messageError != null,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(132.dp)
@@ -324,12 +353,18 @@ private fun FeedbackFormCard(
                 )
             },
             supportingText = {
-                Text(
-                    text = "${message.length}/$MAX_FEEDBACK_LENGTH",
-                    modifier = Modifier.fillMaxWidth(),
-                    color = CalcMotColors.TextSecondary,
-                    textAlign = TextAlign.End
-                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = messageError.orEmpty(),
+                        modifier = Modifier.weight(1f),
+                        color = if (messageError == null) CalcMotColors.TextSecondary else CalcMotColors.Danger
+                    )
+                    Text(
+                        text = "${message.length}/$MAX_FEEDBACK_LENGTH",
+                        color = CalcMotColors.TextSecondary,
+                        textAlign = TextAlign.End
+                    )
+                }
             },
             minLines = 4,
             maxLines = 5,
@@ -409,7 +444,11 @@ private fun FeedbackTypeChip(
                 if (selected) CalcMotColors.Success.copy(alpha = 0.08f) else Color.Transparent,
                 RoundedCornerShape(50.dp)
             )
-            .clickable(onClick = onClick)
+            .selectable(
+                selected = selected,
+                onClick = onClick,
+                role = Role.RadioButton
+            )
             .padding(horizontal = 8.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
@@ -501,7 +540,7 @@ private fun FeedbackFormBackground() {
     )
 }
 
-private enum class FeedbackType(
+internal enum class FeedbackType(
     val label: String,
     val icon: ImageVector,
     val testTag: String
@@ -509,6 +548,17 @@ private enum class FeedbackType(
     PROBLEM("Problema", Icons.Outlined.ReportProblem, UiTestTags.FEEDBACK_TYPE_PROBLEM),
     SUGGESTION("Sugestão", Icons.Outlined.Lightbulb, UiTestTags.FEEDBACK_TYPE_SUGGESTION),
     QUESTION("Dúvida", Icons.AutoMirrored.Outlined.HelpOutline, UiTestTags.FEEDBACK_TYPE_QUESTION)
+}
+
+data class FeedbackDraft(
+    val typeLabel: String,
+    val message: String,
+    val includeAppInfo: Boolean
+)
+
+enum class FeedbackSubmitResult {
+    OPENED,
+    NO_EMAIL_APP
 }
 
 private const val MAX_FEEDBACK_LENGTH = 1000
@@ -519,8 +569,7 @@ private fun FeedbackScreenPreview() {
     CalcMotTheme {
         FeedbackScreen(
             onBack = {},
-            onSubmit = {},
-            onEmail = {}
+            onSubmit = { FeedbackSubmitResult.OPENED }
         )
     }
 }

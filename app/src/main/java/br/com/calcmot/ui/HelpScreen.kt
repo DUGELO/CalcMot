@@ -33,14 +33,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -211,7 +217,11 @@ private fun HelpFaqCard(
     modifier: Modifier = Modifier,
     onOpenPrivacy: () -> Unit
 ) {
-    val expanded = remember { mutableStateListOf(true, true, true, true, true) }
+    var expanded by rememberSaveable { mutableStateOf(BooleanArray(5)) }
+
+    fun toggle(index: Int) {
+        expanded = expanded.copyOf().also { it[index] = !it[index] }
+    }
     Column(
         modifier = modifier
             .border(
@@ -234,35 +244,35 @@ private fun HelpFaqCard(
             title = "O que o CalcMot faz?",
             body = "Ele mostra R$/km, R$/h e uma classificação simples para ajudar você a decidir se uma oferta compensa.",
             expanded = expanded[0],
-            onToggle = { expanded[0] = !expanded[0] }
+            onToggle = { toggle(0) }
         )
         HelpFaqItem(
             number = 2,
             title = "Por que preciso ativar acessibilidade?",
             body = "As ofertas aparecem em outro app e duram poucos segundos. A acessibilidade permite que o CalcMot identifique informações visíveis da oferta e mostre o cálculo de forma mais clara.",
             expanded = expanded[1],
-            onToggle = { expanded[1] = !expanded[1] }
+            onToggle = { toggle(1) }
         )
         HelpFaqItem(
             number = 3,
             title = "O CalcMot aceita corrida sozinho?",
             body = "Não. O CalcMot não toca na tela, não aceita e não recusa corridas.",
             expanded = expanded[2],
-            onToggle = { expanded[2] = !expanded[2] }
+            onToggle = { toggle(2) }
         )
         HelpFaqItem(
             number = 4,
-            title = "O CalcMot funciona fora dos apps\nde motorista?",
+            title = "O CalcMot funciona fora dos apps de motorista?",
             body = "Fora dos apps compatíveis, ele fica em espera.",
             expanded = expanded[3],
-            onToggle = { expanded[3] = !expanded[3] }
+            onToggle = { toggle(3) }
         )
         HelpFaqItem(
             number = 5,
             title = "Como a classificação é calculada?",
             body = "O app compara R$/km e R$/h com a meta que você definiu.",
             expanded = expanded[4],
-            onToggle = { expanded[4] = !expanded[4] },
+            onToggle = { toggle(4) },
             showDivider = false
         )
 
@@ -315,6 +325,10 @@ private fun HelpFaqItem(
         modifier = Modifier
             .testTag(UiTestTags.FAQ_ITEM)
             .clickable(onClick = onToggle)
+            .semantics {
+                role = Role.Button
+                stateDescription = if (expanded) "Resposta expandida" else "Resposta recolhida"
+            }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -354,7 +368,7 @@ private fun HelpFaqItem(
                     )
                     Icon(
                         imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = if (expanded) "Recolher resposta" else "Expandir resposta",
+                        contentDescription = null,
                         tint = CalcMotColors.TextSecondary,
                         modifier = Modifier.size(22.dp)
                     )

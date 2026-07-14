@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -29,7 +30,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import br.com.calcmot.ui.design.tokens.CalcMotColors
 import br.com.calcmot.ui.design.tokens.CalcMotShape
@@ -151,7 +155,7 @@ fun CalcMotButton(
     val shape = RoundedCornerShape(CalcMotShape.Sm)
     when (variant) {
         CalcMotButtonVariant.GHOST -> TextButton(
-            modifier = modifier.heightIn(min = 44.dp),
+            modifier = modifier.heightIn(min = 48.dp),
             onClick = onClick,
             enabled = enabled,
             shape = shape
@@ -160,7 +164,7 @@ fun CalcMotButton(
         }
 
         CalcMotButtonVariant.SECONDARY -> OutlinedButton(
-            modifier = modifier.heightIn(min = 44.dp),
+            modifier = modifier.heightIn(min = 48.dp),
             onClick = onClick,
             enabled = enabled,
             shape = shape,
@@ -170,7 +174,7 @@ fun CalcMotButton(
         }
 
         else -> Button(
-            modifier = modifier.heightIn(min = 44.dp),
+            modifier = modifier.heightIn(min = 48.dp),
             onClick = onClick,
             enabled = enabled,
             shape = shape,
@@ -193,7 +197,7 @@ fun CalcMotIconButton(
     modifier: Modifier = Modifier
 ) {
     TextButton(
-        modifier = modifier.heightIn(min = 40.dp),
+        modifier = modifier.heightIn(min = 48.dp),
         onClick = onClick,
         shape = RoundedCornerShape(CalcMotShape.Sm)
     ) {
@@ -241,6 +245,7 @@ fun CalcMotTextField(
     isError: Boolean = false,
     supportingText: String? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
     singleLine: Boolean = true
 ) {
     OutlinedTextField(
@@ -252,6 +257,7 @@ fun CalcMotTextField(
         isError = isError,
         supportingText = supportingText?.let { { Text(it) } },
         keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
         singleLine = singleLine
     )
 }
@@ -264,7 +270,9 @@ fun CalcMotNumberField(
     modifier: Modifier = Modifier,
     placeholder: String? = null,
     isError: Boolean = false,
-    supportingText: String? = null
+    supportingText: String? = null,
+    imeAction: ImeAction = ImeAction.Done,
+    keyboardActions: KeyboardActions = KeyboardActions.Default
 ) {
     CalcMotTextField(
         value = value,
@@ -274,7 +282,11 @@ fun CalcMotNumberField(
         placeholder = placeholder,
         isError = isError,
         supportingText = supportingText,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Decimal,
+            imeAction = imeAction
+        ),
+        keyboardActions = keyboardActions
     )
 }
 
@@ -288,7 +300,12 @@ fun CalcMotSectionHeader(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Xs)
     ) {
-        Text(text = title, style = CalcMotTypography.ScreenTitle, color = CalcMotColors.TextPrimary)
+        Text(
+            text = title,
+            modifier = Modifier.semantics { heading() },
+            style = CalcMotTypography.ScreenTitle,
+            color = CalcMotColors.TextPrimary
+        )
         subtitle?.let {
             Text(text = it, style = CalcMotTypography.ScreenSubtitle, color = CalcMotColors.TextSecondary)
         }

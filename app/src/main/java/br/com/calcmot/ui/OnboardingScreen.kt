@@ -1,5 +1,6 @@
 package br.com.calcmot.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -44,7 +45,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -85,12 +85,12 @@ import kotlinx.coroutines.launch
 @Composable
 fun OnboardingScreen(
     permissionState: AppPermissionState,
-    onPermissionsRefresh: () -> Unit
+    onPermissionsRefresh: () -> Unit,
+    onOpenPrivacy: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
-    var showPrivacyPolicy by remember { mutableStateOf(false) }
     val pages = remember { accessibilityOnboardingPages() }
     val lastPage = pages.lastIndex
     val pagerState = rememberPagerState(
@@ -119,18 +119,16 @@ fun OnboardingScreen(
         }
     }
 
+    BackHandler(enabled = pagerState.currentPage > 0) {
+        scope.launch {
+            pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0))
+        }
+    }
+
     fun openAccessibilitySettings() {
         runCatching {
             openAccessibilitySettings(context)
         }
-    }
-
-    if (showPrivacyPolicy) {
-        PrivacyPolicyScreen(
-            onBack = { showPrivacyPolicy = false },
-            onSupport = { uriHandler.openUri(CALCMOT_PRIVACY_POLICY_URL) }
-        )
-        return
     }
 
     Scaffold(containerColor = CalcMotColors.HeroBackground) { innerPadding ->
@@ -170,11 +168,6 @@ fun OnboardingScreen(
                     currentPage = pagerState.currentPage,
                     lastPage = lastPage,
                     permissionState = permissionState,
-                    onBack = {
-                        scope.launch {
-                            pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0))
-                        }
-                    },
                     onNext = {
                         scope.launch {
                             pagerState.animateScrollToPage((pagerState.currentPage + 1).coerceAtMost(lastPage))
@@ -191,7 +184,7 @@ fun OnboardingScreen(
                     ) {
                         TextButton(
                             modifier = Modifier.testTag(UiTestTags.PRIVACY_LINK),
-                            onClick = { showPrivacyPolicy = true }
+                            onClick = onOpenPrivacy
                         ) {
                             Text(
                                 text = "Ver política de privacidade",
@@ -208,7 +201,7 @@ fun OnboardingScreen(
                     ) {
                         TextButton(
                             modifier = Modifier.testTag(UiTestTags.PRIVACY_LINK),
-                            onClick = { showPrivacyPolicy = true }
+                            onClick = onOpenPrivacy
                         ) {
                             Text("Privacidade")
                         }
@@ -691,7 +684,6 @@ private fun OnboardingActions(
     currentPage: Int,
     lastPage: Int,
     permissionState: AppPermissionState,
-    onBack: () -> Unit,
     onNext: () -> Unit,
     onOpenAccessibilitySettings: () -> Unit,
     onPermissionsRefresh: () -> Unit

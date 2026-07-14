@@ -23,6 +23,7 @@ object AppSettings {
     private const val KEY_DRIVER_GOAL_MIN_VALUE_PER_HOUR = "driver_goal_min_value_per_hour"
     private const val KEY_DRIVER_GOAL_MODE = "driver_goal_mode"
     private const val KEY_LAST_DRIVER_APP = "last_driver_app"
+    private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
 
     fun isMonitoringEnabled(context: Context): Boolean {
         return context.applicationContext
@@ -178,6 +179,30 @@ object AppSettings {
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_LAST_DRIVER_APP, driverApp.id)
+            .apply()
+    }
+
+    fun isOnboardingCompleted(context: Context, accessibilityEnabled: Boolean): Boolean {
+        val appContext = context.applicationContext
+        val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs.contains(KEY_ONBOARDING_COMPLETED)) {
+            return prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false)
+        }
+
+        val packageInfo = appContext.packageManager.getPackageInfo(appContext.packageName, 0)
+        val isExistingInstallation = packageInfo.lastUpdateTime > packageInfo.firstInstallTime
+        val migratedValue = accessibilityEnabled || isExistingInstallation
+        if (migratedValue) {
+            prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, true).apply()
+        }
+        return migratedValue
+    }
+
+    fun setOnboardingCompleted(context: Context, completed: Boolean) {
+        context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_ONBOARDING_COMPLETED, completed)
             .apply()
     }
 }

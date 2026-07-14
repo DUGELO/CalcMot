@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Color
 import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
@@ -15,7 +14,7 @@ import br.com.calcmot.ui.design.theme.CalcMotColorScheme
 import br.com.calcmot.ui.design.theme.CalcMotTheme
 
 @Composable
-fun MetricaTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun MetricaTheme(content: @Composable () -> Unit) {
     val colorScheme = CalcMotColorScheme.Dark
 
     val view = LocalView.current
@@ -29,7 +28,7 @@ fun MetricaTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composabl
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     window.isNavigationBarContrastEnforced = false
                 }
-                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
                 WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
             }
         }

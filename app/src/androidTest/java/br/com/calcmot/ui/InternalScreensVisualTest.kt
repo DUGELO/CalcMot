@@ -21,7 +21,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.platform.app.InstrumentationRegistry
-import br.com.calcmot.AppDiagnostics
 import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
 import br.com.calcmot.OverlayPositionPreference
@@ -89,34 +88,6 @@ class InternalScreensVisualTest {
     }
 
     @Test
-    fun capturesDiagnostics() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.setContent {
-            MetricaTheme {
-                DiagnosticsScreen(
-                    snapshot = AppDiagnostics.read(context),
-                    hasAccessibility = true,
-                    monitoringEnabled = true,
-                    goalPerKm = "R$ 1,80/km",
-                    goalPerHour = "R$ 35/h",
-                    onBack = {},
-                    onOpenDriverApp = {},
-                    onOpenHelp = {}
-                )
-            }
-        }
-        composeRule.onNodeWithTag(UiTestTags.DIAGNOSTICS_SCREEN).assertIsDisplayed()
-        composeRule.onNodeWithText("Tudo pronto").assertIsDisplayed()
-        composeRule.onNodeWithText("Verifica", substring = true).assertIsDisplayed()
-        assertNoCommonUserFacingForbiddenTerms()
-        captureScreen("diagnostics_top")
-        composeRule.onNodeWithText("Teste", substring = true).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Abrir app de motorista").performScrollTo().assertIsDisplayed()
-        assertNoCommonUserFacingForbiddenTerms()
-        captureScreen("diagnostics_bottom")
-    }
-
-    @Test
     fun capturesHomePaused() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         AppSettings.setMonitoringEnabled(context, false)
@@ -178,35 +149,12 @@ class InternalScreensVisualTest {
     }
 
     @Test
-    fun capturesFeedbackSuccess() {
-        composeRule.setContent {
-            MetricaTheme {
-                FeedbackSuccessScreen(
-                    onBack = {},
-                    onHome = {},
-                    onSendAnotherFeedback = {}
-                )
-            }
-        }
-        composeRule.onNodeWithTag(UiTestTags.FEEDBACK_SUCCESS_SCREEN).assertIsDisplayed()
-        composeRule.onNodeWithText("Feedback enviado").assertIsDisplayed()
-        assertNoCommonUserFacingForbiddenTerms()
-        captureScreen("feedback_success_top")
-
-        composeRule.onNodeWithText("Recebemos apenas o necessário").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithTag(UiTestTags.FEEDBACK_SUCCESS_HOME_BUTTON).performScrollTo().assertIsDisplayed()
-        assertNoCommonUserFacingForbiddenTerms()
-        captureScreen("feedback_success_bottom")
-    }
-
-    @Test
     fun capturesFeedbackForm() {
         composeRule.setContent {
             MetricaTheme {
                 FeedbackScreen(
                     onBack = {},
-                    onSubmit = {},
-                    onEmail = {}
+                    onSubmit = { FeedbackSubmitResult.OPENED }
                 )
             }
         }
@@ -228,7 +176,7 @@ class InternalScreensVisualTest {
                 )
             }
         }
-        composeRule.onNodeWithText("Veja se a corrida compensa antes de aceitar.").assertIsDisplayed()
+        composeRule.onNodeWithText("Decida corridas", substring = true).assertIsDisplayed()
         composeRule.onAllNodesWithTag(UiTestTags.FINISH_ONBOARDING_BUTTON).assertCountEquals(0)
         assertNoCommonUserFacingForbiddenTerms()
         captureScreen("onboarding")
@@ -237,9 +185,11 @@ class InternalScreensVisualTest {
     private fun renderHome(permissionState: AppPermissionState) {
         composeRule.setContent {
             MetricaTheme {
-                HomeScreen(
+                CalcMotNavHost(
                     permissionState = permissionState,
-                    onPermissionsRefresh = {}
+                    onboardingCompleted = true,
+                    onPermissionsRefresh = {},
+                    onOnboardingCompleted = {}
                 )
             }
         }

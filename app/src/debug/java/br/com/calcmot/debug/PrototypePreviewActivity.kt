@@ -65,8 +65,7 @@ class PrototypePreviewActivity : ComponentActivity() {
 
                     "feedback" -> FeedbackScreen(
                         onBack = { finish() },
-                        onSubmit = {},
-                        onEmail = {}
+                        onSubmit = { br.com.calcmot.ui.FeedbackSubmitResult.OPENED }
                     )
 
                     else -> FeedbackSuccessScreen(

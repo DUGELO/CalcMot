@@ -7,6 +7,7 @@ import android.provider.Settings
 import android.text.TextUtils
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -18,13 +19,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import br.com.calcmot.accessibility.UberAccessibilityService
-import br.com.calcmot.ui.HomeScreen
-import br.com.calcmot.ui.OnboardingScreen
+import br.com.calcmot.ui.CalcMotNavHost
 import br.com.calcmot.ui.theme.MetricaTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
         setContent {
             MetricaTheme {
@@ -37,8 +38,15 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun CalcMotApp() {
     val context = LocalContext.current
-    var permissionState by remember {
-        mutableStateOf(readAppPermissionState(context))
+    val initialPermissionState = remember(context) { readAppPermissionState(context) }
+    var permissionState by remember { mutableStateOf(initialPermissionState) }
+    var onboardingCompleted by remember {
+        mutableStateOf(
+            AppSettings.isOnboardingCompleted(
+                context = context,
+                accessibilityEnabled = initialPermissionState.hasAccessibilityService
+            )
+        )
     }
 
     fun refreshPermissions() {
@@ -64,26 +72,28 @@ private fun CalcMotApp() {
 
     CalcMotAppContent(
         permissionState = permissionState,
-        onPermissionsRefresh = ::refreshPermissions
+        onboardingCompleted = onboardingCompleted,
+        onPermissionsRefresh = ::refreshPermissions,
+        onOnboardingCompleted = {
+            AppSettings.setOnboardingCompleted(context, true)
+            onboardingCompleted = true
+        }
     )
 }
 
 @Composable
 fun CalcMotAppContent(
     permissionState: AppPermissionState,
-    onPermissionsRefresh: () -> Unit
+    onPermissionsRefresh: () -> Unit,
+    onboardingCompleted: Boolean = permissionState.hasAllRequiredPermissions,
+    onOnboardingCompleted: () -> Unit = {}
 ) {
-    if (permissionState.hasAllRequiredPermissions) {
-        HomeScreen(
-            permissionState = permissionState,
-            onPermissionsRefresh = onPermissionsRefresh
-        )
-    } else {
-        OnboardingScreen(
-            permissionState = permissionState,
-            onPermissionsRefresh = onPermissionsRefresh
-        )
-    }
+    CalcMotNavHost(
+        permissionState = permissionState,
+        onboardingCompleted = onboardingCompleted,
+        onPermissionsRefresh = onPermissionsRefresh,
+        onOnboardingCompleted = onOnboardingCompleted
+    )
 }
 
 data class AppPermissionState(

@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
@@ -169,6 +170,9 @@ class HomeScreenTest {
         composeRule.onNodeWithTag(UiTestTags.SETTINGS_PRIVACY_ROW)
             .performScrollTo()
             .assertIsDisplayed()
+        composeRule.onAllNodesWithText("Tema").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Tamanho do aviso").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Sobre o CalcMot").assertCountEquals(0)
     }
 
     @Test
@@ -197,6 +201,17 @@ class HomeScreenTest {
         composeRule.onNodeWithTag(UiTestTags.HELP_SCREEN).assertIsDisplayed()
         composeRule.onAllNodesWithTag(UiTestTags.FAQ_ITEM).assertCountEquals(5)
         composeRule.onNodeWithText("O que o CalcMot faz?").assertIsDisplayed()
+        composeRule.onAllNodesWithText(
+            "Ele mostra R$/km, R$/h e uma classificação simples para ajudar você a decidir se uma oferta compensa."
+        ).assertCountEquals(0)
+        composeRule.onNodeWithText("O que o CalcMot faz?").performClick()
+        composeRule.onNodeWithText(
+            "Ele mostra R$/km, R$/h e uma classificação simples para ajudar você a decidir se uma oferta compensa."
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText("O que o CalcMot faz?").performClick()
+        composeRule.onAllNodesWithText(
+            "Ele mostra R$/km, R$/h e uma classificação simples para ajudar você a decidir se uma oferta compensa."
+        ).assertCountEquals(0)
 
         composeRule.onNodeWithTag(UiTestTags.HELP_PRIVACY_BUTTON).performScrollTo().performClick()
         composeRule.onNodeWithTag(UiTestTags.PRIVACY_POLICY_SCREEN).assertIsDisplayed()
@@ -211,9 +226,11 @@ class HomeScreenTest {
     private fun renderHome(permissionState: AppPermissionState) {
         composeRule.setContent {
             MetricaTheme {
-                HomeScreen(
+                CalcMotNavHost(
                     permissionState = permissionState,
-                    onPermissionsRefresh = {}
+                    onboardingCompleted = true,
+                    onPermissionsRefresh = {},
+                    onOnboardingCompleted = {}
                 )
             }
         }

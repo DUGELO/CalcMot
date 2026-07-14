@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -44,17 +46,22 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -85,22 +92,26 @@ import br.com.calcmot.ui.design.tokens.CalcMotColors
 import br.com.calcmot.ui.design.tokens.CalcMotSpacing
 import br.com.calcmot.ui.design.tokens.CalcMotTypography
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FinanceScreen(
     modifier: Modifier = Modifier,
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    onGoalSaved: (DriverGoal) -> Unit = {}
 ) {
     val context = LocalContext.current
     var profitabilitySettings by remember { mutableStateOf(AppSettings.getProfitabilitySettings(context)) }
     var financialImpactEnabled by remember { mutableStateOf(AppSettings.isFinancialImpactEnabled(context)) }
     var driverGoal by remember { mutableStateOf(AppSettings.getDriverGoal(context)) }
-    var goalKmText by remember { mutableStateOf(driverGoal.minValuePerKm.toInputText()) }
-    var goalHourText by remember { mutableStateOf(driverGoal.minValuePerHour.toInputText()) }
-    var goalMode by remember { mutableStateOf(driverGoal.mode) }
-    var goalErrorText by remember { mutableStateOf<String?>(null) }
-    var goalSavedText by remember { mutableStateOf<String?>(null) }
+    var goalKmText by rememberSaveable { mutableStateOf(driverGoal.minValuePerKm.toInputText()) }
+    var goalHourText by rememberSaveable { mutableStateOf(driverGoal.minValuePerHour.toInputText()) }
+    var goalMode by rememberSaveable { mutableStateOf(driverGoal.mode) }
+    var goalErrorText by rememberSaveable { mutableStateOf<String?>(null) }
+    var goalSavedText by rememberSaveable { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     DriverGoalPrototypeScreen(
         modifier = modifier,
@@ -108,7 +119,8 @@ fun FinanceScreen(
         goalHourText = goalHourText,
         selectedPreset = GoalPreset.fromInputs(goalKmText, goalHourText),
         errorText = goalErrorText,
-        savedText = goalSavedText,
+        savedText = null,
+        snackbarHostState = snackbarHostState,
         onBack = onBack,
         onGoalKmChange = {
             goalKmText = it
@@ -139,10 +151,12 @@ fun FinanceScreen(
             } else {
                 AppSettings.setDriverGoal(context, parsed)
                 driverGoal = parsed
+                onGoalSaved(parsed)
                 goalKmText = parsed.minValuePerKm.toInputText()
                 goalHourText = parsed.minValuePerHour.toInputText()
                 goalErrorText = null
-                goalSavedText = "Meta salva."
+                goalSavedText = null
+                scope.launch { snackbarHostState.showSnackbar("Meta salva.") }
             }
         }
     )
@@ -330,6 +344,7 @@ private fun DriverGoalPrototypeScreen(
     selectedPreset: GoalPreset?,
     errorText: String?,
     savedText: String?,
+    snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
     onGoalKmChange: (String) -> Unit,
     onGoalHourChange: (String) -> Unit,
@@ -349,6 +364,7 @@ private fun DriverGoalPrototypeScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -400,6 +416,13 @@ private fun DriverGoalPrototypeScreen(
                 textAlign = TextAlign.Center
             )
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(16.dp)
+        )
     }
 }
 
@@ -561,6 +584,7 @@ private fun GoalInputRow(
     testTag: String,
     onValueChange: (String) -> Unit
 ) {
+    val focusManager = LocalFocusManager.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -578,7 +602,8 @@ private fun GoalInputRow(
                 .testTag(testTag),
             value = value,
             onValueChange = onValueChange,
-            label = label
+            label = label,
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
         )
     }
 }

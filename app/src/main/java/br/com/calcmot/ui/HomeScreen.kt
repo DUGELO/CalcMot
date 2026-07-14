@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CropSquare
+import androidx.compose.material.icons.outlined.AccessibilityNew
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
@@ -97,13 +98,14 @@ import br.com.calcmot.DriverApp
 import br.com.calcmot.DriverAppLauncher
 import br.com.calcmot.OverlayPositionPreference
 import br.com.calcmot.R
+import br.com.calcmot.model.DriverGoal
 import br.com.calcmot.ui.design.tokens.CalcMotColors
 import kotlinx.coroutines.launch
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(
+private fun LegacyHomeScreen(
     permissionState: AppPermissionState,
     onPermissionsRefresh: () -> Unit
 ) {
@@ -158,9 +160,13 @@ fun HomeScreen(
         drawerState = drawerState,
         drawerContent = {
             AppDrawer(
-                selected = destination,
                 status = status,
-                onSelect = ::navigate
+                onHome = { navigate(HomeDestination.START) },
+                onGoal = { navigate(HomeDestination.FINANCE) },
+                onSettings = { navigate(HomeDestination.SETTINGS) },
+                onHelp = { navigate(HomeDestination.HELP) },
+                onPrivacy = { navigate(HomeDestination.PRIVACY) },
+                onFeedback = { navigate(HomeDestination.FEEDBACK) }
             )
         }
     ) {
@@ -226,17 +232,12 @@ fun HomeScreen(
                     onBack = { navigate(HomeDestination.START) },
                     onMonitoringChange = ::setMonitoringEnabled,
                     onFinancialImpactChange = ::setFinancialImpactEnabled,
-                    onOverlayPositionChange = ::setOverlayPosition,
                     onOpenAccessibility = {
                         openAccessibilitySettings(context)
                     },
-                    onOpenGoal = { navigate(HomeDestination.FINANCE) },
                     onOpenOverlayPosition = { navigate(HomeDestination.OVERLAY_POSITION) },
                     onOpenPrivacy = { navigate(HomeDestination.PRIVACY) },
-                    onOpenHelp = { navigate(HomeDestination.HELP) },
-                    onOpenAdvanced = {
-                        if (BuildConfig.DEBUG) navigate(HomeDestination.DIAGNOSTICS)
-                    }
+                    onOpenHelp = { navigate(HomeDestination.HELP) }
                 )
 
                 HomeDestination.OVERLAY_POSITION -> OverlayPositionScreen(
@@ -282,8 +283,10 @@ fun HomeScreen(
 
                 HomeDestination.FEEDBACK -> FeedbackScreen(
                     onBack = { navigate(HomeDestination.START) },
-                    onSubmit = { navigate(HomeDestination.FEEDBACK_SUCCESS) },
-                    onEmail = { uriHandler.openUri("mailto:$CALCMOT_SUPPORT_EMAIL") }
+                    onSubmit = {
+                        navigate(HomeDestination.FEEDBACK_SUCCESS)
+                        FeedbackSubmitResult.OPENED
+                    }
                 )
 
                 HomeDestination.FEEDBACK_SUCCESS -> FeedbackSuccessScreen(
@@ -297,10 +300,14 @@ fun HomeScreen(
 }
 
 @Composable
-private fun AppDrawer(
-    selected: HomeDestination,
+internal fun AppDrawer(
     status: HomeStatus,
-    onSelect: (HomeDestination) -> Unit
+    onHome: () -> Unit,
+    onGoal: () -> Unit,
+    onSettings: () -> Unit,
+    onHelp: () -> Unit,
+    onPrivacy: () -> Unit,
+    onFeedback: () -> Unit
 ) {
     val drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
     ModalDrawerSheet(
@@ -339,37 +346,37 @@ private fun AppDrawer(
                 DrawerMenuItem(
                     text = "Início",
                     icon = Icons.Outlined.Home,
-                    selected = selected == HomeDestination.START,
+                    selected = true,
                     testTag = UiTestTags.DRAWER_HOME_ITEM,
-                    onClick = { onSelect(HomeDestination.START) }
+                    onClick = onHome
                 )
                 DrawerMenuItem(
                     text = "Minha meta",
                     icon = Icons.Outlined.MyLocation,
-                    selected = selected == HomeDestination.FINANCE,
+                    selected = false,
                     testTag = UiTestTags.DRAWER_FINANCE_ITEM,
-                    onClick = { onSelect(HomeDestination.FINANCE) }
+                    onClick = onGoal
                 )
                 DrawerMenuItem(
                     text = "Configurações",
                     icon = Icons.Outlined.Settings,
-                    selected = selected == HomeDestination.SETTINGS,
+                    selected = false,
                     testTag = UiTestTags.DRAWER_SETTINGS_ITEM,
-                    onClick = { onSelect(HomeDestination.SETTINGS) }
+                    onClick = onSettings
                 )
                 DrawerMenuItem(
                     text = "Ajuda",
                     icon = Icons.AutoMirrored.Outlined.HelpOutline,
-                    selected = selected == HomeDestination.HELP,
+                    selected = false,
                     testTag = UiTestTags.DRAWER_HELP_ITEM,
-                    onClick = { onSelect(HomeDestination.HELP) }
+                    onClick = onHelp
                 )
                 DrawerMenuItem(
                     text = "Privacidade",
                     icon = Icons.Outlined.Lock,
-                    selected = selected == HomeDestination.PRIVACY,
+                    selected = false,
                     testTag = UiTestTags.DRAWER_PRIVACY_ITEM,
-                    onClick = { onSelect(HomeDestination.PRIVACY) }
+                    onClick = onPrivacy
                 )
             }
             HorizontalDivider(
@@ -377,8 +384,8 @@ private fun AppDrawer(
                 color = CalcMotColors.BorderSubtle
             )
             DrawerFooter(
-                selectedFeedback = selected == HomeDestination.FEEDBACK || selected == HomeDestination.FEEDBACK_SUCCESS,
-                onFeedback = { onSelect(HomeDestination.FEEDBACK) }
+                selectedFeedback = false,
+                onFeedback = onFeedback
             )
         }
     }
@@ -560,10 +567,11 @@ private fun DrawerFooter(
 }
 
 @Composable
-private fun HomeContent(
+internal fun HomeContent(
     modifier: Modifier,
     status: HomeStatus,
     permissionState: AppPermissionState,
+    driverGoalOverride: DriverGoal? = null,
     onMonitoringChange: (Boolean) -> Unit,
     onOpenAccessibility: () -> Unit,
     onOpenMenu: () -> Unit,
@@ -575,7 +583,8 @@ private fun HomeContent(
     onOpenPrivacy: () -> Unit
 ) {
     val context = LocalContext.current
-    val driverGoal = remember { AppSettings.getDriverGoal(context) }
+    val storedDriverGoal = remember { AppSettings.getDriverGoal(context) }
+    val driverGoal = driverGoalOverride ?: storedDriverGoal
 
     if (status == HomeStatus.PERMISSION_PENDING) {
         HomePermissionRequiredScreen(
@@ -730,7 +739,7 @@ private fun CalcMotMetricSummary(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsScreen(
+internal fun SettingsScreen(
     modifier: Modifier,
     monitoringEnabled: Boolean,
     financialImpactEnabled: Boolean,
@@ -739,16 +748,11 @@ private fun SettingsScreen(
     onBack: () -> Unit,
     onMonitoringChange: (Boolean) -> Unit,
     onFinancialImpactChange: (Boolean) -> Unit,
-    onOverlayPositionChange: (OverlayPositionPreference) -> Unit,
     onOpenAccessibility: () -> Unit,
-    onOpenGoal: () -> Unit,
     onOpenOverlayPosition: () -> Unit,
     onOpenPrivacy: () -> Unit,
-    onOpenHelp: () -> Unit,
-    onOpenAdvanced: () -> Unit
+    onOpenHelp: () -> Unit
 ) {
-    var themeChoice by remember { mutableStateOf(SettingsThemeChoice.DARK) }
-
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -803,25 +807,16 @@ private fun SettingsScreen(
                     value = overlayPosition.settingsLabel,
                     onClick = onOpenOverlayPosition
                 )
-                SettingsDivider()
-                SettingsActionRow(
-                    icon = Icons.Outlined.TextFields,
-                    title = "Tamanho do aviso",
-                    subtitle = "Ajuste para leitura confortável",
-                    value = "Normal",
-                    enabled = false,
-                    onClick = {}
-                )
-            }
-
-            SettingsSection(title = "Aparência") {
-                SettingsThemeRow(
-                    selected = themeChoice,
-                    onSelected = { themeChoice = it }
-                )
             }
 
             SettingsSection(title = "Segurança e suporte") {
+                SettingsActionRow(
+                    icon = Icons.Outlined.AccessibilityNew,
+                    title = "Permissão de acessibilidade",
+                    subtitle = if (permissionState.hasAccessibilityService) "Ativada" else "Desativada",
+                    onClick = onOpenAccessibility
+                )
+                SettingsDivider()
                 SettingsActionRow(
                     modifier = Modifier.testTag(UiTestTags.SETTINGS_PRIVACY_ROW),
                     icon = Icons.Outlined.Security,
@@ -836,24 +831,6 @@ private fun SettingsScreen(
                     subtitle = "Entenda como o app funciona",
                     onClick = onOpenHelp
                 )
-                SettingsDivider()
-                SettingsActionRow(
-                    icon = Icons.Outlined.Info,
-                    title = "Sobre o CalcMot",
-                    subtitle = "Versão do app e informações gerais",
-                    enabled = false,
-                    onClick = {}
-                )
-                if (BuildConfig.DEBUG) {
-                    SettingsDivider()
-                    SettingsActionRow(
-                        modifier = Modifier.testTag(UiTestTags.SETTINGS_ADVANCED_ROW),
-                        icon = Icons.Outlined.Settings,
-                        title = "Diagnóstico",
-                        subtitle = "Ferramentas de teste",
-                        onClick = onOpenAdvanced
-                    )
-                }
             }
         }
     }
@@ -1142,7 +1119,7 @@ private enum class HomeDestination {
     FEEDBACK_SUCCESS
 }
 
-private enum class HomeStatus(
+internal enum class HomeStatus(
     val label: String,
     val title: String,
     val description: String
