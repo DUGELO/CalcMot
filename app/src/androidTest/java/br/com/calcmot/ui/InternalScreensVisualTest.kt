@@ -57,6 +57,19 @@ class InternalScreensVisualTest {
     }
 
     @Test
+    fun capturesAccessibilityActivationGuide() {
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = false))
+        composeRule.onNodeWithTag(UiTestTags.HOME_PERMISSION_REQUIRED_PRIMARY_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_GUIDE_SHEET).assertIsDisplayed()
+        composeRule.onNodeWithText("Como ativar").assertIsDisplayed()
+        composeRule.onNodeWithText("Abrir configurações").assertIsDisplayed()
+        captureScreen(
+            name = "accessibility_activation_guide",
+            nodeTag = UiTestTags.ACCESSIBILITY_GUIDE_SHEET
+        )
+    }
+
+    @Test
     fun capturesHomeReady() {
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
         composeRule.onNodeWithTag(UiTestTags.HOME_READY_SCREEN).assertIsDisplayed()
@@ -103,10 +116,22 @@ class InternalScreensVisualTest {
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
         composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
         composeRule.onNodeWithTag(UiTestTags.DRAWER_FINANCE_ITEM).performClick()
-        composeRule.onNodeWithText("Como o semáforo usa sua meta").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Equilibrado").assertCountEquals(1)
+        composeRule.onNodeWithText("Como o semáforo interpreta").assertIsDisplayed()
+        composeRule.onNodeWithText("Sugestão: Equilibrada · Alterar").assertIsDisplayed()
+        composeRule.onNodeWithText("Ruim: abaixo da meta").assertIsDisplayed()
         assertNoCommonUserFacingForbiddenTerms()
         captureScreen("goals")
+    }
+
+    @Test
+    fun capturesGoalSuggestions() {
+        renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_FINANCE_ITEM).performClick()
+        composeRule.onNodeWithTag(UiTestTags.GOAL_SUGGESTIONS_BUTTON).performScrollTo().performClick()
+        composeRule.onNodeWithTag(UiTestTags.GOAL_SUGGESTIONS_SHEET).assertIsDisplayed()
+        composeRule.onNodeWithText("Recomendada").assertIsDisplayed()
+        captureScreen("goal_suggestions", nodeTag = UiTestTags.GOAL_SUGGESTIONS_SHEET)
     }
 
     @Test
@@ -203,9 +228,17 @@ class InternalScreensVisualTest {
         composeRule.onAllNodesWithText("serviço rodando", substring = true).assertCountEquals(0)
     }
 
-    private fun captureScreen(name: String, forbidRedDominant: Boolean = false) {
+    private fun captureScreen(
+        name: String,
+        forbidRedDominant: Boolean = false,
+        nodeTag: String? = null
+    ) {
         composeRule.waitForIdle()
-        val bitmap = composeRule.onRoot().captureToImage().asAndroidBitmap()
+        val bitmap = if (nodeTag == null) {
+            composeRule.onRoot().captureToImage().asAndroidBitmap()
+        } else {
+            composeRule.onNodeWithTag(nodeTag).captureToImage().asAndroidBitmap()
+        }
         assertTrue("Screenshot $name width should be positive", bitmap.width > 0)
         assertTrue("Screenshot $name height should be positive", bitmap.height > 0)
         assertTrue("Screenshot $name should not be blank", bitmap.hasDifferentPixels())

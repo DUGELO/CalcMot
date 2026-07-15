@@ -95,7 +95,7 @@ fun CalcMotFeedbackSheet(
     subtitle: String? = null,
     tone: CalcMotFeedbackTone = CalcMotFeedbackTone.INFO,
     navigation: CalcMotFeedbackNavigation = CalcMotFeedbackNavigation.CLOSE,
-    heroIcon: ImageVector = tone.defaultIcon,
+    heroIcon: ImageVector? = tone.defaultIcon,
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     primaryAction: CalcMotFeedbackAction? = null,
     secondaryAction: CalcMotFeedbackAction? = null,
@@ -275,7 +275,7 @@ private fun CalcMotFeedbackContent(
     subtitle: String?,
     tone: CalcMotFeedbackTone,
     navigation: CalcMotFeedbackNavigation,
-    heroIcon: ImageVector,
+    heroIcon: ImageVector?,
     onNavigation: () -> Unit,
     primaryAction: CalcMotFeedbackAction?,
     secondaryAction: CalcMotFeedbackAction?,
@@ -291,7 +291,7 @@ private fun CalcMotFeedbackContent(
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         CalcMotFeedbackHeader(navigation = navigation, onNavigation = onNavigation)
-        CalcMotFeedbackHeroIcon(icon = heroIcon, tone = tone)
+        heroIcon?.let { CalcMotFeedbackHeroIcon(icon = it, tone = tone) }
         Text(
             text = title,
             color = CalcMotColors.TextPrimary,

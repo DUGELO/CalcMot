@@ -87,6 +87,11 @@ class HomeScreenTest {
         composeRule.onAllNodesWithTag(UiTestTags.HOME_PRIMARY_ACTION).assertCountEquals(0)
         composeRule.onAllNodesWithText("erro", substring = true, ignoreCase = true).assertCountEquals(0)
         composeRule.onAllNodesWithTag(UiTestTags.MONITORING_SWITCH).assertCountEquals(0)
+
+        composeRule.onNodeWithTag(UiTestTags.HOME_PERMISSION_REQUIRED_PRIMARY_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_GUIDE_SHEET).assertIsDisplayed()
+        composeRule.onNodeWithText("Como ativar").assertIsDisplayed()
+        composeRule.onNodeWithText("Abrir configurações").assertIsDisplayed()
     }
 
     @Test
@@ -106,15 +111,20 @@ class HomeScreenTest {
     }
 
     @Test
-    fun goalsUseSegmentedPresetsAndSaveReflectsOnHome() {
+    fun goalsUseOneReferenceAndSuggestedGoalsRemainOptional() {
         renderHome(permissionState = AppPermissionState(hasAccessibilityService = true))
 
         composeRule.onNodeWithTag(UiTestTags.HOME_GOAL_ACTION).performClick()
         composeRule.onNodeWithTag(UiTestTags.FINANCE_SCREEN).assertIsDisplayed()
-        composeRule.onNodeWithTag(UiTestTags.FINANCE_SCREEN).assertIsDisplayed()
-        composeRule.onNodeWithText("Perfil de meta").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Equilibrado").assertCountEquals(1)
-        composeRule.onNodeWithTag(UiTestTags.GOAL_PRESET_DEMANDING).performClick()
+        composeRule.onNodeWithText("Sua meta").assertIsDisplayed()
+        composeRule.onNodeWithText("Uma meta avalia todas as ofertas.").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Conservador").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Agressivo").assertCountEquals(0)
+        composeRule.onNodeWithTag(UiTestTags.GOAL_SUGGESTIONS_BUTTON).performScrollTo().performClick()
+        composeRule.onNodeWithTag(UiTestTags.GOAL_SUGGESTIONS_SHEET).assertIsDisplayed()
+        composeRule.onNodeWithText("Metas sugeridas").assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.GOAL_PRESET_DEMANDING).performScrollTo().performClick()
+        composeRule.onNodeWithText("Usar esta sugestão").performClick()
         composeRule.onNodeWithTag(UiTestTags.DRIVER_GOAL_KM_INPUT).assertTextContains("1,70")
         composeRule.onNodeWithTag(UiTestTags.DRIVER_GOAL_HOUR_INPUT).assertTextContains("42,00")
         composeRule.onNodeWithTag(UiTestTags.DRIVER_GOAL_SAVE_BUTTON).performClick()

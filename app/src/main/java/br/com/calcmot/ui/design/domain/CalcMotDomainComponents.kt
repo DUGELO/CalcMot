@@ -4,11 +4,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Text
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import br.com.calcmot.ui.design.components.CalcMotButton
 import br.com.calcmot.ui.design.components.CalcMotButtonVariant
 import br.com.calcmot.ui.design.components.CalcMotCard
@@ -79,23 +85,69 @@ fun PermissionStatusCard(
 @Composable
 fun GoalPresetCard(
     title: String,
+    description: String,
     perKm: String,
     perHour: String,
     selected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    recommended: Boolean = false
 ) {
     CalcMotCard(
-        modifier = modifier,
+        modifier = modifier
+            .heightIn(min = 82.dp)
+            .selectable(
+                selected = selected,
+                onClick = onClick,
+                role = Role.RadioButton
+            ),
         variant = if (selected) CalcMotCardVariant.PREMIUM else CalcMotCardVariant.DEFAULT,
-        onClick = onClick
     ) {
-        Column(
-            modifier = Modifier.padding(CalcMotSpacing.CardPadding),
-            verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(CalcMotSpacing.Md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Sm)
         ) {
-            Text(text = title, style = CalcMotTypography.CardTitle, color = CalcMotColors.TextPrimary)
-            Text(text = "$perKm/km • $perHour/h", style = CalcMotTypography.Body, color = CalcMotColors.TextSecondary)
+            RadioButton(
+                selected = selected,
+                onClick = null,
+                colors = RadioButtonDefaults.colors(
+                    selectedColor = CalcMotColors.PrimaryActionBlue,
+                    unselectedColor = CalcMotColors.TextMuted
+                )
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Xs)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Xs)
+                ) {
+                    Text(
+                        text = title,
+                        modifier = Modifier.weight(1f),
+                        style = CalcMotTypography.CardTitle,
+                        color = CalcMotColors.TextPrimary
+                    )
+                    if (recommended) {
+                        CalcMotStatusBadge(text = "Recomendada", color = CalcMotColors.Success)
+                    }
+                }
+                Text(
+                    text = description,
+                    style = CalcMotTypography.Caption,
+                    color = CalcMotColors.TextSecondary
+                )
+                Text(
+                    text = "$perKm/km • $perHour/h",
+                    style = CalcMotTypography.BodyStrong,
+                    color = if (selected) CalcMotColors.Success else CalcMotColors.TextPrimary
+                )
+            }
         }
     }
 }

@@ -45,9 +45,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -91,6 +93,7 @@ fun OnboardingScreen(
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
+    var activationGuideVisible by rememberSaveable { mutableStateOf(false) }
     val pages = remember { accessibilityOnboardingPages() }
     val lastPage = pages.lastIndex
     val pagerState = rememberPagerState(
@@ -173,7 +176,7 @@ fun OnboardingScreen(
                             pagerState.animateScrollToPage((pagerState.currentPage + 1).coerceAtMost(lastPage))
                         }
                     },
-                    onOpenAccessibilitySettings = ::openAccessibilitySettings,
+                    onOpenAccessibilitySettings = { activationGuideVisible = true },
                     onPermissionsRefresh = onPermissionsRefresh
                 )
 
@@ -216,6 +219,15 @@ fun OnboardingScreen(
             }
         }
     }
+
+    AccessibilityActivationGuideSheet(
+        visible = activationGuideVisible,
+        onDismissRequest = { activationGuideVisible = false },
+        onOpenSettings = {
+            activationGuideVisible = false
+            openAccessibilitySettings()
+        }
+    )
 }
 
 @Composable

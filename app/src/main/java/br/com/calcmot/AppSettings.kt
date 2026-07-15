@@ -9,6 +9,7 @@ object AppSettings {
     private const val PREFS_NAME = "calcmot_settings"
     private const val KEY_MONITORING_ENABLED = "monitoring_enabled"
     private const val KEY_OVERLAY_POSITION = "overlay_position"
+    private const val KEY_OVERLAY_THEME = "overlay_theme"
     private const val KEY_OVERLAY_CUSTOM_ENABLED = "overlay_custom_enabled"
     private const val KEY_OVERLAY_CUSTOM_X = "overlay_custom_x"
     private const val KEY_OVERLAY_CUSTOM_Y = "overlay_custom_y"
@@ -57,6 +58,24 @@ object AppSettings {
             .putBoolean(KEY_OVERLAY_CUSTOM_ENABLED, false)
             .remove(KEY_OVERLAY_CUSTOM_X)
             .remove(KEY_OVERLAY_CUSTOM_Y)
+            .apply()
+    }
+
+    fun getOverlayTheme(context: Context): OverlayThemePreference {
+        val rawValue = context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_OVERLAY_THEME, OverlayThemePreference.CLASSIC.name)
+
+        return OverlayThemePreference.entries
+            .firstOrNull { it.name == rawValue }
+            ?: OverlayThemePreference.CLASSIC
+    }
+
+    fun setOverlayTheme(context: Context, theme: OverlayThemePreference) {
+        context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_OVERLAY_THEME, theme.name)
             .apply()
     }
 
@@ -219,4 +238,10 @@ enum class OverlayPositionPreference(
     HIGH(label = "Alto", offsetDp = 72),
     MEDIUM(label = "Médio", offsetDp = 112),
     LOW(label = "Baixo", offsetDp = 152)
+}
+
+enum class OverlayThemePreference(val label: String) {
+    CLASSIC(label = "Clássico"),
+    OUTLINED(label = "Contornado"),
+    SOLID(label = "Sólido")
 }

@@ -1,6 +1,7 @@
 package br.com.calcmot.overlay
 
 import androidx.compose.runtime.Composable
+import br.com.calcmot.OverlayThemePreference
 import br.com.calcmot.model.OfferFinancialImpact
 import br.com.calcmot.model.ProfitabilityCalculator
 import br.com.calcmot.model.ProfitabilityQuality
@@ -13,7 +14,8 @@ import java.util.Locale
 fun OverlayView(
     tripData: TripData,
     profitability: ProfitabilityResult? = null,
-    financialImpact: OfferFinancialImpact? = null
+    financialImpact: OfferFinancialImpact? = null,
+    theme: OverlayThemePreference = OverlayThemePreference.CLASSIC
 ) {
     val result = profitability ?: ProfitabilityCalculator.calculate(tripData, ProfitabilitySettings())
     val quality = resolveOfferQuality(result, financialImpact)
@@ -21,23 +23,27 @@ fun OverlayView(
     val perHour = result?.netPerHour ?: tripData.valorPorHora
 
     CalcMotOverlayContainer(
-        quality = quality
+        quality = quality,
+        theme = theme
     ) {
         OfferDecisionHeader(
             quality = quality,
+            theme = theme,
             showMeaning = financialImpact == null
         )
         financialImpact?.let {
             FinancialImpactLine(
                 impact = it,
-                quality = quality
+                quality = quality,
+                theme = theme
             )
         }
         OverlayMetricSummary(
             perKm = brCurrencyPerUnit(perKm, "km"),
             perHour = brCurrencyPerHour(perHour),
             duration = "${tripData.minutosTotais} min",
-            quality = quality
+            quality = quality,
+            theme = theme
         )
     }
 }

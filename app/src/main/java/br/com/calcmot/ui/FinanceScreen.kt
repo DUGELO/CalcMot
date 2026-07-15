@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -84,10 +85,15 @@ import br.com.calcmot.ui.design.components.CalcMotButton
 import br.com.calcmot.ui.design.components.CalcMotButtonVariant
 import br.com.calcmot.ui.design.components.CalcMotCard
 import br.com.calcmot.ui.design.components.CalcMotEmptyState
+import br.com.calcmot.ui.design.components.CalcMotFeedbackAction
+import br.com.calcmot.ui.design.components.CalcMotFeedbackNavigation
+import br.com.calcmot.ui.design.components.CalcMotFeedbackSheet
+import br.com.calcmot.ui.design.components.CalcMotFeedbackTone
 import br.com.calcmot.ui.design.components.CalcMotNumberField
 import br.com.calcmot.ui.design.components.CalcMotSectionHeader
 import br.com.calcmot.ui.design.components.CalcMotTextField
 import br.com.calcmot.ui.design.domain.FinancialImpactSummaryCard
+import br.com.calcmot.ui.design.domain.GoalPresetCard
 import br.com.calcmot.ui.design.tokens.CalcMotColors
 import br.com.calcmot.ui.design.tokens.CalcMotSpacing
 import br.com.calcmot.ui.design.tokens.CalcMotTypography
@@ -337,6 +343,7 @@ fun FinanceScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DriverGoalPrototypeScreen(
     goalKmText: String,
@@ -352,6 +359,12 @@ private fun DriverGoalPrototypeScreen(
     onSave: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var suggestionsVisible by rememberSaveable { mutableStateOf(false) }
+    var pendingPresetName by rememberSaveable {
+        mutableStateOf((selectedPreset ?: GoalPreset.EQUILIBRADO).name)
+    }
+    val pendingPreset = GoalPreset.valueOf(pendingPresetName)
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -363,10 +376,10 @@ private fun DriverGoalPrototypeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .navigationBarsPadding()
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 92.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             GoalTopBar(onBack = onBack)
@@ -377,11 +390,23 @@ private fun DriverGoalPrototypeScreen(
                 goalHourText = goalHourText,
                 errorText = errorText,
                 savedText = savedText,
-                onPreset = onPreset,
                 onGoalKmChange = onGoalKmChange,
-                onGoalHourChange = onGoalHourChange
+                onGoalHourChange = onGoalHourChange,
+                onShowSuggestions = {
+                    pendingPresetName = (selectedPreset ?: GoalPreset.EQUILIBRADO).name
+                    suggestionsVisible = true
+                }
             )
             GoalMeaningCard()
+        }
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(CalcMotColors.AppBackground)
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 10.dp)
+        ) {
             Button(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -406,23 +431,55 @@ private fun DriverGoalPrototypeScreen(
                     fontWeight = FontWeight.Bold
                 )
             }
-            Text(
-                text = "Você pode alterar sua meta quando quiser.",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                color = CalcMotColors.TextSecondary,
-                fontSize = 15.sp,
-                textAlign = TextAlign.Center
-            )
         }
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 82.dp)
         )
+    }
+
+    CalcMotFeedbackSheet(
+        visible = suggestionsVisible,
+        title = "Metas sugeridas",
+        subtitle = "Escolha apenas um ponto de partida. Depois, você ainda pode ajustar os dois valores.",
+        onDismissRequest = { suggestionsVisible = false },
+        modifier = Modifier.testTag(UiTestTags.GOAL_SUGGESTIONS_SHEET),
+        tone = CalcMotFeedbackTone.INFO,
+        navigation = CalcMotFeedbackNavigation.CLOSE,
+        heroIcon = null,
+        primaryAction = CalcMotFeedbackAction(
+            label = "Usar esta sugestão",
+            onClick = {
+                onPreset(pendingPreset)
+                suggestionsVisible = false
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 280.dp)
+                .verticalScroll(rememberScrollState())
+                .selectableGroup(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            GoalPreset.entries.forEach { preset ->
+                GoalPresetCard(
+                    title = preset.title,
+                    description = preset.description,
+                    perKm = preset.perKmLabel,
+                    perHour = preset.perHourLabel,
+                    selected = pendingPreset == preset,
+                    recommended = preset == GoalPreset.EQUILIBRADO,
+                    onClick = { pendingPresetName = preset.name },
+                    modifier = Modifier.testTag(preset.testTag)
+                )
+            }
+        }
     }
 }
 
@@ -494,17 +551,17 @@ private fun GoalProfileCard(
     goalHourText: String,
     errorText: String?,
     savedText: String?,
-    onPreset: (GoalPreset) -> Unit,
     onGoalKmChange: (String) -> Unit,
-    onGoalHourChange: (String) -> Unit
+    onGoalHourChange: (String) -> Unit,
+    onShowSuggestions: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .border(BorderStroke(1.dp, CalcMotColors.BorderStrong), RoundedCornerShape(22.dp))
             .background(CalcMotColors.Surface.copy(alpha = 0.74f), RoundedCornerShape(22.dp))
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Icon(
@@ -514,37 +571,25 @@ private fun GoalProfileCard(
                 modifier = Modifier.size(34.dp)
             )
             Text(
-                text = "Perfil de meta",
+                text = "Sua meta",
                 color = CalcMotColors.TextPrimary,
                 fontSize = 21.sp,
                 fontWeight = FontWeight.Bold
             )
         }
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            GoalPreset.entries.forEachIndexed { index, preset ->
-                SegmentedButton(
-                    modifier = Modifier.testTag(preset.testTag),
-                    selected = selectedPreset == preset,
-                    onClick = { onPreset(preset) },
-                    shape = SegmentedButtonDefaults.itemShape(index, GoalPreset.entries.size),
-                    colors = SegmentedButtonDefaults.colors(
-                        activeContainerColor = CalcMotColors.PrimaryActionBlue,
-                        activeContentColor = CalcMotColors.TextPrimary,
-                        inactiveContainerColor = CalcMotColors.Surface.copy(alpha = 0.35f),
-                        inactiveContentColor = CalcMotColors.TextSecondary
-                    )
-                ) {
-                    Text(text = preset.displayLabel, maxLines = 1)
-                }
-            }
-        }
+        Text(
+            text = "Uma meta avalia todas as ofertas.",
+            color = CalcMotColors.TextSecondary,
+            fontSize = 15.sp,
+            lineHeight = 20.sp
+        )
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .border(BorderStroke(1.dp, CalcMotColors.BorderSubtle), RoundedCornerShape(16.dp))
                 .background(CalcMotColors.SurfaceElevated.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             GoalInputRow(
                 icon = Icons.Outlined.Route,
@@ -567,6 +612,15 @@ private fun GoalProfileCard(
                 onValueChange = onGoalHourChange
             )
         }
+        CalcMotButton(
+            text = selectedPreset?.let { "Sugestão: ${it.title} · Alterar" }
+                ?: "Usar uma meta sugerida",
+            onClick = onShowSuggestions,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(UiTestTags.GOAL_SUGGESTIONS_BUTTON),
+            variant = CalcMotButtonVariant.SECONDARY
+        )
         errorText?.let {
             Text(text = it, color = CalcMotColors.Danger, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         }
@@ -616,8 +670,8 @@ private fun GoalMeaningCard() {
             .testTag(UiTestTags.GOAL_SEMAPHORE_PREVIEW)
             .border(BorderStroke(1.dp, CalcMotColors.BorderStrong), RoundedCornerShape(22.dp))
             .background(CalcMotColors.Surface.copy(alpha = 0.74f), RoundedCornerShape(22.dp))
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Icon(
@@ -627,12 +681,18 @@ private fun GoalMeaningCard() {
                 modifier = Modifier.size(32.dp)
             )
             Text(
-                text = "Como o semáforo usa sua meta",
+                text = "Como o semáforo interpreta",
                 color = CalcMotColors.TextPrimary,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
         }
+        Text(
+            text = "As quatro cores são resultados da meta acima.",
+            color = CalcMotColors.TextSecondary,
+            fontSize = 14.sp,
+            lineHeight = 19.sp
+        )
         GoalMeaningRow(
             color = CalcMotColors.PrimaryActionBlue,
             title = "Ótima:",
@@ -794,7 +854,7 @@ private fun DriverGoalSettings(
                     onClick = { onPreset(preset) },
                     shape = SegmentedButtonDefaults.itemShape(index, GoalPreset.entries.size)
                 ) {
-                    Text(preset.label)
+                    Text(preset.title)
                 }
             }
         }
@@ -1143,16 +1203,43 @@ private fun countLabel(count: Int): String {
 }
 
 private enum class GoalPreset(
-    val label: String,
-    val displayLabel: String,
+    val title: String,
+    val description: String,
     val km: Double,
     val hour: Double,
     val mode: GoalMode,
     val testTag: String
 ) {
-    CONSERVADOR("Começando", "Conservador", 1.35, 30.0, GoalMode.BALANCED, UiTestTags.GOAL_PRESET_BEGINNER),
-    EQUILIBRADO("Equilibrado", "Equilibrado", 1.50, 35.0, GoalMode.BALANCED, UiTestTags.GOAL_PRESET_BALANCED),
-    EXIGENTE("Exigente", "Agressivo", 1.70, 42.0, GoalMode.BALANCED, UiTestTags.GOAL_PRESET_DEMANDING);
+    CONSERVADOR(
+        "Mais oportunidades",
+        "Meta mais acessível para considerar mais ofertas.",
+        1.35,
+        30.0,
+        GoalMode.BALANCED,
+        UiTestTags.GOAL_PRESET_BEGINNER
+    ),
+    EQUILIBRADO(
+        "Equilibrada",
+        "Bom equilíbrio entre retorno por km e por hora.",
+        1.50,
+        35.0,
+        GoalMode.BALANCED,
+        UiTestTags.GOAL_PRESET_BALANCED
+    ),
+    EXIGENTE(
+        "Maior retorno",
+        "Meta mais alta para destacar ofertas com maior retorno.",
+        1.70,
+        42.0,
+        GoalMode.BALANCED,
+        UiTestTags.GOAL_PRESET_DEMANDING
+    );
+
+    val perKmLabel: String
+        get() = String.format(Locale.forLanguageTag("pt-BR"), "R$ %.2f", km)
+
+    val perHourLabel: String
+        get() = String.format(Locale.forLanguageTag("pt-BR"), "R$ %.0f", hour)
 
     companion object {
         fun fromInputs(kmText: String, hourText: String): GoalPreset? {

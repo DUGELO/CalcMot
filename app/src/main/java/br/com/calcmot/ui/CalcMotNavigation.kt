@@ -25,6 +25,7 @@ internal object CalcMotRoute {
     const val GOAL = "goal"
     const val SETTINGS = "settings"
     const val OVERLAY_POSITION = "overlay-position"
+    const val OVERLAY_THEME = "overlay-theme"
     const val HELP = "help"
     const val PRIVACY = "privacy"
     const val FEEDBACK = "feedback"
@@ -44,6 +45,7 @@ fun CalcMotNavHost(
     var monitoringEnabled by remember { mutableStateOf(AppSettings.isMonitoringEnabled(context)) }
     var financialImpactEnabled by remember { mutableStateOf(AppSettings.isFinancialImpactEnabled(context)) }
     var overlayPosition by remember { mutableStateOf(AppSettings.getOverlayPosition(context)) }
+    var overlayTheme by remember { mutableStateOf(AppSettings.getOverlayTheme(context)) }
     var driverGoal by remember { mutableStateOf(AppSettings.getDriverGoal(context)) }
     val startDestination = remember {
         if (onboardingCompleted || permissionState.hasAccessibilityService) {
@@ -66,6 +68,11 @@ fun CalcMotNavHost(
     fun setOverlayPosition(position: br.com.calcmot.OverlayPositionPreference) {
         AppSettings.setOverlayPosition(context, position)
         overlayPosition = position
+    }
+
+    fun setOverlayTheme(theme: br.com.calcmot.OverlayThemePreference) {
+        AppSettings.setOverlayTheme(context, theme)
+        overlayTheme = theme
     }
 
     fun navigate(route: String) {
@@ -134,11 +141,13 @@ fun CalcMotNavHost(
                 financialImpactEnabled = financialImpactEnabled,
                 permissionState = permissionState,
                 overlayPosition = overlayPosition,
+                overlayTheme = overlayTheme,
                 onBack = { navController.popBackStack() },
                 onMonitoringChange = ::setMonitoringEnabled,
                 onFinancialImpactChange = ::setFinancialImpactEnabled,
                 onOpenAccessibility = { openAccessibilitySettings(context) },
                 onOpenOverlayPosition = { navigate(CalcMotRoute.OVERLAY_POSITION) },
+                onOpenOverlayTheme = { navigate(CalcMotRoute.OVERLAY_THEME) },
                 onOpenPrivacy = { navigate(CalcMotRoute.PRIVACY) },
                 onOpenHelp = { navigate(CalcMotRoute.HELP) }
             )
@@ -150,6 +159,17 @@ fun CalcMotNavHost(
                 onBack = { navController.popBackStack() },
                 onSave = { position ->
                     setOverlayPosition(position)
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(CalcMotRoute.OVERLAY_THEME) {
+            OverlayThemeScreen(
+                currentTheme = overlayTheme,
+                onBack = { navController.popBackStack() },
+                onSave = { theme ->
+                    setOverlayTheme(theme)
                     navController.popBackStack()
                 }
             )

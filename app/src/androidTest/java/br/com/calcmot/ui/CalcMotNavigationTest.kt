@@ -16,6 +16,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import android.view.View
 import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
+import br.com.calcmot.OverlayThemePreference
 import br.com.calcmot.ui.theme.MetricaTheme
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -33,6 +34,7 @@ class CalcMotNavigationTest {
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         AppSettings.setMonitoringEnabled(context, true)
+        AppSettings.setOverlayTheme(context, OverlayThemePreference.CLASSIC)
         navController = TestNavHostController(context).apply {
             navigatorProvider.addNavigator(ComposeNavigator())
         }
@@ -91,6 +93,23 @@ class CalcMotNavigationTest {
             assertEquals(0, flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR)
             assertEquals(0, flags and View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR)
         }
+    }
+
+    @Test
+    fun overlayThemeSelectionPersistsAndReturnsToSettings() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        openSettings()
+
+        composeRule.onNodeWithTag(UiTestTags.SETTINGS_OVERLAY_THEME_ROW)
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag(UiTestTags.OVERLAY_THEME_SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.OVERLAY_THEME_SOLID).performClick()
+        composeRule.onNodeWithTag(UiTestTags.OVERLAY_THEME_SAVE_BUTTON).performClick()
+
+        composeRule.onNodeWithTag(UiTestTags.SETTINGS_SCREEN).assertIsDisplayed()
+        assertEquals(OverlayThemePreference.SOLID, AppSettings.getOverlayTheme(context))
+        assertEquals(CalcMotRoute.SETTINGS, navController.currentDestination?.route)
     }
 
     private fun openSettings() {

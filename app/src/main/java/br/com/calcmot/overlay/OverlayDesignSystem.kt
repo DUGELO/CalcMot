@@ -6,10 +6,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -28,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import br.com.calcmot.model.ImpactMetric
 import br.com.calcmot.model.OfferClassification
 import br.com.calcmot.model.OfferFinancialImpact
+import br.com.calcmot.OverlayThemePreference
 import java.util.Locale
 import kotlin.math.abs
 
@@ -47,6 +51,13 @@ object CalcMotColors {
     val TextMuted = Color(0xFFBDBDBD)
 
     val Divider = Color(0x33FFFFFF)
+
+    val PrototypeGood = Color(0xFF5A9821)
+    val PrototypeBad = Color(0xFFD92D20)
+    val PrototypeGreat = Color(0xFF9C2A9A)
+    val PrototypeWarning = Color(0xFFDA7311)
+    val PrototypeLightSurface = Color(0xFFFFFFFF)
+    val PrototypeDarkText = Color(0xFF171717)
 }
 
 object CalcMotOpacity {
@@ -139,25 +150,51 @@ enum class OverlayOfferQuality(
 @Composable
 fun CalcMotOverlayContainer(
     quality: OverlayOfferQuality,
+    theme: OverlayThemePreference = OverlayThemePreference.CLASSIC,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    val shape = RoundedCornerShape(CalcMotShape.OverlayRadius)
-    Column(
-        modifier = modifier
+    val tokens = overlayVisualTokens(theme, quality)
+    val shape = RoundedCornerShape(tokens.cornerRadius)
+    val themedModifier = when (theme) {
+        OverlayThemePreference.CLASSIC -> modifier
             .widthIn(min = 176.dp, max = 276.dp)
             .clip(shape)
-            .background(CalcMotColors.OverlayBackground)
+            .background(tokens.background)
             .border(
-                width = 1.dp,
-                color = quality.accentColor.copy(alpha = 0.72f),
+                width = tokens.borderWidth,
+                color = tokens.border,
                 shape = shape
             )
-            .padding(CalcMotSpacing.OverlayPadding),
+            .padding(CalcMotSpacing.OverlayPadding)
+
+        OverlayThemePreference.OUTLINED -> modifier
+            .width(260.dp)
+            .clip(shape)
+            .background(tokens.background)
+            .border(
+                width = tokens.borderWidth,
+                color = tokens.border,
+                shape = shape
+            )
+            .padding(CalcMotSpacing.OverlayPadding)
+
+        OverlayThemePreference.SOLID -> modifier
+            .width(260.dp)
+            .clip(shape)
+            .background(tokens.background)
+            .padding(CalcMotSpacing.OverlayPadding)
+    }
+    Column(
+        modifier = themedModifier,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.SectionGap)
     ) {
-        OverlayDragHandle(color = CalcMotColors.TextMuted)
+        if (theme == OverlayThemePreference.CLASSIC) {
+            OverlayDragHandle(color = CalcMotColors.TextMuted)
+        } else {
+            Spacer(modifier = Modifier.height(3.dp))
+        }
         content()
     }
 }
@@ -165,9 +202,11 @@ fun CalcMotOverlayContainer(
 @Composable
 fun OfferDecisionHeader(
     quality: OverlayOfferQuality,
+    theme: OverlayThemePreference = OverlayThemePreference.CLASSIC,
     showMeaning: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val tokens = overlayVisualTokens(theme, quality)
     Row(
         modifier = modifier
             .fillMaxWidth(),
@@ -178,10 +217,10 @@ fun OfferDecisionHeader(
             text = quality.label,
             modifier = Modifier
                 .clip(RoundedCornerShape(CalcMotShape.BadgeRadius))
-                .background(quality.accentColor)
+                .background(tokens.badgeBackground)
                 .padding(horizontal = CalcMotSpacing.Sm, vertical = 3.dp)
                 .defaultMinSize(minWidth = 58.dp),
-            color = quality.badgeContentColor,
+            color = tokens.badgeContent,
             style = CalcMotTypography.MetricLabel.copy(fontWeight = FontWeight.Bold),
             textAlign = TextAlign.Center,
             maxLines = 1,
@@ -191,7 +230,7 @@ fun OfferDecisionHeader(
             Text(
                 text = quality.meaning,
                 modifier = Modifier.padding(start = CalcMotSpacing.Sm),
-                color = CalcMotColors.TextPrimary,
+                color = tokens.primaryText,
                 style = CalcMotTypography.ImpactMessage,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -236,13 +275,15 @@ fun MetricRow(
 fun FinancialImpactLine(
     impact: OfferFinancialImpact,
     quality: OverlayOfferQuality,
+    theme: OverlayThemePreference = OverlayThemePreference.CLASSIC,
     modifier: Modifier = Modifier
 ) {
+    val tokens = overlayVisualTokens(theme, quality)
     Text(
         text = impact.decisionImpactLine(),
         modifier = modifier
             .fillMaxWidth(),
-        color = quality.accentColor,
+        color = if (theme == OverlayThemePreference.CLASSIC) quality.accentColor else tokens.primaryText,
         style = CalcMotTypography.MetaImpactValue,
         textAlign = TextAlign.Center,
         maxLines = 1,
@@ -270,8 +311,10 @@ fun OverlayMetricSummary(
     perHour: String,
     duration: String,
     quality: OverlayOfferQuality,
+    theme: OverlayThemePreference = OverlayThemePreference.CLASSIC,
     modifier: Modifier = Modifier
 ) {
+    val tokens = overlayVisualTokens(theme, quality)
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -280,7 +323,7 @@ fun OverlayMetricSummary(
         MetricRow(
             value = perKm,
             prominent = true,
-            accentColor = quality.accentColor
+            accentColor = tokens.metricText
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -288,13 +331,78 @@ fun OverlayMetricSummary(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "$perHour · $duration",
-                color = CalcMotColors.TextPrimary,
+                text = if (theme == OverlayThemePreference.CLASSIC) {
+                    "$perHour · $duration"
+                } else {
+                    "$perHour - ${duration.replace(" ", "")}"
+                },
+                color = tokens.secondaryText,
                 style = CalcMotTypography.MetricValue,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+private data class OverlayVisualTokens(
+    val background: Color,
+    val border: Color,
+    val borderWidth: Dp,
+    val primaryText: Color,
+    val secondaryText: Color,
+    val metricText: Color,
+    val badgeBackground: Color,
+    val badgeContent: Color,
+    val cornerRadius: Dp
+)
+
+private fun overlayVisualTokens(
+    theme: OverlayThemePreference,
+    quality: OverlayOfferQuality
+): OverlayVisualTokens {
+    val prototypeAccent = when (quality) {
+        OverlayOfferQuality.GREAT -> CalcMotColors.PrototypeGreat
+        OverlayOfferQuality.GOOD -> CalcMotColors.PrototypeGood
+        OverlayOfferQuality.WARNING -> CalcMotColors.PrototypeWarning
+        OverlayOfferQuality.BAD -> CalcMotColors.PrototypeBad
+    }
+    return when (theme) {
+        OverlayThemePreference.CLASSIC -> OverlayVisualTokens(
+            background = CalcMotColors.OverlayBackground,
+            border = quality.accentColor.copy(alpha = 0.72f),
+            borderWidth = 1.dp,
+            primaryText = CalcMotColors.TextPrimary,
+            secondaryText = CalcMotColors.TextPrimary,
+            metricText = quality.accentColor,
+            badgeBackground = quality.accentColor,
+            badgeContent = quality.badgeContentColor,
+            cornerRadius = CalcMotShape.OverlayRadius
+        )
+
+        OverlayThemePreference.OUTLINED -> OverlayVisualTokens(
+            background = CalcMotColors.PrototypeLightSurface,
+            border = prototypeAccent,
+            borderWidth = 5.dp,
+            primaryText = CalcMotColors.PrototypeDarkText,
+            secondaryText = CalcMotColors.PrototypeDarkText,
+            metricText = prototypeAccent,
+            badgeBackground = prototypeAccent,
+            badgeContent = Color.White,
+            cornerRadius = 24.dp
+        )
+
+        OverlayThemePreference.SOLID -> OverlayVisualTokens(
+            background = prototypeAccent,
+            border = Color.Transparent,
+            borderWidth = 0.dp,
+            primaryText = Color.White,
+            secondaryText = Color.White,
+            metricText = Color.White,
+            badgeBackground = Color.White,
+            badgeContent = prototypeAccent,
+            cornerRadius = 24.dp
+        )
     }
 }
 

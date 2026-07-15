@@ -62,6 +62,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     private val tripDataState = mutableStateOf<TripData?>(null)
     private val profitabilityState = mutableStateOf<ProfitabilityResult?>(null)
     private val financialImpactState = mutableStateOf<OfferFinancialImpact?>(null)
+    private val overlayThemeState = mutableStateOf(AppSettings.getOverlayTheme(context))
     private val debugOverlayState = mutableStateOf<AccessibilityDebugOverlayState?>(null)
     private val overlayStateMachine = OverlayStateMachine()
     private var foregroundPackageName: String? = null
@@ -284,6 +285,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
 
         try {
             val calculationStartedAt = android.os.SystemClock.elapsedRealtime()
+            overlayThemeState.value = AppSettings.getOverlayTheme(context)
             tripDataState.value = data
             profitabilityState.value = ProfitabilityCalculator.calculate(
                 tripData = data,
@@ -556,7 +558,8 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
                         OverlayView(
                             tripData = it,
                             profitability = profitabilityState.value,
-                            financialImpact = financialImpactState.value
+                            financialImpact = financialImpactState.value,
+                            theme = overlayThemeState.value
                         )
                     }
                 }

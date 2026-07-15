@@ -6,6 +6,9 @@ plugins {
 }
 
 val releaseKeystorePropertiesFile = rootProject.file("keystore.properties")
+val buildsAppBundle = gradle.startParameter.taskNames.any { taskName ->
+    taskName.contains("bundle", ignoreCase = true)
+}
 val releaseKeystoreProperties = Properties().apply {
     if (releaseKeystorePropertiesFile.exists()) {
         releaseKeystorePropertiesFile.inputStream().use(::load)
@@ -22,8 +25,14 @@ android {
         applicationId = "br.com.calcmot"
         minSdk = 24
         targetSdk = 36
-        versionCode = 7
-        versionName = "3.0"
+        versionCode = 8
+        versionName = "3.1"
+
+        if (buildsAppBundle) {
+            ndk {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            }
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -47,8 +56,8 @@ android {
         }
 
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             if (releaseKeystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -61,7 +70,8 @@ android {
 
     splits {
         abi {
-            isEnable = true
+            // Play handles ABI delivery for AABs. APK builds stay split to keep sideloads small.
+            isEnable = !buildsAppBundle
             reset()
             include("arm64-v8a", "armeabi-v7a")
             isUniversalApk = false

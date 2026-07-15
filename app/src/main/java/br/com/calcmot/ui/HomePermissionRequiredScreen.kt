@@ -37,6 +37,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +69,8 @@ fun HomePermissionRequiredScreen(
     goalPerKm: String = "R$ 1,80/km",
     goalPerHour: String = "R$ 35/h"
 ) {
+    var activationGuideVisible by rememberSaveable { mutableStateOf(false) }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -94,7 +100,7 @@ fun HomePermissionRequiredScreen(
                     .fillMaxWidth()
                     .heightIn(min = 58.dp)
                     .testTag(UiTestTags.HOME_PERMISSION_REQUIRED_PRIMARY_BUTTON),
-                onClick = onActivatePermission,
+                onClick = { activationGuideVisible = true },
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = CalcMotColors.PrimaryActionBlue,
@@ -143,6 +149,15 @@ fun HomePermissionRequiredScreen(
             Spacer(modifier = Modifier.height(20.dp))
         }
     }
+
+    AccessibilityActivationGuideSheet(
+        visible = activationGuideVisible,
+        onDismissRequest = { activationGuideVisible = false },
+        onOpenSettings = {
+            activationGuideVisible = false
+            onActivatePermission()
+        }
+    )
 }
 
 @Composable

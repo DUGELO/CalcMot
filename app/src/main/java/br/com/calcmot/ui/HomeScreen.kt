@@ -97,6 +97,7 @@ import br.com.calcmot.BuildConfig
 import br.com.calcmot.DriverApp
 import br.com.calcmot.DriverAppLauncher
 import br.com.calcmot.OverlayPositionPreference
+import br.com.calcmot.OverlayThemePreference
 import br.com.calcmot.R
 import br.com.calcmot.model.DriverGoal
 import br.com.calcmot.ui.design.tokens.CalcMotColors
@@ -118,6 +119,7 @@ private fun LegacyHomeScreen(
     var monitoringEnabled by remember { mutableStateOf(AppSettings.isMonitoringEnabled(context)) }
     var financialImpactEnabled by remember { mutableStateOf(AppSettings.isFinancialImpactEnabled(context)) }
     var overlayPosition by remember { mutableStateOf(AppSettings.getOverlayPosition(context)) }
+    var overlayTheme by remember { mutableStateOf(AppSettings.getOverlayTheme(context)) }
 
     fun navigate(next: HomeDestination) {
         destination = next
@@ -140,6 +142,11 @@ private fun LegacyHomeScreen(
         overlayPosition = position
     }
 
+    fun setOverlayTheme(theme: OverlayThemePreference) {
+        AppSettings.setOverlayTheme(context, theme)
+        overlayTheme = theme
+    }
+
     val status = when {
         !permissionState.hasAccessibilityService -> HomeStatus.PERMISSION_PENDING
         monitoringEnabled -> HomeStatus.READY
@@ -151,6 +158,7 @@ private fun LegacyHomeScreen(
         destination == HomeDestination.FINANCE ||
         destination == HomeDestination.SETTINGS ||
         destination == HomeDestination.OVERLAY_POSITION ||
+        destination == HomeDestination.OVERLAY_THEME ||
         destination == HomeDestination.PRIVACY ||
         (destination == HomeDestination.START && status == HomeStatus.READY) ||
         (destination == HomeDestination.START && status == HomeStatus.PAUSED) ||
@@ -229,6 +237,7 @@ private fun LegacyHomeScreen(
                     financialImpactEnabled = financialImpactEnabled,
                     permissionState = permissionState,
                     overlayPosition = overlayPosition,
+                    overlayTheme = overlayTheme,
                     onBack = { navigate(HomeDestination.START) },
                     onMonitoringChange = ::setMonitoringEnabled,
                     onFinancialImpactChange = ::setFinancialImpactEnabled,
@@ -236,6 +245,7 @@ private fun LegacyHomeScreen(
                         openAccessibilitySettings(context)
                     },
                     onOpenOverlayPosition = { navigate(HomeDestination.OVERLAY_POSITION) },
+                    onOpenOverlayTheme = { navigate(HomeDestination.OVERLAY_THEME) },
                     onOpenPrivacy = { navigate(HomeDestination.PRIVACY) },
                     onOpenHelp = { navigate(HomeDestination.HELP) }
                 )
@@ -245,6 +255,15 @@ private fun LegacyHomeScreen(
                     onBack = { navigate(HomeDestination.SETTINGS) },
                     onSave = { position ->
                         setOverlayPosition(position)
+                        navigate(HomeDestination.SETTINGS)
+                    }
+                )
+
+                HomeDestination.OVERLAY_THEME -> OverlayThemeScreen(
+                    currentTheme = overlayTheme,
+                    onBack = { navigate(HomeDestination.SETTINGS) },
+                    onSave = { theme ->
+                        setOverlayTheme(theme)
                         navigate(HomeDestination.SETTINGS)
                     }
                 )
@@ -745,11 +764,13 @@ internal fun SettingsScreen(
     financialImpactEnabled: Boolean,
     permissionState: AppPermissionState,
     overlayPosition: OverlayPositionPreference,
+    overlayTheme: OverlayThemePreference,
     onBack: () -> Unit,
     onMonitoringChange: (Boolean) -> Unit,
     onFinancialImpactChange: (Boolean) -> Unit,
     onOpenAccessibility: () -> Unit,
     onOpenOverlayPosition: () -> Unit,
+    onOpenOverlayTheme: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onOpenHelp: () -> Unit
 ) {
@@ -806,6 +827,15 @@ internal fun SettingsScreen(
                     subtitle = "Escolha onde o semáforo aparece na tela",
                     value = overlayPosition.settingsLabel,
                     onClick = onOpenOverlayPosition
+                )
+                SettingsDivider()
+                SettingsActionRow(
+                    modifier = Modifier.testTag(UiTestTags.SETTINGS_OVERLAY_THEME_ROW),
+                    icon = Icons.Outlined.Palette,
+                    title = "Tema do aviso",
+                    subtitle = "Escolha o estilo visual do semáforo",
+                    value = overlayTheme.label,
+                    onClick = onOpenOverlayTheme
                 )
             }
 
@@ -1112,6 +1142,7 @@ private enum class HomeDestination {
     FINANCE,
     SETTINGS,
     OVERLAY_POSITION,
+    OVERLAY_THEME,
     HELP,
     PRIVACY,
     DIAGNOSTICS,

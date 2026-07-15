@@ -36,11 +36,12 @@ class ReleaseReadinessTest {
     }
 
     @Test
-    fun `release keeps r8 disabled while bundled ml kit ocr is used`() {
+    fun `release keeps bundled ml kit ocr and enables r8 shrinking`() {
         val buildFile = projectFile("app/build.gradle.kts").readText()
 
         assertTrue(buildFile.contains("implementation(\"com.google.mlkit:text-recognition:16.0.1\")"))
-        assertTrue(buildFile.contains("isMinifyEnabled = false"))
+        assertTrue(buildFile.contains("isMinifyEnabled = true"))
+        assertTrue(buildFile.contains("isShrinkResources = true"))
     }
 
     @Test

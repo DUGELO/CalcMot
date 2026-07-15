@@ -66,6 +66,11 @@ class OnboardingScreenTest {
         composeRule.onNodeWithText("Entendo e quero ativar").assertIsDisplayed()
         composeRule.onNodeWithText("Ver política de privacidade").assertIsDisplayed()
         composeRule.onAllNodesWithTag(UiTestTags.ONBOARDING_BACK_BUTTON).assertCountEquals(0)
+
+        composeRule.onNodeWithTag(UiTestTags.OPEN_ACCESSIBILITY_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_GUIDE_SHEET).assertIsDisplayed()
+        composeRule.onNodeWithText("Como ativar").assertIsDisplayed()
+        composeRule.onNodeWithText("Abrir configurações").assertIsDisplayed()
     }
 
     @Test
