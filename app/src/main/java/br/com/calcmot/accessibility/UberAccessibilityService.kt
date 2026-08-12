@@ -17,6 +17,8 @@ import br.com.calcmot.BuildConfig
 import br.com.calcmot.DriverApp
 import br.com.calcmot.DriverAppPackagePolicy
 import br.com.calcmot.PackageDecision
+import br.com.calcmot.ReadingPipelineRuntime
+import br.com.calcmot.ReadingPipelineWatchdogPolicy
 import br.com.calcmot.model.OfferCaptureOutcome
 import br.com.calcmot.model.OfferCaptureRejectionReason
 import br.com.calcmot.model.OfferCaptureSource
@@ -30,6 +32,7 @@ import br.com.calcmot.ninetynine.NinetyNineCaptureResult
 import br.com.calcmot.ninetynine.NinetyNineCaptureSkipReason
 import br.com.calcmot.ninetynine.NinetyNineExtractionRejection
 import br.com.calcmot.ninetynine.NinetyNineExtractionResult
+import br.com.calcmot.ninetynine.NinetyNineEngineState
 import br.com.calcmot.ninetynine.NinetyNineRecognitionConfig
 import br.com.calcmot.ninetynine.UnsupportedNinetyNineCaptureSource
 import br.com.calcmot.overlay.IOverlayManager
@@ -51,10 +54,17 @@ import br.com.calcmot.processor.TreeOfferInspection
 import br.com.calcmot.processor.TreeRejectionReason
 import br.com.calcmot.processor.overlayFingerprint
 import br.com.calcmot.telemetry.OverlayLatencyTrace
+import br.com.calcmot.telemetry.AnalyticsBuckets
+import br.com.calcmot.telemetry.AnalyticsEvents
+import br.com.calcmot.telemetry.AnalyticsParams
+import br.com.calcmot.telemetry.AnalyticsValues
+import br.com.calcmot.telemetry.TelemetryProvider
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
@@ -64,15 +74,19 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.Executors
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
 class UberAccessibilityService : AccessibilityService() {
 
+    private val serviceExceptionHandler = CoroutineExceptionHandler { _, error ->
+        recordServiceFailure(stage = "scope", error = error)
+    }
     private var captureDispatcher = newCaptureDispatcher()
-    private var serviceScope = CoroutineScope(SupervisorJob() + captureDispatcher)
-    private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var serviceScope = CoroutineScope(SupervisorJob() + captureDispatcher + serviceExceptionHandler)
+    private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main + serviceExceptionHandler)
 
     private fun newCaptureDispatcher(): ExecutorCoroutineDispatcher {
         return Executors.newSingleThreadExecutor { runnable ->
@@ -87,7 +101,7 @@ class UberAccessibilityService : AccessibilityService() {
         if (serviceScope.isActive) return
         captureDispatcher.close()
         captureDispatcher = newCaptureDispatcher()
-        serviceScope = CoroutineScope(SupervisorJob() + captureDispatcher)
+        serviceScope = CoroutineScope(SupervisorJob() + captureDispatcher + serviceExceptionHandler)
     }
 
     internal var overlayManager: IOverlayManager? = null
@@ -99,6 +113,7 @@ class UberAccessibilityService : AccessibilityService() {
     private var accessibilityPollingJob: Job? = null
     private var capturePipelineJob: Job? = null
     private var overlayExpiryJob: Job? = null
+    private var readingResetJob: Job? = null
     private var runtimeAccessibilityInfoConfigured = false
     @Volatile
     private var accessibilityPollingUntil = 0L
@@ -123,6 +138,8 @@ class UberAccessibilityService : AccessibilityService() {
     @Volatile
     private var lastWatchdogScanAtMillis = 0L
     @Volatile
+    private var lastPipelineWatchdogResetAtElapsed = 0L
+    @Volatile
     private var rawForegroundPackageName: String? = null
     @Volatile
     private var trustedForegroundPackageName: String? = null
@@ -137,13 +154,19 @@ class UberAccessibilityService : AccessibilityService() {
     private val latencyTracesByGeneration = ConcurrentHashMap<Long, OverlayLatencyTrace>()
     private var lastParsedOfferAudit: ParsedOfferAudit? = null
     private val postReconnectCandidateGuard = PostReconnectCandidateGuard()
-    private val accessibilityTreeLab by lazy { AccessibilityTreeLab(this) }
-    private val captureLearningLab by lazy { CaptureLearningLab(this) }
-    private val ninetyNineDiagnostics by lazy { NinetyNineAccessibilityDiagnostics(this) }
+    private val accessibilityTreeLabDelegate = lazy { AccessibilityTreeLab(this) }
+    private val accessibilityTreeLab by accessibilityTreeLabDelegate
+    private val captureLearningLabDelegate = lazy { CaptureLearningLab(this) }
+    private val captureLearningLab by captureLearningLabDelegate
+    private val ninetyNineDiagnosticsDelegate = lazy { NinetyNineAccessibilityDiagnostics(this) }
+    private val ninetyNineDiagnostics by ninetyNineDiagnosticsDelegate
     private val ninetyNineSemanticBridgeProbe by lazy {
         NinetyNineSemanticBridgeProbe(ninetyNineDiagnostics)
     }
     private var ninetyNineCaptureEngine: NinetyNineCaptureEngine? = null
+    private val readingCommandHandler = ReadingPipelineRuntime.CommandHandler { platform, reason ->
+        requestReadingRestart(platform, reason)
+    }
     private val shellOfferHandler: (ShellOfferFrame) -> Unit = { frame ->
         if (BuildConfig.DEBUG) {
             serviceScope.launch { handleShellOfferFrame(frame) }
@@ -152,6 +175,14 @@ class UberAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        runCatching {
+            initializeConnectedService()
+        }.onFailure { error ->
+            recordServiceFailure(stage = "service_connected", error = error)
+        }
+    }
+
+    private fun initializeConnectedService() {
         ensureServiceScopeActive()
         configureRuntimeAccessibilityInfo()
         val reconnectBaselineFingerprint = captureCoordinator.currentOverlayFingerprint()
@@ -170,6 +201,10 @@ class UberAccessibilityService : AccessibilityService() {
             ShellOfferBridge.register(shellOfferHandler)
         }
         startContinuousAccessibilityPolling()
+        ReadingPipelineRuntime.register(readingCommandHandler)
+        val selectedPlatform = AppSettings.getLastDriverApp(this)
+        ReadingPipelineRuntime.markPipelineStarted(selectedPlatform)
+        logRuntimePermissionStatuses()
         if (AccessibilityDebugConfig.ENABLE_DEBUG_OVERLAY_HEARTBEAT) {
             showDebugHeartbeat(
                 uberForeground = false,
@@ -216,7 +251,22 @@ class UberAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+        try {
+            handleAccessibilityEvent(event)
+        } catch (error: Exception) {
+            recordServiceFailure(stage = "accessibility_event", error = error)
+            runCatching {
+                cancelCapturePipeline(OverlayLatencyTrace.EndReason.INVALID_CONTEXT)
+            }
+            runCatching { pauseNinetyNineCaptureEngine() }
+            mainScope.launch {
+                runCatching { overlayManager?.hideOverlay() }
+            }
+        }
+    }
 
+    private fun handleAccessibilityEvent(event: AccessibilityEvent) {
+        startContinuousAccessibilityPolling()
         val eventPackage = event.packageName?.toString()
         val packageDecision = DriverAppPackagePolicy.classify(eventPackage)
         val eventDriverApp = DriverAppPackagePolicy.driverAppForPackage(eventPackage)
@@ -249,6 +299,31 @@ class UberAccessibilityService : AccessibilityService() {
                     "CALCMOT_TRANSIENT_SYSTEM_EVENT_IGNORED " +
                         "package=${DriverAppPackagePolicy.describe(eventPackage)} eventType=${event.eventType}"
                 )
+                return
+            }
+
+            PackageDecision.ALLOWED_USER_APP -> {
+                if (event.isForegroundDefiningEvent()) {
+                    if (trustedForegroundDriverApp == DriverApp.NINETY_NINE &&
+                        runCatching(::hasVisibleNinetyNineRoot).getOrDefault(false)
+                    ) {
+                        Log.w(
+                            TAG,
+                            "CALCMOT_99_BACKGROUND_COMMON_EVENT_IGNORED " +
+                                "package=${DriverAppPackagePolicy.describe(eventPackage)} " +
+                                "eventType=${event.eventType}"
+                        )
+                        return
+                    }
+                    enterIdleForAllowedUserApp(eventPackage, event.eventType)
+                } else {
+                    Log.w(
+                        TAG,
+                        "CALCMOT_COMMON_APP_EVENT_IGNORED_NON_FOREGROUND " +
+                            "package=${DriverAppPackagePolicy.describe(eventPackage)} " +
+                            "eventType=${event.eventType}"
+                    )
+                }
                 return
             }
 
@@ -296,6 +371,7 @@ class UberAccessibilityService : AccessibilityService() {
         configureRuntimeProfileForDriverApp(eventDriverApp)
         AppSettings.setLastDriverApp(this, eventDriverApp)
         updateTrustedForeground(packageName = eventPackage, decision = PackageDecision.DRIVER_APP)
+        ReadingPipelineRuntime.markDriverEvent(eventDriverApp)
         overlayManager?.setForegroundPackage(eventPackage)
         Log.w(
             TAG,
@@ -375,15 +451,34 @@ class UberAccessibilityService : AccessibilityService() {
 
         capturePipelineJob = serviceScope.launch {
             try {
-                runCapturePipeline(eventCopy, eventAtMillis, generation)
+                ReadingPipelineRuntime.markPipelineState(
+                    eventDriverApp,
+                    ReadingPipelineRuntime.PipelineState.BUSY
+                )
+                runCapturePipelineSafely(eventCopy, eventAtMillis, generation)
             } finally {
                 eventCopy.recycle()
             }
         }
     }
 
+    private fun enterIdleForAllowedUserApp(packageName: String?, eventType: Int) {
+        pauseNinetyNineCaptureEngine()
+        updateTrustedForeground(packageName, PackageDecision.ALLOWED_USER_APP)
+        Log.w(
+            TAG,
+            "CALCMOT_COMMON_APP_OVERLAY_ALLOWED_CAPTURE_STOPPED " +
+                "package=${DriverAppPackagePolicy.describe(packageName)} eventType=$eventType"
+        )
+        cancelCapturePipeline(OverlayLatencyTrace.EndReason.INVALID_CONTEXT)
+        accessibilityPollingUntil = 0L
+        mainScope.launch {
+            overlayManager?.setForegroundPackage(packageName)
+        }
+    }
+
     private fun enterSafeIdleForBlockedUserApp(packageName: String?, eventType: Int) {
-        closeNinetyNineCaptureEngine()
+        pauseNinetyNineCaptureEngine()
         updateTrustedForeground(packageName = packageName, decision = PackageDecision.BLOCKED_USER_APP)
         Log.w(
             TAG,
@@ -416,10 +511,13 @@ class UberAccessibilityService : AccessibilityService() {
     private fun updateTrustedForeground(packageName: String?, decision: PackageDecision) {
         trustedForegroundPackageName = DriverAppPackagePolicy.normalize(packageName)
         trustedForegroundDecision = decision
-        trustedForegroundDriverApp = if (decision == PackageDecision.DRIVER_APP) {
-            DriverAppPackagePolicy.driverAppForPackage(packageName)
-        } else {
-            DriverApp.UNKNOWN
+        trustedForegroundDriverApp = when (decision) {
+            PackageDecision.DRIVER_APP -> DriverAppPackagePolicy.driverAppForPackage(packageName)
+            PackageDecision.ALLOWED_USER_APP -> trustedForegroundDriverApp
+            PackageDecision.OWN_APP,
+            PackageDecision.UNKNOWN,
+            PackageDecision.TRANSIENT_SYSTEM,
+            PackageDecision.BLOCKED_USER_APP -> DriverApp.UNKNOWN
         }
         trustedForegroundSeenAtElapsed = SystemClock.elapsedRealtime()
     }
@@ -428,7 +526,7 @@ class UberAccessibilityService : AccessibilityService() {
         if (driverApp == DriverApp.UNKNOWN || driverApp == trustedForegroundDriverApp) return
         val previousDriverApp = trustedForegroundDriverApp
         if (previousDriverApp == DriverApp.NINETY_NINE && driverApp != DriverApp.NINETY_NINE) {
-            closeNinetyNineCaptureEngine()
+            pauseNinetyNineCaptureEngine()
         }
         if (previousDriverApp != DriverApp.UNKNOWN) {
             cancelCapturePipeline(OverlayLatencyTrace.EndReason.TRACE_SUPERSEDED_BY_NEW_DRIVER_EVENT)
@@ -456,6 +554,14 @@ class UberAccessibilityService : AccessibilityService() {
             captureCoordinator.switchDriverApp(driverApp)
         }
         trustedForegroundDriverApp = driverApp
+        TelemetryProvider.analytics.track(
+            AnalyticsEvents.DRIVER_APP_DETECTED,
+            mapOf(
+                AnalyticsParams.PLATFORM to driverApp.id,
+                AnalyticsParams.SOURCE to AnalyticsValues.SOURCE_ACCESSIBILITY_SERVICE
+            )
+        )
+        ReadingPipelineRuntime.markPipelineStarted(driverApp)
     }
 
     private fun configureRuntimeProfileForDriverApp(driverApp: DriverApp) {
@@ -577,7 +683,11 @@ class UberAccessibilityService : AccessibilityService() {
         if (!session.shouldStartBurst) return
 
         capturePipelineJob = serviceScope.launch {
-            runCapturePipeline(event = null, eventAtMillis = eventAtMillis, generation = session.generation)
+            runCapturePipelineSafely(
+                event = null,
+                eventAtMillis = eventAtMillis,
+                generation = session.generation
+            )
         }
     }
 
@@ -650,6 +760,73 @@ class UberAccessibilityService : AccessibilityService() {
         }
     }
 
+    private suspend fun runCapturePipelineSafely(
+        event: AccessibilityEvent?,
+        eventAtMillis: Long,
+        generation: Long
+    ) {
+        try {
+            runCapturePipeline(event, eventAtMillis, generation)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            recordServiceFailure(stage = "capture_pipeline", error = error)
+            runCatching {
+                recordCaptureRejection(
+                    source = if (trustedForegroundDriverApp == DriverApp.NINETY_NINE) {
+                        OfferCaptureSource.NINETY_NINE_OCR
+                    } else {
+                        OfferCaptureSource.ACCESSIBILITY_TREE
+                    },
+                    reason = OfferCaptureRejectionReason.INVALID_FRAME
+                )
+            }
+            if (isCurrentGeneration(generation)) {
+                activeScanSessionGeneration = 0L
+                activeScanSessionStartedAtMillis = 0L
+                capturePipelineJob = null
+                startPendingCaptureAfterCurrentIfNeeded()
+            }
+        } finally {
+            val platform = trustedForegroundDriverApp
+            if (platform != DriverApp.UNKNOWN &&
+                ReadingPipelineRuntime.current().pipelineState != ReadingPipelineRuntime.PipelineState.FAILED
+            ) {
+                ReadingPipelineRuntime.markPipelineState(
+                    platform,
+                    ReadingPipelineRuntime.PipelineState.IDLE
+                )
+            }
+        }
+    }
+
+    private fun recordServiceFailure(stage: String, error: Throwable) {
+        runCatching {
+            AppDiagnostics.recordStage(this, AppDiagnostics.Stage.CAPTURE_ERROR)
+        }
+        val message = "CALCMOT_FAILURE_CONTAINED stage=$stage type=${error.javaClass.simpleName}"
+        ReadingPipelineRuntime.markFailure(
+            trustedForegroundDriverApp,
+            "${error.javaClass.simpleName} em $stage"
+        )
+        TelemetryProvider.crashReporter.recordNonFatal(
+            error = error,
+            reason = stage,
+            params = mapOf(
+                AnalyticsParams.PLATFORM to trustedForegroundDriverApp.id,
+                AnalyticsParams.SOURCE to AnalyticsValues.SOURCE_ACCESSIBILITY_SERVICE,
+                AnalyticsParams.PIPELINE_STATE to "failed"
+            )
+        )
+        runCatching {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, message, error)
+            } else {
+                Log.e(TAG, message)
+            }
+        }
+    }
+
     private suspend fun handleEventPayloadCandidate(
         event: AccessibilityEvent,
         eventAtMillis: Long,
@@ -701,7 +878,7 @@ class UberAccessibilityService : AccessibilityService() {
         accessibilityPollingJob = serviceScope.launch {
             while (System.currentTimeMillis() <= accessibilityPollingUntil) {
                 if (!AppSettings.isMonitoringEnabled(this@UberAccessibilityService)) {
-                    closeNinetyNineCaptureEngine()
+                    pauseNinetyNineCaptureEngine()
                     captureCoordinator.reset()
                     cancelOverlayExpiry()
                     mainScope.launch { overlayManager?.hideOverlay() }
@@ -733,36 +910,62 @@ class UberAccessibilityService : AccessibilityService() {
         if (continuousAccessibilityPollingJob?.isActive == true) return
 
         continuousAccessibilityPollingJob = serviceScope.launch {
-            while (true) {
+            while (isActive) {
                 delay(ACCESSIBILITY_HEARTBEAT_INTERVAL_MS)
-
-                if (!AppSettings.isMonitoringEnabled(this@UberAccessibilityService)) {
-                    captureCoordinator.reset()
-                    cancelOverlayExpiry()
-                    mainScope.launch { overlayManager?.hideOverlay() }
-                    continue
-                }
-                runCatching {
-                    bootstrapDriverForegroundFromActiveRoot()
-                }.onFailure { error ->
-                    if (BuildConfig.DEBUG) {
-                        Log.e(TAG, "CALCMOT_DRIVER_FOREGROUND_BOOTSTRAP_FAILED", error)
+                try {
+                    if (!AppSettings.isMonitoringEnabled(this@UberAccessibilityService)) {
+                        captureCoordinator.reset()
+                        cancelOverlayExpiry()
+                        mainScope.launch { overlayManager?.hideOverlay() }
+                        continue
                     }
-                }
-                if (!isCurrentForegroundPackageAllowed()) {
-                    continue
-                }
+                    runCatching {
+                        bootstrapDriverForegroundFromActiveRoot()
+                    }.onFailure { error ->
+                        recordServiceFailure(stage = "foreground_bootstrap", error = error)
+                    }
+                    if (!isCurrentForegroundPackageAllowed()) continue
 
-                captureCoordinator.expireOverlayIfStale()
-                    ?.let { applyCaptureDecision(it, "overlay-heartbeat-ttl") }
+                    runPipelineWatchdogIfNeeded()
 
-                if (trustedForegroundDriverApp == DriverApp.NINETY_NINE) {
-                    runFocusedNinetyNineHeartbeatScanIfNeeded()
-                    continue
+                    captureCoordinator.expireOverlayIfStale()
+                        ?.let { applyCaptureDecision(it, "overlay-heartbeat-ttl") }
+
+                    if (trustedForegroundDriverApp == DriverApp.NINETY_NINE) {
+                        runFocusedNinetyNineHeartbeatScanIfNeeded()
+                        continue
+                    }
+                    runFocusedUberWatchdogScanIfNeeded()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    // A single malformed window or OEM screenshot failure must not kill the
+                    // long-lived heartbeat responsible for recovering future offers.
+                    recordServiceFailure(stage = "continuous_heartbeat", error = error)
                 }
-                runFocusedUberWatchdogScanIfNeeded()
             }
         }
+    }
+
+    private fun runPipelineWatchdogIfNeeded() {
+        val platform = trustedForegroundDriverApp
+        if (platform == DriverApp.UNKNOWN) return
+        val now = SystemClock.elapsedRealtime()
+        val reason = ReadingPipelineWatchdogPolicy.reason(
+            snapshot = ReadingPipelineRuntime.current(),
+            nowElapsedRealtime = now,
+            lastResetElapsedRealtime = lastPipelineWatchdogResetAtElapsed
+        ) ?: return
+
+        lastPipelineWatchdogResetAtElapsed = now
+        if (reason == ReadingPipelineRuntime.RestartReason.WATCHDOG_BUSY) {
+            ReadingPipelineRuntime.markBusyTooLong(platform)
+        }
+        Log.w(
+            TAG,
+            "CALCMOT_PIPELINE_WATCHDOG_RESET reason=${reason.logValue} platform=${platform.id}"
+        )
+        requestReadingRestart(platform, reason)
     }
 
     private fun bootstrapDriverForegroundFromActiveRoot() {
@@ -850,10 +1053,25 @@ class UberAccessibilityService : AccessibilityService() {
         }
 
         val startedAt = SystemClock.elapsedRealtime()
-        val result = getOrCreateNinetyNineCaptureEngine().captureAndExtract(
-            targetBounds = targetBounds,
-            excludedScreenBounds = listOfNotNull(overlayManager?.visibleBounds)
+        ReadingPipelineRuntime.markPipelineState(
+            DriverApp.NINETY_NINE,
+            ReadingPipelineRuntime.PipelineState.CAPTURING
         )
+        val result = try {
+            getOrCreateNinetyNineCaptureEngine().captureAndExtract(
+                targetBounds = targetBounds,
+                excludedScreenBounds = listOfNotNull(overlayManager?.visibleBounds)
+            )
+        } finally {
+            if (ReadingPipelineRuntime.current().pipelineState !=
+                ReadingPipelineRuntime.PipelineState.FAILED
+            ) {
+                ReadingPipelineRuntime.markPipelineState(
+                    DriverApp.NINETY_NINE,
+                    ReadingPipelineRuntime.PipelineState.IDLE
+                )
+            }
+        }
         trace?.metric(
             name = "99.visualCapture",
             durationMs = SystemClock.elapsedRealtime() - startedAt,
@@ -905,6 +1123,15 @@ class UberAccessibilityService : AccessibilityService() {
             }
 
             is NinetyNineCaptureResult.Skipped -> {
+                if (result.reason == NinetyNineCaptureSkipReason.OCR_TIMEOUT ||
+                    result.reason == NinetyNineCaptureSkipReason.CAPTURE_TIMEOUT ||
+                    result.reason == NinetyNineCaptureSkipReason.INTERNAL_ERROR
+                ) {
+                    ReadingPipelineRuntime.markFailure(
+                        DriverApp.NINETY_NINE,
+                        "99: ${result.reason.name}"
+                    )
+                }
                 if (result.reason != NinetyNineCaptureSkipReason.COOLDOWN &&
                     result.reason != NinetyNineCaptureSkipReason.BUSY &&
                     result.reason != NinetyNineCaptureSkipReason.UNCHANGED_FRAME
@@ -935,18 +1162,134 @@ class UberAccessibilityService : AccessibilityService() {
     }
 
     private fun getOrCreateNinetyNineCaptureEngine(): NinetyNineCaptureEngine {
-        return ninetyNineCaptureEngine ?: NinetyNineCaptureEngine(
+        val engine = ninetyNineCaptureEngine ?: NinetyNineCaptureEngine(
             captureSource = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 AccessibilityScreenshotCaptureSource(this)
             } else {
                 UnsupportedNinetyNineCaptureSource
+            },
+            stateListener = { state ->
+                val runtimeState = when (state) {
+                    NinetyNineEngineState.IDLE -> ReadingPipelineRuntime.PipelineState.IDLE
+                    NinetyNineEngineState.CAPTURING -> ReadingPipelineRuntime.PipelineState.CAPTURING
+                    NinetyNineEngineState.OCR -> ReadingPipelineRuntime.PipelineState.OCR
+                }
+                ReadingPipelineRuntime.markPipelineState(DriverApp.NINETY_NINE, runtimeState)
             }
         ).also { ninetyNineCaptureEngine = it }
+        engine.resume()
+        return engine
     }
 
-    private fun closeNinetyNineCaptureEngine() {
+    private fun pauseNinetyNineCaptureEngine() {
+        ninetyNineCaptureEngine?.pause()
+    }
+
+    private fun releaseNinetyNineCaptureEngine() {
         ninetyNineCaptureEngine?.close()
         ninetyNineCaptureEngine = null
+    }
+
+    private fun requestReadingRestart(
+        platform: DriverApp?,
+        reason: ReadingPipelineRuntime.RestartReason
+    ) {
+        ensureServiceScopeActive()
+        if (readingResetJob?.isActive == true) return
+        readingResetJob = serviceScope.launch {
+            val selectedPlatform = platform
+                ?.takeIf { it != DriverApp.UNKNOWN }
+                ?: AppSettings.getLastDriverApp(this@UberAccessibilityService)
+            val platformsToReset = if (platform == null) {
+                DriverApp.supported
+            } else {
+                listOf(selectedPlatform)
+            }
+            try {
+                platformsToReset.forEach { target ->
+                    ReadingPipelineRuntime.markPipelineStopped(target, reason.logValue)
+                }
+                val oldCaptureJob = capturePipelineJob
+                cancelCapturePipeline(OverlayLatencyTrace.EndReason.INVALID_CONTEXT)
+                withTimeoutOrNull(RESET_JOB_JOIN_TIMEOUT_MS) {
+                    oldCaptureJob?.join()
+                }
+                cancelOverlayExpiry()
+                accessibilityPollingUntil = 0L
+                lastWatchdogScanAtMillis = 0L
+                lastParsedOfferAudit = null
+                postReconnectCandidateGuard.onServiceConnected(null)
+                captureCoordinator.reset()
+
+                if (platform == null || selectedPlatform == DriverApp.NINETY_NINE) {
+                    releaseNinetyNineCaptureEngine()
+                } else {
+                    ninetyNineCaptureEngine?.resetTransientState()
+                }
+
+                configureRuntimeProfileForDriverApp(selectedPlatform)
+                withContext(Dispatchers.Main.immediate) {
+                    if (overlayManager == null) {
+                        overlayManager = OverlayManager(this@UberAccessibilityService).also { manager ->
+                            manager.setOnUserDismissed { handleOverlayDismissedByUser() }
+                        }
+                    } else {
+                        overlayManager?.hideOverlay()
+                    }
+                }
+                startContinuousAccessibilityPolling()
+                platformsToReset.forEach { target ->
+                    ReadingPipelineRuntime.markReset(target, reason.logValue)
+                }
+                ReadingPipelineRuntime.markPipelineStarted(selectedPlatform)
+                ReadingPipelineRuntime.markReadingRestarted(selectedPlatform)
+                logRuntimePermissionStatuses()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                recordServiceFailure(stage = "pipeline_reset", error = error)
+                ReadingPipelineRuntime.markFailure(
+                    selectedPlatform,
+                    "Falha ao reiniciar leitura: ${error.javaClass.simpleName}"
+                )
+            } finally {
+                readingResetJob = null
+            }
+        }
+    }
+
+    private fun logRuntimePermissionStatuses() {
+        val accessibilityActive = ReadingPipelineRuntime.current().serviceConnected
+        val powerManager = getSystemService(POWER_SERVICE) as? PowerManager
+        val batteryValue = if (
+            powerManager?.isIgnoringBatteryOptimizations(packageName) == true
+        ) {
+            "unrestricted"
+        } else {
+            "optimized"
+        }
+        Log.w(TAG, "CALCMOT_ACCESSIBILITY_STATUS active=$accessibilityActive")
+        Log.w(TAG, "CALCMOT_OVERLAY_PERMISSION_STATUS active=$accessibilityActive")
+        Log.w(TAG, "CALCMOT_BATTERY_OPTIMIZATION_STATUS value=$batteryValue")
+        val statusReason = if (accessibilityActive) {
+            AnalyticsValues.STATUS_ACTIVE
+        } else {
+            AnalyticsValues.STATUS_INACTIVE
+        }
+        TelemetryProvider.analytics.track(
+            AnalyticsEvents.ACCESSIBILITY_STATUS_CHECKED,
+            mapOf(
+                AnalyticsParams.SOURCE to AnalyticsValues.SOURCE_ACCESSIBILITY_SERVICE,
+                AnalyticsParams.REASON to statusReason
+            )
+        )
+        TelemetryProvider.analytics.track(
+            AnalyticsEvents.OVERLAY_PERMISSION_STATUS_CHECKED,
+            mapOf(
+                AnalyticsParams.SOURCE to AnalyticsValues.SOURCE_ACCESSIBILITY_SERVICE,
+                AnalyticsParams.REASON to statusReason
+            )
+        )
     }
 
     private fun findNinetyNineCaptureBounds(): Rect? {
@@ -1010,18 +1353,29 @@ class UberAccessibilityService : AccessibilityService() {
         if (!hasUberRootAvailable()) return
 
         lastWatchdogScanAtMillis = now
-        val scanResult = extractCandidateFromAccessibilityTree(
-            eventAtMillis = now,
-            logRejectedTree = false,
-            generationId = captureGeneration,
-            delayMs = 0L
-        ) ?: return
-
-        handleAccessibilityScanResult(
-            scanResult = scanResult,
-            label = "accessibility-watchdog",
-            trace = latencyTraceForGeneration(captureGeneration)
+        ReadingPipelineRuntime.markPipelineState(
+            DriverApp.UBER,
+            ReadingPipelineRuntime.PipelineState.CAPTURING
         )
+        try {
+            val scanResult = extractCandidateFromAccessibilityTree(
+                eventAtMillis = now,
+                logRejectedTree = false,
+                generationId = captureGeneration,
+                delayMs = 0L
+            ) ?: return
+
+            handleAccessibilityScanResult(
+                scanResult = scanResult,
+                label = "accessibility-watchdog",
+                trace = latencyTraceForGeneration(captureGeneration)
+            )
+        } finally {
+            ReadingPipelineRuntime.markPipelineState(
+                DriverApp.UBER,
+                ReadingPipelineRuntime.PipelineState.IDLE
+            )
+        }
     }
 
     private fun hasUberRootAvailable(): Boolean {
@@ -2383,6 +2737,14 @@ class UberAccessibilityService : AccessibilityService() {
     }
 
     private fun recordCaptureSuccess(source: OfferCaptureSource, candidate: OfferCandidate) {
+        ReadingPipelineRuntime.markSuccessfulRead(trustedForegroundDriverApp)
+        TelemetryProvider.analytics.track(
+            AnalyticsEvents.OFFER_DETECTED,
+            mapOf(
+                AnalyticsParams.PLATFORM to trustedForegroundDriverApp.id,
+                AnalyticsParams.SOURCE to source.id
+            ) + AnalyticsBuckets.from(candidate)
+        )
         captureLearningLab.recordCandidate(source, candidate)
         AppDiagnostics.recordCaptureOutcome(
             this,
@@ -2391,6 +2753,14 @@ class UberAccessibilityService : AccessibilityService() {
     }
 
     private fun recordCaptureSuccess(source: OfferCaptureSource, tripData: TripData) {
+        ReadingPipelineRuntime.markSuccessfulRead(trustedForegroundDriverApp)
+        TelemetryProvider.analytics.track(
+            AnalyticsEvents.OFFER_DETECTED,
+            mapOf(
+                AnalyticsParams.PLATFORM to trustedForegroundDriverApp.id,
+                AnalyticsParams.SOURCE to source.id
+            ) + AnalyticsBuckets.from(tripData)
+        )
         captureLearningLab.recordOverlay(source, tripData)
         AppDiagnostics.recordCaptureOutcome(
             this,
@@ -2402,6 +2772,14 @@ class UberAccessibilityService : AccessibilityService() {
         source: OfferCaptureSource,
         reason: OfferCaptureRejectionReason
     ) {
+        TelemetryProvider.analytics.track(
+            AnalyticsEvents.OFFER_REJECTED,
+            mapOf(
+                AnalyticsParams.PLATFORM to trustedForegroundDriverApp.id,
+                AnalyticsParams.SOURCE to source.id,
+                AnalyticsParams.REASON to reason.id
+            )
+        )
         captureLearningLab.recordRejected(source, reason)
         AppDiagnostics.recordCaptureOutcome(
             this,
@@ -2720,6 +3098,13 @@ class UberAccessibilityService : AccessibilityService() {
                     ?.withTripData(decision.tripData)
                     ?.mark(OverlayLatencyTrace.Stage.T9_OVERLAY_REQUESTED)
                 Log.w(TAG, "CALCMOT_OVERLAY_REQUEST fingerprint=${decision.overlayFingerprint}")
+                TelemetryProvider.analytics.track(
+                    AnalyticsEvents.OFFER_PARSED,
+                    mapOf(
+                        AnalyticsParams.PLATFORM to trustedForegroundDriverApp.id,
+                        AnalyticsParams.SOURCE to decision.source.id
+                    ) + AnalyticsBuckets.from(decision.tripData)
+                )
                 showOverlay(decision.tripData, trace)
                 scheduleOverlayExpiry(decision.overlayFingerprint)
                 true
@@ -2821,22 +3206,51 @@ class UberAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        if (BuildConfig.DEBUG) {
-            ShellOfferBridge.unregister(shellOfferHandler)
+        Log.w(TAG, "CALCMOT_ACCESSIBILITY_SERVICE_DESTROY instance=${System.identityHashCode(this)}")
+        safelyTearDown("shell_bridge") {
+            if (BuildConfig.DEBUG) {
+                ShellOfferBridge.unregister(shellOfferHandler)
+            }
         }
-        continuousAccessibilityPollingJob?.cancel()
-        accessibilityPollingJob?.cancel()
-        capturePipelineJob?.cancel()
-        overlayExpiryJob?.cancel()
-        accessibilityTreeLab.close()
-        captureLearningLab.close()
-        ninetyNineDiagnostics.close()
-        closeNinetyNineCaptureEngine()
-        overlayManager?.removeOverlay()
-        serviceScope.cancel()
-        mainScope.cancel()
-        captureDispatcher.close()
+        safelyTearDown("jobs") {
+            continuousAccessibilityPollingJob?.cancel()
+            accessibilityPollingJob?.cancel()
+            capturePipelineJob?.cancel()
+            overlayExpiryJob?.cancel()
+            readingResetJob?.cancel()
+        }
+        safelyTearDown("accessibility_tree_lab") {
+            if (accessibilityTreeLabDelegate.isInitialized()) {
+                accessibilityTreeLab.close()
+            }
+        }
+        safelyTearDown("capture_learning_lab") {
+            if (captureLearningLabDelegate.isInitialized()) {
+                captureLearningLab.close()
+            }
+        }
+        safelyTearDown("99_diagnostics") {
+            if (ninetyNineDiagnosticsDelegate.isInitialized()) {
+                ninetyNineDiagnostics.close()
+            }
+        }
+        safelyTearDown("99_capture_engine") { releaseNinetyNineCaptureEngine() }
+        safelyTearDown("reading_runtime") {
+            ReadingPipelineRuntime.unregister(readingCommandHandler)
+        }
+        safelyTearDown("overlay") { overlayManager?.removeOverlay() }
+        safelyTearDown("service_scope") { serviceScope.cancel() }
+        safelyTearDown("main_scope") { mainScope.cancel() }
+        safelyTearDown("capture_dispatcher") { captureDispatcher.close() }
+        runCatching { super.onDestroy() }.onFailure { error ->
+            recordServiceFailure(stage = "destroy_super", error = error)
+        }
+    }
+
+    private inline fun safelyTearDown(stage: String, block: () -> Unit) {
+        runCatching(block).onFailure { error ->
+            recordServiceFailure(stage = "destroy_$stage", error = error)
+        }
     }
 
     override fun onInterrupt() {}
@@ -2931,6 +3345,7 @@ class UberAccessibilityService : AccessibilityService() {
         const val SUSPECT_VALUE_CHANGE_WINDOW_MS = 15_000L
         const val SUSPECT_VALUE_EPSILON = 0.05
         const val VISUAL_PROBE_MAX_AGE_MS = 5_000L
+        const val RESET_JOB_JOIN_TIMEOUT_MS = 3_000L
         val durationSignalRegex = Regex("""\b[0-9]{1,3}\s*(h|hora|min|minuto)\b""")
     }
 

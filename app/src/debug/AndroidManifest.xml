@@ -35,5 +35,10 @@
                 <action android:name="br.com.calcmot.DEBUG_LATENCY_VISUAL_PROBE" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".debug.CrashlyticsTestCrashReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
     </application>
 </manifest>

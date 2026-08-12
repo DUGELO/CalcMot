@@ -34,6 +34,7 @@ import br.com.calcmot.AppSettings
 import br.com.calcmot.AppDiagnostics
 import br.com.calcmot.BuildConfig
 import br.com.calcmot.DriverAppPackagePolicy
+import br.com.calcmot.DriverApp
 import br.com.calcmot.OverlayCustomPosition
 import br.com.calcmot.PackageDecision
 import br.com.calcmot.accessibility.AccessibilityDebugOverlayState
@@ -44,10 +45,16 @@ import br.com.calcmot.model.ProfitabilityResult
 import br.com.calcmot.model.TripData
 import br.com.calcmot.processor.overlayFingerprint
 import br.com.calcmot.telemetry.OverlayLatencyTrace
+import br.com.calcmot.telemetry.AnalyticsBuckets
+import br.com.calcmot.telemetry.AnalyticsEvents
+import br.com.calcmot.telemetry.AnalyticsParams
+import br.com.calcmot.telemetry.AnalyticsValues
+import br.com.calcmot.telemetry.TelemetryProvider
 import br.com.calcmot.ui.theme.MetricaTheme
 import android.util.Log
 import kotlin.math.roundToInt
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 open class OverlayManager(private val context: Context) : IOverlayManager {
@@ -91,23 +98,26 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
                     suppressMillis = USER_DISMISS_SUPPRESS_MILLIS
                 )
                 resetOverlayView()
-                userDismissedCallback?.invoke()
+                runCatching { userDismissedCallback?.invoke() }
+                    .onFailure { error ->
+                        Log.e(TAG, "OVERLAY_DISMISS_CALLBACK_FAILURE", error)
+                    }
                 return true
             }
         }
     )
 
     override val isVisible: Boolean
-        get() = runOnMainBlocking {
+        get() = runOverlayBoundary("isVisible", false) {
             composeView?.visibility == View.VISIBLE && composeView?.parent != null
         }
 
     override val visibleBounds: Rect?
         get() {
-            return runOnMainBlocking {
-                val view = composeView ?: return@runOnMainBlocking null
+            return runOverlayBoundary("visibleBounds", null) {
+                val view = composeView ?: return@runOverlayBoundary null
                 if (view.visibility != View.VISIBLE || view.parent == null || view.width <= 0 || view.height <= 0) {
-                    return@runOnMainBlocking null
+                    return@runOverlayBoundary null
                 }
                 val location = IntArray(2)
                 view.getLocationOnScreen(location)
@@ -122,27 +132,27 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
 
     @SuppressLint("ClickableViewAccessibility")
     override fun showOverlay(data: TripData) {
-        runOnMainBlocking {
+        runOverlayBoundary("showOverlay", Unit) {
             if (!isOverlayAllowed()) {
                 blockOverlayOutsideDriverApp("showOverlay")
-                return@runOnMainBlocking
+                return@runOverlayBoundary
             }
             showOverlayInternal(data, retryOnBadToken = true)
         }
     }
 
     override fun showDebugOverlay(state: AccessibilityDebugOverlayState) {
-        runOnMainBlocking {
+        runOverlayBoundary("showDebugOverlay", Unit) {
             if (!isOverlayAllowed()) {
                 blockOverlayOutsideDriverApp("showDebugOverlay")
-                return@runOnMainBlocking
+                return@runOverlayBoundary
             }
             showDebugOverlayInternal(state, retryOnBadToken = true, forceApplicationOverlay = false)
         }
     }
 
     override fun setForegroundPackage(packageName: String?) {
-        runOnMainBlocking {
+        runOverlayBoundary("setForegroundPackage", Unit) {
             val decision = DriverAppPackagePolicy.classify(packageName)
             when (decision) {
                 PackageDecision.DRIVER_APP -> {
@@ -153,6 +163,16 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
                     Log.w(
                         "OverlayManager",
                         "OVERLAY_ALLOWED_DRIVER_APP package=${DriverAppPackagePolicy.describe(packageName)}"
+                    )
+                }
+
+                PackageDecision.ALLOWED_USER_APP -> {
+                    foregroundPackageName = DriverAppPackagePolicy.normalize(packageName)
+                    criticalBlockPackageName = null
+                    Log.w(
+                        "OverlayManager",
+                        "OVERLAY_ALLOWED_COMMON_APP package=" +
+                            DriverAppPackagePolicy.describe(packageName)
                     )
                 }
 
@@ -186,7 +206,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     }
 
     override fun setLatencyTrace(trace: OverlayLatencyTrace?) {
-        runOnMainBlocking {
+        runOverlayBoundary("setLatencyTrace", Unit) {
             pendingLatencyTrace = trace
         }
     }
@@ -359,11 +379,22 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             latencyTrace?.mark(OverlayLatencyTrace.Stage.T11_OVERLAY_ADD_OR_UPDATE_END)
             Log.w("OverlayManager", "CALCMOT_OVERLAY_WINDOW fingerprint=$newFingerprint")
             AppDiagnostics.recordStage(context, AppDiagnostics.Stage.OVERLAY_SHOWN)
+            TelemetryProvider.analytics.track(
+                AnalyticsEvents.OVERLAY_SHOWN,
+                mapOf(
+                    AnalyticsParams.PLATFORM to currentTelemetryPlatform(),
+                    AnalyticsParams.SOURCE to AnalyticsValues.SOURCE_OVERLAY,
+                    AnalyticsParams.CLASSIFICATION to (
+                        profitabilityState.value?.quality?.name?.lowercase() ?: "unknown"
+                    )
+                ) + AnalyticsBuckets.from(data)
+            )
             if (BuildConfig.DEBUG) {
                 Log.i("OverlayManager", "Overlay shown: $data")
             }
         } catch (e: WindowManager.BadTokenException) {
             AppDiagnostics.recordStage(context, AppDiagnostics.Stage.OVERLAY_ERROR)
+            trackOverlayFailure(AnalyticsValues.REASON_BAD_TOKEN, e, reportCrash = !retryOnBadToken)
             overlayStateMachine.markTokenRecovering(newFingerprint)
             resetOverlayView()
             Log.w("OverlayManager", "OVERLAY_TOKEN_RECOVERING fingerprint=$newFingerprint")
@@ -391,6 +422,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             }
         } catch (e: Exception) {
             AppDiagnostics.recordStage(context, AppDiagnostics.Stage.OVERLAY_ERROR)
+            trackOverlayFailure(AnalyticsValues.REASON_EXCEPTION, e, reportCrash = true)
             latencyTrace?.close(OverlayLatencyTrace.EndReason.CARD_GONE)
             Log.e("OverlayManager", "Erro showOverlay: ", e)
         }
@@ -398,6 +430,12 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
 
     private fun isOverlayAllowed(): Boolean {
         if (criticalBlockPackageName != null) return false
+        val foregroundDecision = DriverAppPackagePolicy.classify(foregroundPackageName)
+        if (foregroundDecision != PackageDecision.DRIVER_APP &&
+            foregroundDecision != PackageDecision.ALLOWED_USER_APP
+        ) {
+            return false
+        }
         val trustedPackage = trustedDriverPackageName ?: return false
         if (!DriverAppPackagePolicy.isDriverPackage(trustedPackage)) return false
         val elapsedSinceTrustedDriver = SystemClock.elapsedRealtime() - trustedDriverPackageSeenAtElapsed
@@ -428,27 +466,27 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     }
 
     override fun hideOverlay() {
-        runOnMainBlocking {
+        runOverlayBoundary("hideOverlay", Unit) {
             resetOverlayView()
             overlayStateMachine.markHidden()
         }
     }
 
     override fun expireOverlay(fingerprint: String?) {
-        runOnMainBlocking {
+        runOverlayBoundary("expireOverlay", Unit) {
             resetOverlayView()
             overlayStateMachine.markExpired(fingerprint ?: overlayStateMachine.currentFingerprint())
         }
     }
 
     override fun hideDebugOverlay() {
-        runOnMainBlocking {
+        runOverlayBoundary("hideDebugOverlay", Unit) {
             debugComposeView?.visibility = View.GONE
         }
     }
 
     override fun removeOverlay() {
-        runOnMainBlocking {
+        runOverlayBoundary("removeOverlay", Unit) {
             resetOverlayView()
             resetDebugOverlayView()
             overlayStateMachine.markHidden()
@@ -456,7 +494,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     }
 
     override fun removeOverlayWindowsForScan(): Boolean {
-        return runOnMainBlocking {
+        return runOverlayBoundary("removeOverlayWindowsForScan", false) {
             val hadOverlayWindow = composeView?.parent != null || debugComposeView?.parent != null
             if (hadOverlayWindow) {
                 resetOverlayView()
@@ -489,7 +527,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
                     removeWindowView(manager, it, "overlay")
                 }
             }
-            ownerToDestroy?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+            destroyLifecycleOwner(ownerToDestroy, "overlay")
         }
     }
 
@@ -509,7 +547,15 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
                     removeWindowView(manager, it, "debug-overlay")
                 }
             }
-            ownerToDestroy?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+            destroyLifecycleOwner(ownerToDestroy, "debug-overlay")
+        }
+    }
+
+    private fun destroyLifecycleOwner(owner: CustomLifecycleOwner?, label: String) {
+        runCatching {
+            owner?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        }.onFailure { error ->
+            Log.e(TAG, "OVERLAY_LIFECYCLE_DESTROY_FAILURE label=$label", error)
         }
     }
 
@@ -533,12 +579,49 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
 
         val latch = CountDownLatch(1)
         val result = AtomicReference<Result<T>>()
-        mainHandler.post {
+        val posted = mainHandler.post {
             result.set(runCatching(block))
             latch.countDown()
         }
-        latch.await()
-        return result.get().getOrThrow()
+        check(posted) { "Main looper rejected overlay operation" }
+        check(latch.await(MAIN_THREAD_OPERATION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+            "Timed out waiting for overlay operation on main thread"
+        }
+        return checkNotNull(result.get()) {
+            "Overlay operation completed without a result"
+        }.getOrThrow()
+    }
+
+    private fun <T> runOverlayBoundary(
+        operation: String,
+        fallback: T,
+        block: () -> T
+    ): T {
+        return runCatching {
+            runOnMainBlocking(block)
+        }.getOrElse { error ->
+            AppDiagnostics.recordStage(context, AppDiagnostics.Stage.OVERLAY_ERROR)
+            trackOverlayFailure(AnalyticsValues.REASON_BOUNDARY_FAILURE, error, reportCrash = true)
+            Log.e(TAG, "OVERLAY_BOUNDARY_FAILURE operation=$operation", error)
+            fallback
+        }
+    }
+
+    private fun trackOverlayFailure(reason: String, error: Throwable, reportCrash: Boolean) {
+        val params = mapOf(
+            AnalyticsParams.PLATFORM to currentTelemetryPlatform(),
+            AnalyticsParams.SOURCE to AnalyticsValues.SOURCE_OVERLAY,
+            AnalyticsParams.REASON to reason,
+            AnalyticsParams.PIPELINE_STATE to "failed"
+        )
+        TelemetryProvider.analytics.track(AnalyticsEvents.OVERLAY_FAILED, params)
+        if (reportCrash) {
+            TelemetryProvider.crashReporter.recordNonFatal(error, reason, params)
+        }
+    }
+
+    private fun currentTelemetryPlatform(): String {
+        return DriverApp.fromPackage(foregroundPackageName).id
     }
 
     private fun createComposeView(windowContext: Context) {
@@ -755,10 +838,12 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     }
 
     private companion object {
+        const val TAG = "OverlayManager"
         const val BAD_TOKEN_RETRY_DELAY_MS = 150L
+        const val MAIN_THREAD_OPERATION_TIMEOUT_MS = 2_000L
         const val OVERLAY_PREDRAW_TIMEOUT_MS = 1_500L
         const val USER_DISMISS_SUPPRESS_MILLIS = 10_000L
-        const val TRUSTED_DRIVER_GRACE_MS = 2_000L
+        const val TRUSTED_DRIVER_GRACE_MS = 5_000L
         var preferDebugApplicationOverlay = false
     }
 }

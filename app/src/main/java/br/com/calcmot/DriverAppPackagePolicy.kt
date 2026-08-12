@@ -2,6 +2,7 @@ package br.com.calcmot
 
 enum class PackageDecision {
     DRIVER_APP,
+    ALLOWED_USER_APP,
     OWN_APP,
     UNKNOWN,
     TRANSIENT_SYSTEM,
@@ -26,14 +27,22 @@ object DriverAppPackagePolicy {
         "com.google.android.apps.chrome",
         "com.google.android.webview",
         "org.mozilla.firefox",
+        "org.mozilla.fenix",
+        "com.brave.browser",
         "com.microsoft.emmx",
         "com.opera.browser",
-        "com.whatsapp",
-        "com.whatsapp.w4b",
-        "com.google.android.apps.photos",
-        "com.sec.android.gallery3d",
-        "com.samsung.android.gallery3d",
-        "com.miui.gallery",
+        "com.sec.android.app.sbrowser",
+        "com.android.permissioncontroller",
+        "com.google.android.permissioncontroller",
+        "com.android.packageinstaller",
+        "com.google.android.packageinstaller",
+        "com.samsung.android.packageinstaller",
+        "com.x8bit.bitwarden",
+        "com.agilebits.onepassword",
+        "com.lastpass.lpandroid",
+        "com.google.android.apps.walletnfcrel",
+        "com.samsung.android.spay",
+        "com.paypal.android.p2pmobile",
         "com.nu.production",
         "br.com.digio",
         "br.com.digio.uber",
@@ -55,7 +64,21 @@ object DriverAppPackagePolicy {
         "br.gov.caixa",
         "com.picpay",
         "br.com.uol.ps",
-        "com.mercadopago"
+        "com.mercadopago",
+        "br.com.intermedium",
+        "com.intermedium",
+        "br.com.c6bank",
+        "com.c6bank",
+        "br.com.neon",
+        "com.neon",
+        "br.com.original",
+        "br.com.bancopan",
+        "br.com.banrisul",
+        "br.com.sicredi",
+        "br.com.sicoob",
+        "com.btgpactual",
+        "br.com.xp",
+        "com.xpinc"
     )
 
     fun classify(packageName: CharSequence?): PackageDecision {
@@ -67,7 +90,7 @@ object DriverAppPackagePolicy {
             normalized in transientSystemPackages -> PackageDecision.TRANSIENT_SYSTEM
             normalized in criticalUserPackages -> PackageDecision.BLOCKED_USER_APP
             criticalUserPackagePrefixes.any { normalized.startsWith(it) } -> PackageDecision.BLOCKED_USER_APP
-            else -> PackageDecision.BLOCKED_USER_APP
+            else -> PackageDecision.ALLOWED_USER_APP
         }
     }
 
@@ -89,6 +112,7 @@ object DriverAppPackagePolicy {
 
     fun isCaptureBlockedUserApp(packageName: CharSequence?): Boolean {
         return when (classify(packageName)) {
+            PackageDecision.ALLOWED_USER_APP,
             PackageDecision.BLOCKED_USER_APP -> true
             PackageDecision.DRIVER_APP,
             PackageDecision.OWN_APP,
@@ -119,4 +143,5 @@ object DriverAppPackagePolicy {
             ?.trim()
             ?.takeIf { it.isNotBlank() }
     }
+
 }

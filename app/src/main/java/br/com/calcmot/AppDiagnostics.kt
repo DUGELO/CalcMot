@@ -251,6 +251,7 @@ object AppDiagnostics {
         STABLE_OFFER("stable_offer", "Card confirmado"),
         OVERLAY_SHOWN("overlay_shown", "Overlay exibido"),
         OVERLAY_ERROR("overlay_error", "Erro ao exibir overlay"),
+        CAPTURE_ERROR("capture_error", "Falha de captura contida"),
         FRAME_REJECTED("frame_rejected", "Card incompleto");
 
         companion object {

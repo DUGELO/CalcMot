@@ -150,7 +150,7 @@ enum class OverlayOfferQuality(
 @Composable
 fun CalcMotOverlayContainer(
     quality: OverlayOfferQuality,
-    theme: OverlayThemePreference = OverlayThemePreference.CLASSIC,
+    theme: OverlayThemePreference = OverlayThemePreference.OUTLINED,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -202,7 +202,7 @@ fun CalcMotOverlayContainer(
 @Composable
 fun OfferDecisionHeader(
     quality: OverlayOfferQuality,
-    theme: OverlayThemePreference = OverlayThemePreference.CLASSIC,
+    theme: OverlayThemePreference = OverlayThemePreference.OUTLINED,
     showMeaning: Boolean = true,
     modifier: Modifier = Modifier
 ) {
@@ -275,7 +275,7 @@ fun MetricRow(
 fun FinancialImpactLine(
     impact: OfferFinancialImpact,
     quality: OverlayOfferQuality,
-    theme: OverlayThemePreference = OverlayThemePreference.CLASSIC,
+    theme: OverlayThemePreference = OverlayThemePreference.OUTLINED,
     modifier: Modifier = Modifier
 ) {
     val tokens = overlayVisualTokens(theme, quality)
@@ -311,7 +311,7 @@ fun OverlayMetricSummary(
     perHour: String,
     duration: String,
     quality: OverlayOfferQuality,
-    theme: OverlayThemePreference = OverlayThemePreference.CLASSIC,
+    theme: OverlayThemePreference = OverlayThemePreference.OUTLINED,
     modifier: Modifier = Modifier
 ) {
     val tokens = overlayVisualTokens(theme, quality)

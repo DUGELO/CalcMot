@@ -4,8 +4,10 @@ import android.accessibilityservice.AccessibilityService
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Build
+import android.util.Log
 import android.view.Display
 import androidx.annotation.RequiresApi
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
@@ -20,35 +22,64 @@ class AccessibilityScreenshotCaptureSource(
 
     override suspend fun capture(targetBounds: Rect): Bitmap? =
         suspendCancellableCoroutine { continuation ->
-            service.takeScreenshot(
-                Display.DEFAULT_DISPLAY,
-                service.mainExecutor,
-                object : AccessibilityService.TakeScreenshotCallback {
-                    override fun onSuccess(
-                        screenshot: AccessibilityService.ScreenshotResult
-                    ) {
-                        val hardwareBuffer = screenshot.hardwareBuffer
-                        val bitmap = try {
-                            Bitmap.wrapHardwareBuffer(hardwareBuffer, screenshot.colorSpace)
-                                ?.copy(Bitmap.Config.ARGB_8888, false)
-                        } finally {
-                            hardwareBuffer.close()
-                        }
-                        val cropped = bitmap?.cropTo(targetBounds)
-                        if (bitmap != null && cropped !== bitmap) bitmap.recycle()
-                        if (continuation.isActive) {
-                            continuation.resume(cropped)
-                        } else {
-                            cropped?.recycle()
-                        }
-                    }
+            val completed = AtomicBoolean(false)
 
-                    override fun onFailure(errorCode: Int) {
-                        if (continuation.isActive) continuation.resume(null)
-                    }
+            fun complete(bitmap: Bitmap?) {
+                if (!completed.compareAndSet(false, true) || !continuation.isActive) {
+                    bitmap?.recycle()
+                    return
                 }
-            )
+                runCatching { continuation.resume(bitmap) }
+                    .onFailure { bitmap?.recycle() }
+            }
+
+            try {
+                service.takeScreenshot(
+                    Display.DEFAULT_DISPLAY,
+                    service.mainExecutor,
+                    object : AccessibilityService.TakeScreenshotCallback {
+                        override fun onSuccess(
+                            screenshot: AccessibilityService.ScreenshotResult
+                        ) {
+                            var sourceBitmap: Bitmap? = null
+                            try {
+                                val hardwareBuffer = screenshot.hardwareBuffer
+                                sourceBitmap = try {
+                                    Bitmap.wrapHardwareBuffer(hardwareBuffer, screenshot.colorSpace)
+                                        ?.copy(Bitmap.Config.ARGB_8888, false)
+                                } finally {
+                                    runCatching { hardwareBuffer.close() }
+                                }
+                                val cropped = sourceBitmap?.cropTo(targetBounds)
+                                if (sourceBitmap != null && cropped !== sourceBitmap) {
+                                    sourceBitmap.recycle()
+                                }
+                                sourceBitmap = null
+                                complete(cropped)
+                            } catch (error: Exception) {
+                                sourceBitmap?.let {
+                                    if (!it.isRecycled) it.recycle()
+                                }
+                                Log.w(TAG, "SCREENSHOT_RESULT_REJECTED type=${error.javaClass.simpleName}")
+                                complete(null)
+                            }
+                        }
+
+                        override fun onFailure(errorCode: Int) {
+                            Log.w(TAG, "SCREENSHOT_FAILED code=$errorCode")
+                            complete(null)
+                        }
+                    }
+                )
+            } catch (error: Exception) {
+                Log.w(TAG, "SCREENSHOT_REQUEST_REJECTED type=${error.javaClass.simpleName}")
+                complete(null)
+            }
         }
+
+    private companion object {
+        const val TAG = "CalcMot99Capture"
+    }
 }
 
 object UnsupportedNinetyNineCaptureSource : NinetyNineCaptureSource {

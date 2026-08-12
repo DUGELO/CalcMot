@@ -19,6 +19,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import br.com.calcmot.accessibility.UberAccessibilityService
+import br.com.calcmot.telemetry.AnalyticsEvents
+import br.com.calcmot.telemetry.AnalyticsParams
+import br.com.calcmot.telemetry.AnalyticsValues
+import br.com.calcmot.telemetry.TelemetryProvider
 import br.com.calcmot.ui.CalcMotNavHost
 import br.com.calcmot.ui.theme.MetricaTheme
 
@@ -104,9 +108,19 @@ data class AppPermissionState(
 }
 
 fun readAppPermissionState(context: Context): AppPermissionState {
-    return AppPermissionState(
-        hasAccessibilityService = isAccessibilityServiceEnabled(context)
+    val accessibilityEnabled = isAccessibilityServiceEnabled(context)
+    TelemetryProvider.analytics.track(
+        AnalyticsEvents.ACCESSIBILITY_STATUS_CHECKED,
+        mapOf(
+            AnalyticsParams.SOURCE to AnalyticsValues.SOURCE_SYSTEM,
+            AnalyticsParams.REASON to if (accessibilityEnabled) {
+                AnalyticsValues.STATUS_ACTIVE
+            } else {
+                AnalyticsValues.STATUS_INACTIVE
+            }
+        )
     )
+    return AppPermissionState(hasAccessibilityService = accessibilityEnabled)
 }
 
 fun hasRequiredPermissions(context: Context): Boolean {

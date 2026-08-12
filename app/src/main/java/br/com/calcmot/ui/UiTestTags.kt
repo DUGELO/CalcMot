@@ -30,6 +30,7 @@ object UiTestTags {
     const val DRAWER_FEEDBACK_ITEM = "drawer_feedback_item"
     const val DRAWER_DIAGNOSTICS_ITEM = "drawer_diagnostics_item"
     const val DIAGNOSTICS_SCREEN = "diagnostics_screen"
+    const val RESTART_READING_BUTTON = "restart_reading_button"
     const val STATUS_PILL = "status_pill"
     const val MONITORING_SWITCH = "monitoring_switch"
     const val HOME_HERO_CARD = "home_hero_card"

@@ -3,6 +3,8 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 val releaseKeystorePropertiesFile = rootProject.file("keystore.properties")
@@ -25,8 +27,8 @@ android {
         applicationId = "br.com.calcmot"
         minSdk = 24
         targetSdk = 36
-        versionCode = 8
-        versionName = "3.1"
+        versionCode = 9
+        versionName = "3.2"
 
         if (buildsAppBundle) {
             ndk {
@@ -101,6 +103,12 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.androidx.compose.material3)
+
+    // Firebase versions remain aligned through the BoM; use main modules, not deprecated KTX artifacts.
+    implementation(platform("com.google.firebase:firebase-bom:34.17.0"))
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-crashlytics")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

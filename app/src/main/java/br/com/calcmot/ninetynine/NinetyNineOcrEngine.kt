@@ -13,6 +13,7 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlin.coroutines.resume
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 interface NinetyNineOcrEngine : AutoCloseable {
@@ -27,6 +28,7 @@ interface NinetyNineOcrEngine : AutoCloseable {
 class MlKitNinetyNineOcrEngine : NinetyNineOcrEngine {
     private val recognizer: TextRecognizer =
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    private val closed = AtomicBoolean(false)
 
     override suspend fun recognize(
         bitmap: Bitmap,
@@ -34,6 +36,7 @@ class MlKitNinetyNineOcrEngine : NinetyNineOcrEngine {
         cropOriginY: Int,
         excludedScreenBounds: List<Rect>
     ): NinetyNineOcrFrame? {
+        if (closed.get()) return null
         val primaryText = process(bitmap) ?: return null
         val primaryFrame = primaryText.toFrame(
             width = bitmap.width,
@@ -70,22 +73,28 @@ class MlKitNinetyNineOcrEngine : NinetyNineOcrEngine {
 
     private suspend fun process(bitmap: Bitmap): Text? =
         suspendCancellableCoroutine { continuation ->
-            recognizer.process(InputImage.fromBitmap(bitmap, 0))
-            .addOnSuccessListener { text ->
-                if (continuation.isActive) {
-                    continuation.resume(text)
+            try {
+                if (closed.get()) {
+                    continuation.resume(null)
+                    return@suspendCancellableCoroutine
                 }
-            }
-            .addOnFailureListener {
-                if (continuation.isActive) continuation.resume(null)
-            }
-            .addOnCanceledListener {
+                recognizer.process(InputImage.fromBitmap(bitmap, 0))
+                    .addOnSuccessListener { text ->
+                        if (continuation.isActive) continuation.resume(text)
+                    }
+                    .addOnFailureListener {
+                        if (continuation.isActive) continuation.resume(null)
+                    }
+                    .addOnCanceledListener {
+                        if (continuation.isActive) continuation.resume(null)
+                    }
+            } catch (_: Exception) {
                 if (continuation.isActive) continuation.resume(null)
             }
         }
 
     override fun close() {
-        recognizer.close()
+        if (closed.compareAndSet(false, true)) recognizer.close()
     }
 
     private fun Text.toFrame(

@@ -326,7 +326,10 @@ internal fun AppDrawer(
     onSettings: () -> Unit,
     onHelp: () -> Unit,
     onPrivacy: () -> Unit,
-    onFeedback: () -> Unit
+    onFeedback: () -> Unit,
+    diagnosticsEnabled: Boolean = false,
+    onVersionTap: () -> Unit = {},
+    onDiagnostics: () -> Unit = {}
 ) {
     val drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
     ModalDrawerSheet(
@@ -404,7 +407,10 @@ internal fun AppDrawer(
             )
             DrawerFooter(
                 selectedFeedback = false,
-                onFeedback = onFeedback
+                onFeedback = onFeedback,
+                diagnosticsEnabled = diagnosticsEnabled,
+                onVersionTap = onVersionTap,
+                onDiagnostics = onDiagnostics
             )
         }
     }
@@ -564,15 +570,28 @@ private fun DrawerMenuItem(
 @Composable
 private fun DrawerFooter(
     selectedFeedback: Boolean,
-    onFeedback: () -> Unit
+    onFeedback: () -> Unit,
+    diagnosticsEnabled: Boolean,
+    onVersionTap: () -> Unit,
+    onDiagnostics: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             DrawerWordmark(fontSize = 18)
             Text(
                 text = "Versão ${BuildConfig.VERSION_NAME}",
+                modifier = Modifier.clickable(onClick = onVersionTap),
                 color = CalcMotColors.TextSecondary,
                 fontSize = 15.sp
+            )
+        }
+        if (diagnosticsEnabled) {
+            DrawerMenuItem(
+                text = "Diagnóstico",
+                icon = Icons.Outlined.Security,
+                selected = false,
+                testTag = UiTestTags.DRAWER_DIAGNOSTICS_ITEM,
+                onClick = onDiagnostics
             )
         }
         DrawerMenuItem(
@@ -599,7 +618,8 @@ internal fun HomeContent(
     onEditGoal: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHelp: () -> Unit,
-    onOpenPrivacy: () -> Unit
+    onOpenPrivacy: () -> Unit,
+    onRestartReading: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val storedDriverGoal = remember { AppSettings.getDriverGoal(context) }
@@ -626,6 +646,7 @@ internal fun HomeContent(
             onOpenGoal = onEditGoal,
             onOpenSettings = onOpenSettings,
             onOpenHelp = onOpenHelp,
+            onRestartReading = onRestartReading,
             goalPerKm = "${driverGoal.minValuePerKm.toGoalMoney()}/km",
             goalPerHour = "${driverGoal.minValuePerHour.toGoalMoneyNoCentsIfRound()}/h"
         )
@@ -772,7 +793,9 @@ internal fun SettingsScreen(
     onOpenOverlayPosition: () -> Unit,
     onOpenOverlayTheme: () -> Unit,
     onOpenPrivacy: () -> Unit,
-    onOpenHelp: () -> Unit
+    onOpenHelp: () -> Unit,
+    diagnosticsEnabled: Boolean = false,
+    onOpenDiagnostics: () -> Unit = {}
 ) {
     Box(
         modifier = modifier
@@ -861,6 +884,16 @@ internal fun SettingsScreen(
                     subtitle = "Entenda como o app funciona",
                     onClick = onOpenHelp
                 )
+                if (diagnosticsEnabled) {
+                    SettingsDivider()
+                    SettingsActionRow(
+                        modifier = Modifier.testTag(UiTestTags.DRAWER_DIAGNOSTICS_ITEM),
+                        icon = Icons.Outlined.Security,
+                        title = "Diagnóstico de leitura",
+                        subtitle = "Status técnico e recuperação da leitura",
+                        onClick = onOpenDiagnostics
+                    )
+                }
             }
         }
     }

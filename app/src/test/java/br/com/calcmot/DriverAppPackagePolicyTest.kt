@@ -61,22 +61,38 @@ class DriverAppPackagePolicyTest {
     }
 
     @Test
-    fun `blocked user apps block capture and force overlay hidden`() {
+    fun `sensitive user apps block capture and force overlay hidden`() {
         listOf(
             "com.nu.production",
             "com.android.settings",
             "com.android.chrome",
-            "com.whatsapp",
-            "com.google.android.apps.photos",
-            "com.sec.android.gallery3d",
+            "com.x8bit.bitwarden",
+            "com.google.android.apps.walletnfcrel",
             "br.com.digio.uber",
-            "br.com.itau",
-            "com.example.notes"
+            "br.com.itau"
         ).forEach { packageName ->
             assertEquals(PackageDecision.BLOCKED_USER_APP, DriverAppPackagePolicy.classify(packageName))
             assertTrue(DriverAppPackagePolicy.isCaptureBlockedUserApp(packageName))
             assertTrue(DriverAppPackagePolicy.isCriticalUserApp(packageName))
             assertTrue(DriverAppPackagePolicy.isBlockedUserApp(packageName))
+            assertFalse(DriverAppPackagePolicy.isDriverPackage(packageName))
+        }
+    }
+
+    @Test
+    fun `common user apps allow overlay presentation but never capture`() {
+        listOf(
+            "com.example.notes",
+            "com.whatsapp",
+            "com.google.android.apps.photos",
+            "com.sec.android.gallery3d",
+            "com.google.android.apps.maps",
+            "com.spotify.music"
+        ).forEach { packageName ->
+            assertEquals(PackageDecision.ALLOWED_USER_APP, DriverAppPackagePolicy.classify(packageName))
+            assertTrue(DriverAppPackagePolicy.isCaptureBlockedUserApp(packageName))
+            assertFalse(DriverAppPackagePolicy.isCriticalUserApp(packageName))
+            assertFalse(DriverAppPackagePolicy.isBlockedUserApp(packageName))
             assertFalse(DriverAppPackagePolicy.isDriverPackage(packageName))
         }
     }

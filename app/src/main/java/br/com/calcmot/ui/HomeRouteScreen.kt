@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
 import br.com.calcmot.DriverAppLauncher
+import br.com.calcmot.ReadingPipelineRuntime
 import br.com.calcmot.model.DriverGoal
 import kotlinx.coroutines.launch
 
@@ -51,11 +52,16 @@ internal fun HomeScreen(
     onOpenSettings: () -> Unit = {},
     onOpenHelp: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
-    onOpenFeedback: () -> Unit = {}
+    onOpenFeedback: () -> Unit = {},
+    diagnosticsEnabled: Boolean = false,
+    onUnlockDiagnostics: () -> Unit = {},
+    onOpenDiagnostics: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    var versionTapCount by remember { mutableStateOf(0) }
+    var lastVersionTapAt by remember { mutableStateOf(0L) }
     val status = when {
         !permissionState.hasAccessibilityService -> HomeStatus.PERMISSION_PENDING
         monitoringEnabled -> HomeStatus.READY
@@ -69,6 +75,18 @@ internal fun HomeScreen(
         }
     }
 
+    fun handleVersionTap() {
+        val now = android.os.SystemClock.elapsedRealtime()
+        versionTapCount = if (now - lastVersionTapAt <= 1_500L) versionTapCount + 1 else 1
+        lastVersionTapAt = now
+        if (versionTapCount >= 5) {
+            versionTapCount = 0
+            AppSettings.setDiagnosticsEnabled(context, true)
+            Toast.makeText(context, "Diagnóstico ativado", Toast.LENGTH_SHORT).show()
+            closeDrawerAnd(onUnlockDiagnostics)
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -79,7 +97,10 @@ internal fun HomeScreen(
                 onSettings = { closeDrawerAnd(onOpenSettings) },
                 onHelp = { closeDrawerAnd(onOpenHelp) },
                 onPrivacy = { closeDrawerAnd(onOpenPrivacy) },
-                onFeedback = { closeDrawerAnd(onOpenFeedback) }
+                onFeedback = { closeDrawerAnd(onOpenFeedback) },
+                diagnosticsEnabled = diagnosticsEnabled,
+                onVersionTap = ::handleVersionTap,
+                onDiagnostics = { closeDrawerAnd(onOpenDiagnostics) }
             )
         }
     ) {
@@ -104,7 +125,15 @@ internal fun HomeScreen(
             onEditGoal = onOpenGoal,
             onOpenSettings = onOpenSettings,
             onOpenHelp = onOpenHelp,
-            onOpenPrivacy = onOpenPrivacy
+            onOpenPrivacy = onOpenPrivacy,
+            onRestartReading = {
+                val restarted = ReadingPipelineRuntime.manualRestart(context)
+                Toast.makeText(
+                    context,
+                    if (restarted) "Leitura reiniciada" else "Ative a acessibilidade para reiniciar",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         )
     }
 }

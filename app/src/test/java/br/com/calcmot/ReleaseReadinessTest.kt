@@ -1,11 +1,49 @@
 package br.com.calcmot
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
 class ReleaseReadinessTest {
+
+    @Test
+    fun `firebase telemetry is isolated and advertising identifiers are disabled`() {
+        val manifest = projectFile("app/src/main/AndroidManifest.xml").readText()
+        val rootBuild = projectFile("build.gradle.kts").readText()
+        val appBuild = projectFile("app/build.gradle.kts").readText()
+        val sourceRoot = projectFile("app/src/main/java")
+        val directFirebaseFiles = sourceRoot.walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .filter { it.readText().contains("com.google.firebase") }
+            .map { it.relativeTo(sourceRoot).invariantSeparatorsPath }
+            .toSet()
+
+        assertTrue(rootBuild.contains("com.google.firebase.crashlytics"))
+        assertTrue(
+            listOf(File("build.gradle.kts"), File("../build.gradle.kts"))
+                .filter(File::exists)
+                .any { it.readText().contains("version \"3.0.7\"") }
+        )
+        assertTrue(appBuild.contains("firebase-bom:34.17.0"))
+        assertTrue(appBuild.contains("firebase-analytics"))
+        assertTrue(appBuild.contains("firebase-crashlytics"))
+        assertEquals(
+            setOf(
+                "br/com/calcmot/telemetry/FirebaseAnalyticsTracker.kt",
+                "br/com/calcmot/telemetry/FirebaseCrashReporter.kt"
+            ),
+            directFirebaseFiles
+        )
+        assertTrue(manifest.contains("com.google.android.gms.permission.AD_ID"))
+        assertTrue(manifest.contains("android.permission.ACCESS_ADSERVICES_AD_ID"))
+        assertTrue(manifest.contains("android.permission.ACCESS_ADSERVICES_ATTRIBUTION"))
+        assertTrue(manifest.contains("tools:node=\"remove\""))
+        assertTrue(manifest.contains("google_analytics_adid_collection_enabled"))
+        assertTrue(manifest.contains("google_analytics_default_allow_ad_personalization_signals"))
+        assertTrue(manifest.contains("google_analytics_automatic_screen_reporting_enabled"))
+    }
 
     @Test
     fun `manifest does not request foreground media projection permissions`() {
@@ -21,9 +59,13 @@ class ReleaseReadinessTest {
     @Test
     fun `release manifest does not export debug receiver`() {
         val manifest = projectFile("app/src/main/AndroidManifest.xml").readText()
+        val debugManifest = projectFile("app/src/debug/AndroidManifest.xml").readText()
 
         assertFalse(manifest.contains("DebugReceiver"))
+        assertFalse(manifest.contains("CrashlyticsTestCrashReceiver"))
         assertFalse(manifest.contains("ACTION_PROCESS_TEXT"))
+        assertTrue(debugManifest.contains("CrashlyticsTestCrashReceiver"))
+        assertTrue(debugManifest.contains("android.permission.DUMP"))
     }
 
     @Test
@@ -42,6 +84,10 @@ class ReleaseReadinessTest {
         assertTrue(buildFile.contains("implementation(\"com.google.mlkit:text-recognition:16.0.1\")"))
         assertTrue(buildFile.contains("isMinifyEnabled = true"))
         assertTrue(buildFile.contains("isShrinkResources = true"))
+        val proguardRules = projectFile("app/proguard-rules.pro").readText()
+        assertTrue(proguardRules.contains("com.google.mlkit.vision.text.internal.TextRegistrar"))
+        assertTrue(proguardRules.contains("com.google.mlkit.vision.text.internal.zzo"))
+        assertFalse(proguardRules.contains("-keep class com.google.mlkit.**"))
     }
 
     @Test
@@ -81,6 +127,11 @@ class ReleaseReadinessTest {
         assertTrue(service.contains("trustedForegroundDriverApp == DriverApp.NINETY_NINE"))
         assertTrue(service.contains("handleNinetyNineVisualCapture"))
         assertTrue(service.contains("OfferCaptureSource.NINETY_NINE_OCR"))
+        assertTrue(service.contains("private fun pauseNinetyNineCaptureEngine()"))
+        assertTrue(service.contains("ninetyNineCaptureEngine?.pause()"))
+        assertTrue(service.contains("private fun releaseNinetyNineCaptureEngine()"))
+        assertTrue(service.contains("safelyTearDown(\"99_capture_engine\") { releaseNinetyNineCaptureEngine() }"))
+        assertFalse(service.contains("private fun closeNinetyNineCaptureEngine()"))
         assertTrue(service.contains("PowerManager"))
         assertTrue(service.contains("hasVisibleNinetyNineRoot"))
         assertTrue(ninetyNineSources.contains("AtomicBoolean"))
@@ -156,7 +207,10 @@ class ReleaseReadinessTest {
         assertTrue(service.contains("pendingCaptureAfterCurrent"))
         assertTrue(service.contains("capture.pendingAfterCurrent"))
         assertTrue(service.contains("enterSafeIdleForBlockedUserApp"))
+        assertTrue(service.contains("enterIdleForAllowedUserApp"))
+        assertTrue(service.contains("CALCMOT_COMMON_APP_OVERLAY_ALLOWED_CAPTURE_STOPPED"))
         assertTrue(service.contains("PackageDecision.BLOCKED_USER_APP"))
+        assertTrue(service.contains("PackageDecision.ALLOWED_USER_APP"))
         assertTrue(service.contains("CALCMOT_ACCESSIBILITY_EVENT"))
         assertTrue(service.contains("CALCMOT_PACKAGE_GUARD"))
         assertTrue(service.contains("CALCMOT_OWN_PACKAGE_EVENT_IGNORED"))
@@ -202,18 +256,16 @@ class ReleaseReadinessTest {
         assertTrue(service.contains("bootstrapNinetyNineForegroundFromActiveRoot"))
         assertTrue(service.contains("runFocusedNinetyNineHeartbeatScanIfNeeded"))
         assertTrue(service.contains("label = \"99-heartbeat\""))
-        assertTrue(
-            service.contains(
-                "if (trustedForegroundDriverApp == DriverApp.NINETY_NINE) {\n" +
-                    "                    runFocusedNinetyNineHeartbeatScanIfNeeded()\n" +
-                    "                    continue\n" +
-                    "                }\n" +
-                    "                runFocusedUberWatchdogScanIfNeeded()"
-            )
-        )
+        assertTrue(service.contains("runPipelineWatchdogIfNeeded()"))
+        assertTrue(service.contains("runFocusedNinetyNineHeartbeatScanIfNeeded()"))
+        assertTrue(service.contains("runFocusedUberWatchdogScanIfNeeded()"))
+        assertTrue(service.contains("recordServiceFailure(stage = \"continuous_heartbeat\""))
         assertFalse(service.contains("accessibility-continuous-poll"))
         assertTrue(service.contains("if (BuildConfig.DEBUG) {\n            ShellOfferBridge.register(shellOfferHandler)"))
-        assertTrue(service.contains("if (BuildConfig.DEBUG) {\n            ShellOfferBridge.unregister(shellOfferHandler)"))
+        assertTrue(
+            Regex("""if \(BuildConfig\.DEBUG\) \{\s+ShellOfferBridge\.unregister\(shellOfferHandler\)""")
+                .containsMatchIn(service)
+        )
         assertTrue(debugToggles.contains("ENABLE_ZERO_OVERLAY_DURING_SCAN"))
         assertTrue(debugToggles.contains("const val ENABLE_ZERO_OVERLAY_DURING_SCAN: Boolean = true"))
     }
@@ -227,14 +279,44 @@ class ReleaseReadinessTest {
         assertTrue(overlay.contains("OVERLAY_REPLACED_IN_PLACE"))
         assertTrue(overlay.contains("OVERLAY_REQUEST_DROPPED_NO_TRUSTED_DRIVER"))
         assertTrue(overlay.contains("OVERLAY_BLOCKED_USER_APP"))
+        assertTrue(overlay.contains("OVERLAY_ALLOWED_COMMON_APP"))
         assertFalse(overlay.contains("OVERLAY_BLOCKED_NON_ALLOWED_APP"))
         assertTrue(overlay.contains("OVERLAY_FOREGROUND_TRANSIENT_IGNORED"))
         assertTrue(overlay.contains("OVERLAY_FOREGROUND_OWN_IGNORED"))
-        assertTrue(overlay.contains("TRUSTED_DRIVER_GRACE_MS = 2_000L"))
+        assertTrue(overlay.contains("TRUSTED_DRIVER_GRACE_MS = 5_000L"))
         assertTrue(overlay.contains("allowApplicationOverlayFallback = true"))
         assertTrue(overlay.contains("context is AccessibilityService"))
         assertFalse(overlay.contains("Erro showOverlay: token invalido\", e"))
         assertFalse(overlay.contains("Erro showDebugOverlay: token invalido\", e"))
+    }
+
+    @Test
+    fun `android framework boundaries contain recoverable runtime failures`() {
+        val overlay = projectFile(
+            "app/src/main/java/br/com/calcmot/overlay/OverlayManager.kt"
+        ).readText()
+        val service = projectFile(
+            "app/src/main/java/br/com/calcmot/accessibility/UberAccessibilityService.kt"
+        ).readText()
+        val launcher = projectFile(
+            "app/src/main/java/br/com/calcmot/DriverAppLauncher.kt"
+        ).readText()
+        val settingsNavigator = projectFile(
+            "app/src/main/java/br/com/calcmot/ui/AccessibilitySettingsNavigator.kt"
+        ).readText()
+
+        assertTrue(overlay.contains("runOverlayBoundary(\"showOverlay\""))
+        assertTrue(overlay.contains("runOverlayBoundary(\"removeOverlay\""))
+        assertTrue(overlay.contains("runOverlayBoundary(\"removeOverlayWindowsForScan\""))
+        assertTrue(overlay.contains("OVERLAY_LIFECYCLE_DESTROY_FAILURE"))
+        assertTrue(overlay.contains("MAIN_THREAD_OPERATION_TIMEOUT_MS"))
+        assertTrue(service.contains("initializeConnectedService"))
+        assertTrue(service.contains("safelyTearDown(\"overlay\""))
+        assertTrue(service.contains("accessibilityTreeLabDelegate.isInitialized()"))
+        assertTrue(launcher.contains("context.startActivity(resolved.launchIntent)"))
+        assertTrue(launcher.contains("if (!launched) return null"))
+        assertTrue(settingsNavigator.contains("context.startActivity(intent)"))
+        assertTrue(settingsNavigator.contains(".isSuccess"))
     }
 
     @Test

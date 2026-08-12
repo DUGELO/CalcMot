@@ -19,3 +19,15 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# ML Kit discovers these components by manifest metadata and reflection. Keeping
+# only the discovery boundary prevents R8 from inlining the text-recognizer
+# factory into a nullable component lookup on minified release builds.
+-keep class com.google.mlkit.common.internal.MlKitInitProvider { *; }
+-keep class com.google.mlkit.common.internal.MlKitComponentDiscoveryService { *; }
+-keep class com.google.mlkit.common.internal.CommonComponentRegistrar { *; }
+-keep class com.google.mlkit.vision.common.internal.VisionCommonRegistrar { *; }
+-keep class com.google.mlkit.vision.text.internal.TextRegistrar { *; }
+-keep class com.google.mlkit.vision.text.internal.zzo { *; }
+-keep class com.google.mlkit.vision.text.internal.zzp { *; }
+-keep class com.google.mlkit.common.sdkinternal.ExecutorSelector { *; }

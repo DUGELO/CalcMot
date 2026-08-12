@@ -25,6 +25,7 @@ object AppSettings {
     private const val KEY_DRIVER_GOAL_MODE = "driver_goal_mode"
     private const val KEY_LAST_DRIVER_APP = "last_driver_app"
     private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+    private const val KEY_DIAGNOSTICS_ENABLED = "diagnostics_enabled"
 
     fun isMonitoringEnabled(context: Context): Boolean {
         return context.applicationContext
@@ -64,11 +65,11 @@ object AppSettings {
     fun getOverlayTheme(context: Context): OverlayThemePreference {
         val rawValue = context.applicationContext
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_OVERLAY_THEME, OverlayThemePreference.CLASSIC.name)
+            .getString(KEY_OVERLAY_THEME, OverlayThemePreference.OUTLINED.name)
 
         return OverlayThemePreference.entries
             .firstOrNull { it.name == rawValue }
-            ?: OverlayThemePreference.CLASSIC
+            ?: OverlayThemePreference.OUTLINED
     }
 
     fun setOverlayTheme(context: Context, theme: OverlayThemePreference) {
@@ -222,6 +223,20 @@ object AppSettings {
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(KEY_ONBOARDING_COMPLETED, completed)
+            .apply()
+    }
+
+    fun isDiagnosticsEnabled(context: Context): Boolean {
+        return context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_DIAGNOSTICS_ENABLED, false)
+    }
+
+    fun setDiagnosticsEnabled(context: Context, enabled: Boolean) {
+        context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_DIAGNOSTICS_ENABLED, enabled)
             .apply()
     }
 }

@@ -1,5 +1,9 @@
 package br.com.calcmot.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
@@ -18,6 +22,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
+import br.com.calcmot.ReadingPipelineRuntime
 
 internal object CalcMotRoute {
     const val ONBOARDING = "onboarding"
@@ -29,6 +34,7 @@ internal object CalcMotRoute {
     const val HELP = "help"
     const val PRIVACY = "privacy"
     const val FEEDBACK = "feedback"
+    const val DIAGNOSTICS = "diagnostics"
 }
 
 @Composable
@@ -47,6 +53,7 @@ fun CalcMotNavHost(
     var overlayPosition by remember { mutableStateOf(AppSettings.getOverlayPosition(context)) }
     var overlayTheme by remember { mutableStateOf(AppSettings.getOverlayTheme(context)) }
     var driverGoal by remember { mutableStateOf(AppSettings.getDriverGoal(context)) }
+    var diagnosticsEnabled by remember { mutableStateOf(AppSettings.isDiagnosticsEnabled(context)) }
     val startDestination = remember {
         if (onboardingCompleted || permissionState.hasAccessibilityService) {
             CalcMotRoute.HOME
@@ -122,7 +129,13 @@ fun CalcMotNavHost(
                 onOpenSettings = { navigate(CalcMotRoute.SETTINGS) },
                 onOpenHelp = { navigate(CalcMotRoute.HELP) },
                 onOpenPrivacy = { navigate(CalcMotRoute.PRIVACY) },
-                onOpenFeedback = { navigate(CalcMotRoute.FEEDBACK) }
+                onOpenFeedback = { navigate(CalcMotRoute.FEEDBACK) },
+                diagnosticsEnabled = diagnosticsEnabled,
+                onUnlockDiagnostics = {
+                    diagnosticsEnabled = true
+                    navigate(CalcMotRoute.DIAGNOSTICS)
+                },
+                onOpenDiagnostics = { navigate(CalcMotRoute.DIAGNOSTICS) }
             )
         }
 
@@ -149,7 +162,9 @@ fun CalcMotNavHost(
                 onOpenOverlayPosition = { navigate(CalcMotRoute.OVERLAY_POSITION) },
                 onOpenOverlayTheme = { navigate(CalcMotRoute.OVERLAY_THEME) },
                 onOpenPrivacy = { navigate(CalcMotRoute.PRIVACY) },
-                onOpenHelp = { navigate(CalcMotRoute.HELP) }
+                onOpenHelp = { navigate(CalcMotRoute.HELP) },
+                diagnosticsEnabled = diagnosticsEnabled,
+                onOpenDiagnostics = { navigate(CalcMotRoute.DIAGNOSTICS) }
             )
         }
 
@@ -202,6 +217,37 @@ fun CalcMotNavHost(
                         accessibilityEnabled = permissionState.hasAccessibilityService,
                         monitoringEnabled = monitoringEnabled
                     )
+                }
+            )
+        }
+
+        composable(CalcMotRoute.DIAGNOSTICS) {
+            ReadingDiagnosticsScreen(
+                accessibilityActive = permissionState.hasAccessibilityService,
+                batteryOptimization = ReadingPipelineRuntime.batteryOptimizationLabel(context),
+                diagnosticsEnabled = diagnosticsEnabled,
+                onBack = { navController.popBackStack() },
+                onDiagnosticsEnabledChange = { enabled ->
+                    AppSettings.setDiagnosticsEnabled(context, enabled)
+                    diagnosticsEnabled = enabled
+                    if (!enabled) navController.popBackStack()
+                },
+                onCopy = {
+                    val text = ReadingPipelineRuntime.diagnosticsText(
+                        context,
+                        permissionState.hasAccessibilityService
+                    )
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Diagnóstico CalcMot", text))
+                    Toast.makeText(context, "Diagnóstico copiado", Toast.LENGTH_SHORT).show()
+                },
+                onRestart = {
+                    val restarted = ReadingPipelineRuntime.manualRestart(context)
+                    Toast.makeText(
+                        context,
+                        if (restarted) "Leitura reiniciada" else "Ative a acessibilidade para reiniciar",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             )
         }

@@ -6,17 +6,22 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import br.com.calcmot.accessibility.UberAccessibilityService
 
 private const val SETTINGS_FRAGMENT_ARGS = ":settings:show_fragment_args"
 private const val SETTINGS_FRAGMENT_ARGS_KEY = ":settings:fragment_args_key"
 
-fun openAccessibilitySettings(context: Context) {
+fun openAccessibilitySettings(context: Context): Boolean {
     val intent = accessibilitySettingsIntent(context)
     if (context !is Activity) {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    context.startActivity(intent)
+    return runCatching {
+        context.startActivity(intent)
+    }.onFailure { error ->
+        Log.e("AccessibilityNav", "Unable to open accessibility settings", error)
+    }.isSuccess
 }
 
 fun accessibilitySettingsIntent(context: Context): Intent {

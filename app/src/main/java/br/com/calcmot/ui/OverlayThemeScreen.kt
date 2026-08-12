@@ -142,7 +142,7 @@ fun OverlayThemeScreen(
                     .testTag(UiTestTags.OVERLAY_THEME_SAVE_BUTTON)
             )
             androidx.compose.material3.TextButton(
-                onClick = { selectedTheme = OverlayThemePreference.CLASSIC },
+                onClick = { selectedTheme = OverlayThemePreference.OUTLINED },
                 modifier = Modifier.testTag(UiTestTags.OVERLAY_THEME_DEFAULT_BUTTON)
             ) {
                 Text(

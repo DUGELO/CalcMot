@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "303161771474",
+    "project_id": "calcmot",
+    "storage_bucket": "calcmot.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:303161771474:android:a060ee5f467931e1d8740b",
+        "android_client_info": {
+          "package_name": "br.com.calcmot"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFLEcpDFCzWtYNmvvB5nZomT9GFYmawaw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

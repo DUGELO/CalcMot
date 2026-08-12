@@ -15,7 +15,7 @@ fun OverlayView(
     tripData: TripData,
     profitability: ProfitabilityResult? = null,
     financialImpact: OfferFinancialImpact? = null,
-    theme: OverlayThemePreference = OverlayThemePreference.CLASSIC
+    theme: OverlayThemePreference = OverlayThemePreference.OUTLINED
 ) {
     val result = profitability ?: ProfitabilityCalculator.calculate(tripData, ProfitabilitySettings())
     val quality = resolveOfferQuality(result, financialImpact)

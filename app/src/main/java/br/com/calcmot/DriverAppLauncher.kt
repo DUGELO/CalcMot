@@ -3,6 +3,7 @@ package br.com.calcmot
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.util.Log
 
 data class InstalledDriverApp(
     val driverApp: DriverApp,
@@ -15,7 +16,11 @@ object DriverAppLauncher {
     fun installedApps(context: Context): List<InstalledDriverApp> {
         return DriverApp.supported.mapNotNull { driverApp ->
             driverApp.packageNames.firstNotNullOfOrNull { packageName ->
-                context.packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
+                runCatching {
+                    context.packageManager.getLaunchIntentForPackage(packageName)
+                }.onFailure { error ->
+                    Log.w(TAG, "Unable to resolve driver app package=$packageName", error)
+                }.getOrNull()?.let { launchIntent ->
                     InstalledDriverApp(
                         driverApp = driverApp,
                         packageName = packageName,
@@ -39,13 +44,24 @@ object DriverAppLauncher {
             driverApp = driverApp
         ) ?: return null
 
+        ReadingPipelineRuntime.selectPlatform(context, resolved.driverApp)
         resolved.launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(resolved.launchIntent)
+        val launched = runCatching {
+            context.startActivity(resolved.launchIntent)
+        }.onFailure { error ->
+            Log.e(TAG, "Unable to launch driver app package=${resolved.packageName}", error)
+        }.isSuccess
+        if (!launched) return null
+
         AppSettings.setLastDriverApp(context, resolved.driverApp)
         return resolved.driverApp
     }
 
     fun isInstalled(packageManager: PackageManager, packageName: String): Boolean {
-        return packageManager.getLaunchIntentForPackage(packageName) != null
+        return runCatching {
+            packageManager.getLaunchIntentForPackage(packageName) != null
+        }.getOrDefault(false)
     }
+
+    private const val TAG = "DriverAppLauncher"
 }

@@ -36,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +56,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.calcmot.R
+import br.com.calcmot.telemetry.AnalyticsEvents
+import br.com.calcmot.telemetry.AnalyticsParams
+import br.com.calcmot.telemetry.AnalyticsValues
+import br.com.calcmot.telemetry.TelemetryProvider
 import br.com.calcmot.ui.design.theme.CalcMotTheme
 import br.com.calcmot.ui.design.tokens.CalcMotColors
 import br.com.calcmot.ui.design.tokens.CalcMotShape
@@ -66,6 +71,12 @@ fun PremiumScreen(
     onSkip: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    LaunchedEffect(Unit) {
+        TelemetryProvider.analytics.track(
+            AnalyticsEvents.PAYWALL_VIEWED,
+            mapOf(AnalyticsParams.SOURCE to AnalyticsValues.SOURCE_PREMIUM)
+        )
+    }
     Box(
         modifier = modifier
             .fillMaxSize()

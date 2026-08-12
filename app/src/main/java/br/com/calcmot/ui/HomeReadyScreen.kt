@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material.icons.outlined.Route
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
@@ -65,6 +66,7 @@ fun HomeReadyScreen(
     onOpenGoal: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHelp: () -> Unit,
+    onRestartReading: () -> Unit = {},
     modifier: Modifier = Modifier,
     goalPerKm: String = "R$ 1,80/km",
     goalPerHour: String = "R$ 35/h"
@@ -130,6 +132,29 @@ fun HomeReadyScreen(
                         .weight(1f)
                         .testTag(UiTestTags.HOME_SETTINGS_ACTION),
                     onClick = onOpenSettings
+                )
+            }
+            OutlinedButton(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 52.dp)
+                    .testTag(UiTestTags.RESTART_READING_BUTTON),
+                onClick = onRestartReading,
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, CalcMotColors.BorderSubtle),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = CalcMotColors.BrandSecondary)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp)
+                )
+                Text(
+                    text = "Reiniciar leitura",
+                    modifier = Modifier.padding(start = 8.dp),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
                 )
             }
             OutlinedButton(

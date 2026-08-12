@@ -11,6 +11,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -59,9 +60,10 @@ class NinetyNineCaptureEngineInstrumentedTest {
         val first = async { engine.captureAndExtract(target, emptyList()) }
         ocrStarted.await()
         val overlapping = engine.captureAndExtract(target, emptyList())
+        engine.close()
+        assertFalse(closed)
         releaseOcr.complete(Unit)
         val completed = first.await()
-        engine.close()
 
         assertEquals(1, sourceCalls.get())
         assertTrue(overlapping is NinetyNineCaptureResult.Skipped)
@@ -70,7 +72,85 @@ class NinetyNineCaptureEngineInstrumentedTest {
     }
 
     @Test
-    fun captureEngineAppliesModernCooldownWithoutAllocatingAnotherBitmap() = runBlocking {
+    fun captureEngineContainsUnexpectedCaptureFailure() = runBlocking {
+        val source = object : NinetyNineCaptureSource {
+            override suspend fun capture(targetBounds: Rect): Bitmap? {
+                throw IllegalStateException("protected surface")
+            }
+        }
+        val ocr = object : NinetyNineOcrEngine {
+            override suspend fun recognize(
+                bitmap: Bitmap,
+                cropOriginX: Int,
+                cropOriginY: Int,
+                excludedScreenBounds: List<Rect>
+            ): NinetyNineOcrFrame? = null
+
+            override fun close() = Unit
+        }
+        val engine = NinetyNineCaptureEngine(source, ocr) { 30_000L }
+
+        val result = engine.captureAndExtract(Rect(0, 0, 720, 1516), emptyList())
+
+        assertEquals(
+            NinetyNineCaptureSkipReason.INTERNAL_ERROR,
+            (result as NinetyNineCaptureResult.Skipped).reason
+        )
+        engine.close()
+    }
+
+    @Test
+    fun captureEnginePausesWithoutClosingAndResumesSameRecognizer() = runBlocking {
+        val sourceCalls = AtomicInteger(0)
+        val source = object : NinetyNineCaptureSource {
+            override suspend fun capture(targetBounds: Rect): Bitmap {
+                sourceCalls.incrementAndGet()
+                return Bitmap.createBitmap(
+                    targetBounds.width(),
+                    targetBounds.height(),
+                    Bitmap.Config.ARGB_8888
+                )
+            }
+        }
+        var closeCalls = 0
+        val ocr = object : NinetyNineOcrEngine {
+            override suspend fun recognize(
+                bitmap: Bitmap,
+                cropOriginX: Int,
+                cropOriginY: Int,
+                excludedScreenBounds: List<Rect>
+            ): NinetyNineOcrFrame = offerFrame()
+
+            override fun close() {
+                closeCalls += 1
+            }
+        }
+        val engine = NinetyNineCaptureEngine(source, ocr) { 30_000L }
+        val target = Rect(0, 0, 720, 1516)
+
+        engine.pause()
+        val paused = engine.captureAndExtract(target, emptyList())
+
+        assertEquals(
+            NinetyNineCaptureSkipReason.PAUSED,
+            (paused as NinetyNineCaptureResult.Skipped).reason
+        )
+        assertEquals(0, sourceCalls.get())
+        assertEquals(0, closeCalls)
+
+        engine.resume()
+        val resumed = engine.captureAndExtract(target, emptyList())
+
+        assertTrue(resumed is NinetyNineCaptureResult.Extracted)
+        assertEquals(1, sourceCalls.get())
+        assertEquals(0, closeCalls)
+
+        engine.close()
+        assertEquals(1, closeCalls)
+    }
+
+    @Test
+    fun captureEngineAppliesCooldownWithoutAllocatingAnotherBitmap() = runBlocking {
         val sourceCalls = AtomicInteger(0)
         val source = object : NinetyNineCaptureSource {
             override suspend fun capture(targetBounds: Rect): Bitmap {
@@ -99,7 +179,7 @@ class NinetyNineCaptureEngineInstrumentedTest {
         val first = engine.captureAndExtract(target, emptyList())
         now += 100L
         val throttled = engine.captureAndExtract(target, emptyList())
-        now += 500L
+        now += 1_000L
         val unchanged = engine.captureAndExtract(target, emptyList())
 
         assertTrue(first is NinetyNineCaptureResult.Extracted)
