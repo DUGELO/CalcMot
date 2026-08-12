@@ -1,2 +1,6 @@
 /build
+<<<<<<< HEAD
 app/google-services.json
+=======
+.google-services.json
+>>>>>>> cd7c1afb94c07892a10db94b3cc80cd1660eb9f5
