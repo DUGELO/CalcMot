@@ -27,8 +27,8 @@ android {
         applicationId = "br.com.calcmot"
         minSdk = 24
         targetSdk = 36
-        versionCode = 9
-        versionName = "3.2"
+        versionCode = 10
+        versionName = "3.3"
 
         if (buildsAppBundle) {
             ndk {
