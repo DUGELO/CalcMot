@@ -21,6 +21,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import br.com.calcmot.AppPermissionState
+import br.com.calcmot.analytics.ClarityIntegration
+import br.com.calcmot.analytics.ClarityScreenTracking
 import br.com.calcmot.AppSettings
 import br.com.calcmot.ReadingPipelineRuntime
 
@@ -55,6 +57,7 @@ fun CalcMotNavHost(
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    ClarityScreenTracking("app", currentBackStackEntry?.destination?.route)
     var monitoringEnabled by remember { mutableStateOf(AppSettings.isMonitoringEnabled(context)) }
     var financialImpactEnabled by remember { mutableStateOf(AppSettings.isFinancialImpactEnabled(context)) }
     var overlayPosition by remember { mutableStateOf(AppSettings.getOverlayPosition(context)) }
@@ -72,11 +75,13 @@ fun CalcMotNavHost(
     fun setMonitoringEnabled(enabled: Boolean) {
         AppSettings.setMonitoringEnabled(context, enabled)
         monitoringEnabled = enabled
+        ClarityIntegration.track(if (enabled) "monitoring_enabled" else "monitoring_disabled")
     }
 
     fun setFinancialImpactEnabled(enabled: Boolean) {
         AppSettings.setFinancialImpactEnabled(context, enabled)
         financialImpactEnabled = enabled
+        ClarityIntegration.track(if (enabled) "financial_impact_enabled" else "financial_impact_disabled")
     }
 
     fun setOverlayPosition(position: br.com.calcmot.OverlayPositionPreference) {
@@ -151,7 +156,7 @@ fun CalcMotNavHost(
             FinanceScreen(
                 modifier = Modifier,
                 onBack = { navController.popBackStack() },
-                onGoalSaved = { driverGoal = it }
+                onGoalSaved = { driverGoal = it; ClarityIntegration.track("financial_goal_saved") }
             )
         }
 

@@ -8,6 +8,18 @@ plugins {
     id("com.google.firebase.crashlytics")
 }
 
+// Deployment identifiers stay in ignored local configuration or the CI environment.
+val clarityLocalProperties = Properties().apply {
+    val configuration = rootProject.file("local.properties")
+    if (configuration.isFile) configuration.inputStream().use(::load)
+}
+val clarityProjectId = providers.environmentVariable("CALCMOT_CLARITY_PROJECT_ID")
+    .orElse(clarityLocalProperties.getProperty("clarity.projectId", ""))
+    .get().trim()
+require(clarityProjectId.isEmpty() || clarityProjectId.matches(Regex("[a-z0-9]+"))) {
+    "Invalid Clarity project configuration."
+}
+
 val releaseKeystorePropertiesFile = rootProject.file("keystore.properties")
 val buildsAppBundle = gradle.startParameter.taskNames.any { taskName ->
     taskName.contains("bundle", ignoreCase = true)
@@ -30,6 +42,7 @@ android {
         targetSdk = 36
         versionCode = 10
         versionName = "3.3"
+        buildConfigField("String", "CLARITY_PROJECT_ID", "\"$clarityProjectId\"")
 
         if (buildsAppBundle) {
             ndk {
@@ -98,6 +111,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
+    implementation("com.microsoft.clarity:clarity-compose:3.10.0")
     implementation("androidx.camera:camera-core:1.6.1")
     implementation("androidx.camera:camera-camera2:1.6.1")
     implementation("androidx.camera:camera-lifecycle:1.6.1")

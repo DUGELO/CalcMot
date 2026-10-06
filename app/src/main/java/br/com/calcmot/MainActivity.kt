@@ -23,6 +23,7 @@ import br.com.calcmot.telemetry.AnalyticsEvents
 import br.com.calcmot.telemetry.AnalyticsParams
 import br.com.calcmot.telemetry.AnalyticsValues
 import br.com.calcmot.telemetry.TelemetryProvider
+import br.com.calcmot.analytics.ClarityIntegration
 import br.com.calcmot.ui.CalcMotNavHost
 import br.com.calcmot.ui.theme.MetricaTheme
 
@@ -30,6 +31,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        ClarityIntegration.initialize(applicationContext)
 
         setContent {
             MetricaTheme {

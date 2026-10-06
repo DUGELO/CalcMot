@@ -35,6 +35,8 @@ import br.com.calcmot.securityrecording.data.*
 import br.com.calcmot.securityrecording.domain.*
 import br.com.calcmot.securityrecording.platform.RecordingSessionService
 import br.com.calcmot.securityrecording.ui.components.*
+import br.com.calcmot.analytics.ClarityIntegration
+import br.com.calcmot.analytics.ClarityScreenTracking
 import br.com.calcmot.ui.UiTestTags
 import br.com.calcmot.ui.design.tokens.*
 import br.com.calcmot.ui.theme.MetricaTheme
@@ -46,6 +48,7 @@ class SecurityRecordingActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        ClarityIntegration.initialize(applicationContext)
         requestedSession = intent.getStringExtra(EXTRA_OPEN_SESSION)
         setContent { MetricaTheme { RecordingExperience({ finish() }, requestedSession, requestRevision) } }
     }
@@ -59,6 +62,8 @@ class SecurityRecordingActivity : ComponentActivity() {
 @Composable
 internal fun RecordingExperience(onClose: () -> Unit, requestedSession: String? = null, requestRevision: Int = 0) {
     val nav = rememberNavController()
+    val clarityEntry by nav.currentBackStackEntryAsState()
+    ClarityScreenTracking("recording", clarityEntry?.destination?.route)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val setup = remember { RecordingSetupRepository(context) }

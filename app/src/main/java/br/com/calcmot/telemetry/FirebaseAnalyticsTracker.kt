@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import br.com.calcmot.BuildConfig
+import br.com.calcmot.analytics.ClarityIntegration
 import com.google.firebase.analytics.FirebaseAnalytics
 import java.util.concurrent.ConcurrentHashMap
 
@@ -21,6 +22,7 @@ class FirebaseAnalyticsTracker(context: Context) : AnalyticsTracker {
             safeEvent.params.forEach { (key, value) -> putString(key, value) }
         }
         runCatching { analytics.logEvent(safeEvent.name, bundle) }
+        ClarityIntegration.track(safeEvent.name, safeEvent.params)
     }
 
     private fun shouldThrottle(event: SafeTelemetryPolicy.SafeEvent): Boolean {

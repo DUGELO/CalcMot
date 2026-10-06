@@ -56,6 +56,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.calcmot.R
+import br.com.calcmot.analytics.ClarityIntegration
 import br.com.calcmot.telemetry.AnalyticsEvents
 import br.com.calcmot.telemetry.AnalyticsParams
 import br.com.calcmot.telemetry.AnalyticsValues
@@ -72,6 +73,7 @@ fun PremiumScreen(
     modifier: Modifier = Modifier
 ) {
     LaunchedEffect(Unit) {
+        ClarityIntegration.screenView("app", "premium")
         TelemetryProvider.analytics.track(
             AnalyticsEvents.PAYWALL_VIEWED,
             mapOf(AnalyticsParams.SOURCE to AnalyticsValues.SOURCE_PREMIUM)
@@ -94,7 +96,7 @@ fun PremiumScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            PremiumTopBar(onBack = onBack)
+            PremiumTopBar(onBack = { ClarityIntegration.track("premium_back"); onBack() })
 
             PremiumLogoMark(
                 modifier = Modifier
@@ -115,7 +117,7 @@ fun PremiumScreen(
                     .fillMaxWidth()
                     .heightIn(min = 54.dp)
                     .testTag(UiTestTags.PREMIUM_START_BUTTON),
-                onClick = onStartNow,
+                onClick = { ClarityIntegration.track("premium_cta_clicked"); onStartNow() },
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = CalcMotColors.PrimaryActionBlue,
@@ -131,7 +133,7 @@ fun PremiumScreen(
 
             TextButton(
                 modifier = Modifier.testTag(UiTestTags.PREMIUM_SKIP_BUTTON),
-                onClick = onSkip
+                onClick = { ClarityIntegration.track("premium_dismissed"); onSkip() }
             ) {
                 Text(
                     text = "Agora não",
