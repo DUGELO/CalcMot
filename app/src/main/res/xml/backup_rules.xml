@@ -6,6 +6,10 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
+    <exclude domain="database" path="calcmot_recordings.db" />
+        <exclude domain="database" path="calcmot_recordings.db-wal" />
+        <exclude domain="database" path="calcmot_recordings.db-shm" />
+    <exclude domain="file" path="security-recording" />
     <!--
    <include domain="sharedpref" path="."/>
    <exclude domain="sharedpref" path="device.xml"/>

@@ -35,6 +35,13 @@ internal object CalcMotRoute {
     const val PRIVACY = "privacy"
     const val FEEDBACK = "feedback"
     const val DIAGNOSTICS = "diagnostics"
+    const val SECURITY_TOOLS = "security-tools"
+    const val SECURITY_HUB = "security-hub"
+    const val SECURITY_CONFIGURE = "security-configure"
+    const val SECURITY_ACTIVE = "security-active"
+    const val SECURITY_LIBRARY = "security-library"
+    const val SECURITY_PLAYER = "security-player/{sessionId}"
+    fun securityPlayer(sessionId: String) = "security-player/$sessionId"
 }
 
 @Composable
@@ -130,6 +137,7 @@ fun CalcMotNavHost(
                 onOpenHelp = { navigate(CalcMotRoute.HELP) },
                 onOpenPrivacy = { navigate(CalcMotRoute.PRIVACY) },
                 onOpenFeedback = { navigate(CalcMotRoute.FEEDBACK) },
+                onOpenTools = { navigate(CalcMotRoute.SECURITY_TOOLS) },
                 diagnosticsEnabled = diagnosticsEnabled,
                 onUnlockDiagnostics = {
                     diagnosticsEnabled = true
@@ -249,6 +257,51 @@ fun CalcMotNavHost(
                         Toast.LENGTH_SHORT
                     ).show()
                 }
+            )
+        }
+
+        // The recording entry remains passive until the driver deliberately opens configuration.
+        composable(CalcMotRoute.SECURITY_TOOLS) {
+            br.com.calcmot.securityrecording.ui.SecurityToolsRoute(
+                onBack = { navController.popBackStack() },
+                onOpenHub = { context.startActivity(android.content.Intent(context, br.com.calcmot.securityrecording.ui.SecurityRecordingActivity::class.java)) }
+            )
+        }
+
+        composable(CalcMotRoute.SECURITY_HUB) {
+            br.com.calcmot.securityrecording.ui.SecurityRecordingHubRoute(
+                onBack = { navController.popBackStack() },
+                onConfigure = { navigate(CalcMotRoute.SECURITY_CONFIGURE) },
+                onLibrary = { navigate(CalcMotRoute.SECURITY_LIBRARY) }
+            )
+        }
+
+        composable(CalcMotRoute.SECURITY_CONFIGURE) {
+            br.com.calcmot.securityrecording.ui.SecurityRecordingConfigurationRoute(
+                onBack = { navController.popBackStack() },
+                onRecordingRequested = { navigate(CalcMotRoute.SECURITY_ACTIVE) }
+            )
+        }
+
+        composable(CalcMotRoute.SECURITY_ACTIVE) {
+            br.com.calcmot.securityrecording.ui.SecurityRecordingActiveRoute(
+                onBack = { navController.popBackStack() },
+                onOpenLibrary = { navigate(CalcMotRoute.SECURITY_LIBRARY) }
+            )
+        }
+
+        composable(CalcMotRoute.SECURITY_LIBRARY) {
+            br.com.calcmot.securityrecording.ui.SecurityRecordingLibraryRoute(
+                onBack = { navController.popBackStack() },
+                onOpenSession = { sessionId -> navigate(CalcMotRoute.securityPlayer(sessionId)) }
+            )
+        }
+
+        composable(CalcMotRoute.SECURITY_PLAYER) { entry ->
+            val sessionId = entry.arguments?.getString("sessionId") ?: return@composable
+            br.com.calcmot.securityrecording.ui.SecurityRecordingPlayerRoute(
+                sessionId = sessionId,
+                onBack = { navController.popBackStack() }
             )
         }
     }

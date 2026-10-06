@@ -34,6 +34,7 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CropSquare
 import androidx.compose.material.icons.outlined.AccessibilityNew
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Handyman
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MyLocation
@@ -327,6 +328,7 @@ internal fun AppDrawer(
     onHelp: () -> Unit,
     onPrivacy: () -> Unit,
     onFeedback: () -> Unit,
+    onTools: () -> Unit = {},
     diagnosticsEnabled: Boolean = false,
     onVersionTap: () -> Unit = {},
     onDiagnostics: () -> Unit = {}
@@ -378,6 +380,13 @@ internal fun AppDrawer(
                     selected = false,
                     testTag = UiTestTags.DRAWER_FINANCE_ITEM,
                     onClick = onGoal
+                )
+                DrawerMenuItem(
+                    text = "Ferramentas",
+                    icon = Icons.Outlined.Handyman,
+                    selected = false,
+                    testTag = UiTestTags.DRAWER_SECURITY_ITEM,
+                    onClick = onTools
                 )
                 DrawerMenuItem(
                     text = "Configurações",

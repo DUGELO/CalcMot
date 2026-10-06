@@ -9,6 +9,107 @@ import java.io.File
 class ReleaseReadinessTest {
 
     @Test
+    fun `security recording vertical stays isolated from offer pipelines and telemetry`() {
+        val root = projectFile("app/src/main/java/br/com/calcmot/securityrecording")
+        val forbiddenImports = listOf(
+            "br.com.calcmot.accessibility",
+            "br.com.calcmot.processor",
+            "br.com.calcmot.ninetynine",
+            "br.com.calcmot.overlay",
+            "br.com.calcmot.finance",
+            "br.com.calcmot.telemetry"
+        )
+
+        root.walkTopDown().filter { it.isFile && it.extension == "kt" }.forEach { file ->
+            val source = file.readText(Charsets.UTF_8)
+            forbiddenImports.forEach { forbidden ->
+                assertFalse("${file.name} must not import $forbidden", source.contains("import $forbidden"))
+            }
+        }
+    }
+
+    @Test
+    fun `recording service and local evidence are declared fail closed`() {
+        val manifest = projectFile("app/src/main/AndroidManifest.xml").readText()
+        val legacyBackup = projectFile("app/src/main/res/xml/backup_rules.xml").readText()
+        val modernBackup = projectFile("app/src/main/res/xml/data_extraction_rules.xml").readText()
+
+        assertTrue(manifest.contains(".securityrecording.platform.RecordingSessionService"))
+        assertTrue(manifest.contains("android:foregroundServiceType=\"camera|microphone\""))
+        assertTrue(manifest.contains("android:exported=\"false\""))
+        assertTrue(Regex("android:name=\"android.permission.WRITE_EXTERNAL_STORAGE\"\\s+android:maxSdkVersion=\"28\"").containsMatchIn(manifest))
+        assertTrue(manifest.contains("SecurityRecordingActivity"))
+        assertTrue(manifest.contains("androidx.core.content.FileProvider"))
+        val paths = projectFile("app/src/main/res/xml/recording_share_paths.xml").readText()
+        assertTrue(paths.contains("security-recording/share/"))
+        assertFalse(paths.contains("root-path"))
+        assertFalse(paths.contains("external-path"))
+        listOf(legacyBackup, modernBackup).forEach { rules ->
+            assertTrue(rules.contains("domain=\"database\" path=\"calcmot_recordings.db\""))
+            assertTrue(rules.contains("domain=\"file\" path=\"security-recording\""))
+        }
+    }
+
+    @Test
+    fun `recording start uses a single use token instead of a boolean extra`() {
+        val service = projectFile(
+            "app/src/main/java/br/com/calcmot/securityrecording/platform/RecordingSessionService.kt"
+        ).readText()
+        val authorization = projectFile(
+            "app/src/main/java/br/com/calcmot/securityrecording/application/RecordingStartAuthorization.kt"
+        ).readText()
+
+        assertTrue(service.contains("RecordingStartAuthorization.consume"))
+        assertTrue(service.contains("RecordingStartAuthorization.issue"))
+        assertFalse(service.contains("EXTRA_ACTIVITY_CONFIRMED"))
+        assertTrue(authorization.contains("expirations.remove(token)"))
+        assertTrue(authorization.contains("VALIDITY_MS"))
+    }
+
+    @Test
+    fun `recording service serializes callbacks and admits only encoded audio video`() {
+        val service = projectFile("app/src/main/java/br/com/calcmot/securityrecording/platform/RecordingSessionService.kt").readText()
+        assertTrue(service.indexOf("super.onStartCommand(intent, flags, startId)") < service.indexOf("val command = intent?.toCommand()"))
+        assertTrue(service.contains("START_NOT_STICKY"))
+        assertTrue(service.contains("Channel<Event>"))
+        assertTrue(service.contains("for (event in queue)"))
+        assertTrue(service.contains("RecordingCaptureEvidence.confirmed"))
+        assertTrue(service.contains("AudioStats.AUDIO_STATE_ACTIVE"))
+        assertTrue(service.contains("delay(30_000L)"))
+        assertFalse(service.contains("unbindAll"))
+    }
+
+    @Test
+    fun `camera flow reuses validated native components and has reactive metadata history`() {
+        val scaffold = projectFile("app/src/main/java/br/com/calcmot/securityrecording/ui/components/RecordingScaffold.kt").readText()
+        val library = projectFile("app/src/main/java/br/com/calcmot/securityrecording/ui/RecordingLibraryScreens.kt").readText()
+        val routes = projectFile("app/src/main/java/br/com/calcmot/securityrecording/ui/RecordingRoutes.kt").readText()
+        assertTrue(scaffold.contains("CalcMotScaffold"))
+        assertTrue(scaffold.contains("CalcMotTopBar"))
+        assertTrue(library.contains("repository.observeSessions()"))
+        assertFalse(library.contains("verifiedSessions()"))
+        assertTrue(library.contains("native.playWhenReady = false"))
+        assertTrue(library.contains("Lifecycle.Event.ON_STOP"))
+        assertTrue(routes.contains("nav.navigate"))
+        assertTrue(routes.contains("startConfirmed"))
+        val previews = projectFile("app/src/main/java/br/com/calcmot/securityrecording/ui/RecordingIntegrationPreviews.kt").readText()
+        assertTrue(previews.contains("RecordingActivePresentation"))
+        assertTrue(previews.contains("RecordingFirstUseRoute"))
+        assertTrue(previews.contains("RecordingSettingsRoute"))
+    }
+
+    @Test
+    fun `notification denial has contextual settings and capture retains its preconditions`() {
+        val routes = projectFile("app/src/main/java/br/com/calcmot/securityrecording/ui/RecordingRoutes.kt").readText()
+        val service = projectFile("app/src/main/java/br/com/calcmot/securityrecording/platform/RecordingSessionService.kt").readText()
+        assertTrue(routes.contains("shouldShowRequestPermissionRationale"))
+        assertTrue(routes.contains("Settings.ACTION_APP_NOTIFICATION_SETTINGS"))
+        assertTrue(routes.contains("launcher.launch(permission)"))
+        assertTrue(service.contains("permissionsReady(context)"))
+        assertTrue(service.contains("areNotificationsEnabled()"))
+    }
+
+    @Test
     fun `firebase telemetry is isolated and advertising identifiers are disabled`() {
         val manifest = projectFile("app/src/main/AndroidManifest.xml").readText()
         val rootBuild = projectFile("build.gradle.kts").readText()
@@ -46,11 +147,12 @@ class ReleaseReadinessTest {
     }
 
     @Test
-    fun `manifest does not request foreground media projection permissions`() {
+    fun `manifest isolates recording foreground service from media projection`() {
         val manifest = projectFile("app/src/main/AndroidManifest.xml").readText()
 
         assertFalse(manifest.contains("android.permission.SYSTEM_ALERT_WINDOW"))
-        assertFalse(manifest.contains("android.permission.FOREGROUND_SERVICE"))
+        assertTrue(manifest.contains("android.permission.FOREGROUND_SERVICE_CAMERA"))
+        assertTrue(manifest.contains("android.permission.FOREGROUND_SERVICE_MICROPHONE"))
         assertFalse(manifest.contains("android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"))
         assertFalse(manifest.contains("android:foregroundServiceType=\"mediaProjection\""))
         assertFalse(manifest.contains("NinetyNineProjectionService"))
@@ -261,7 +363,10 @@ class ReleaseReadinessTest {
         assertTrue(service.contains("runFocusedUberWatchdogScanIfNeeded()"))
         assertTrue(service.contains("recordServiceFailure(stage = \"continuous_heartbeat\""))
         assertFalse(service.contains("accessibility-continuous-poll"))
-        assertTrue(service.contains("if (BuildConfig.DEBUG) {\n            ShellOfferBridge.register(shellOfferHandler)"))
+        assertTrue(
+            Regex("""if \(BuildConfig\.DEBUG\) \{\s+ShellOfferBridge\.register\(shellOfferHandler\)""")
+                .containsMatchIn(service)
+        )
         assertTrue(
             Regex("""if \(BuildConfig\.DEBUG\) \{\s+ShellOfferBridge\.unregister\(shellOfferHandler\)""")
                 .containsMatchIn(service)

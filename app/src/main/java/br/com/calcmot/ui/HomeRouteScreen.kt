@@ -53,6 +53,7 @@ internal fun HomeScreen(
     onOpenHelp: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
     onOpenFeedback: () -> Unit = {},
+    onOpenTools: () -> Unit = {},
     diagnosticsEnabled: Boolean = false,
     onUnlockDiagnostics: () -> Unit = {},
     onOpenDiagnostics: () -> Unit = {}
@@ -98,6 +99,7 @@ internal fun HomeScreen(
                 onHelp = { closeDrawerAnd(onOpenHelp) },
                 onPrivacy = { closeDrawerAnd(onOpenPrivacy) },
                 onFeedback = { closeDrawerAnd(onOpenFeedback) },
+                onTools = { closeDrawerAnd(onOpenTools) },
                 diagnosticsEnabled = diagnosticsEnabled,
                 onVersionTap = ::handleVersionTap,
                 onDiagnostics = { closeDrawerAnd(onOpenDiagnostics) }

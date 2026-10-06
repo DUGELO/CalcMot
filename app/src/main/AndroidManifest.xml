@@ -12,7 +12,16 @@
     <uses-permission
         android:name="android.permission.ACCESS_ADSERVICES_ATTRIBUTION"
         tools:node="remove" />
-
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <!-- No boot entry point is introduced for camera or cleanup. Startup reschedules local work. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" tools:node="remove" />
     <queries>
         <package android:name="com.ubercab.driver" />
         <package android:name="com.ubercab" />
@@ -31,6 +40,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.CalcMot">
 
+        <receiver android:name="androidx.work.impl.background.systemalarm.RescheduleReceiver" tools:node="remove" />
         <meta-data
             android:name="google_analytics_adid_collection_enabled"
             android:value="false" />
@@ -65,6 +75,15 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <service
+            android:name=".securityrecording.platform.RecordingSessionService"
+            android:exported="false"
+            android:foregroundServiceType="camera|microphone" />
+
+        <activity android:name=".securityrecording.ui.SecurityRecordingActivity" android:exported="false" android:launchMode="singleTop" android:theme="@style/Theme.CalcMot" />
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.securityrecording.files" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/recording_share_paths" />
+        </provider>
     </application>
 
 </manifest>

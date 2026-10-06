@@ -5,15 +5,19 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
+        <exclude domain="database" path="calcmot_recordings.db" />
+        <exclude domain="database" path="calcmot_recordings.db-wal" />
+        <exclude domain="database" path="calcmot_recordings.db-shm" />
+        <exclude domain="file" path="security-recording" />
         <!-- TODO: Use <include> and <exclude> to control what is backed up.
         <include .../>
         <exclude .../>
         -->
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="database" path="calcmot_recordings.db" />
+        <exclude domain="database" path="calcmot_recordings.db-wal" />
+        <exclude domain="database" path="calcmot_recordings.db-shm" />
+        <exclude domain="file" path="security-recording" />
     </device-transfer>
-    -->
 </data-extraction-rules>

@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -110,6 +111,18 @@ class CalcMotNavigationTest {
         composeRule.onNodeWithTag(UiTestTags.SETTINGS_SCREEN).assertIsDisplayed()
         assertEquals(OverlayThemePreference.SOLID, AppSettings.getOverlayTheme(context))
         assertEquals(CalcMotRoute.SETTINGS, navController.currentDestination?.route)
+    }
+
+    @Test
+    fun recordingDiscoveryReachesPassiveHubWithoutOpeningPreview() {
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_SECURITY_ITEM).performClick()
+        composeRule.onNodeWithText("Câmera secreta").performClick()
+
+        composeRule.onNodeWithText("Hub de Gravação de Segurança").assertIsDisplayed()
+        composeRule.onNodeWithText("Nenhuma captura é iniciada aqui.").assertIsDisplayed()
+        composeRule.onAllNodesWithTag(UiTestTags.SECURITY_RECORDING_PREVIEW).assertCountEquals(0)
+        assertEquals(CalcMotRoute.SECURITY_HUB, navController.currentDestination?.route)
     }
 
     private fun openSettings() {
