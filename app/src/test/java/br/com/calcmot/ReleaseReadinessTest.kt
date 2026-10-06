@@ -46,15 +46,98 @@ class ReleaseReadinessTest {
     }
 
     @Test
-    fun `manifest does not request foreground media projection permissions`() {
+    fun `manifest removes work manager permissions and does not request media projection`() {
         val manifest = projectFile("app/src/main/AndroidManifest.xml").readText()
 
         assertFalse(manifest.contains("android.permission.SYSTEM_ALERT_WINDOW"))
-        assertFalse(manifest.contains("android.permission.FOREGROUND_SERVICE"))
+        assertTrue(manifest.removesPermission("android.permission.RECEIVE_BOOT_COMPLETED"))
+        assertTrue(manifest.removesPermission("android.permission.FOREGROUND_SERVICE"))
         assertFalse(manifest.contains("android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"))
         assertFalse(manifest.contains("android:foregroundServiceType=\"mediaProjection\""))
         assertFalse(manifest.contains("NinetyNineProjectionService"))
     }
+
+    @Test
+    fun `security recording hub stays isolated and passive in story one one`() {
+        val sourceRoot = projectFile("app/src/main/java")
+        val securityRoot = projectFile("app/src/main/java/br/com/calcmot/securityrecording")
+        assertTrue("The security recording vertical must exist", securityRoot.isDirectory)
+
+        val securitySources = securityRoot.walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .toList()
+        assertTrue("The security recording vertical must contain Kotlin sources", securitySources.isNotEmpty())
+        val securityText = securitySources.joinToString("\n") { it.readText(Charsets.UTF_8) }
+        val forbiddenPackages = listOf(
+            "br.com.calcmot.accessibility",
+            "br.com.calcmot.processor",
+            "br.com.calcmot.ninetynine",
+            "br.com.calcmot.overlay",
+            "br.com.calcmot.finance",
+            "br.com.calcmot.telemetry"
+        )
+        forbiddenPackages.forEach { forbidden ->
+            assertFalse("securityrecording must not reference $forbidden", securityText.contains(forbidden))
+        }
+
+        val prohibitedCaptureTokens = listOf(
+            "android.permission.CAMERA",
+            "android.permission.RECORD_AUDIO",
+            "ProcessCameraProvider",
+            "CameraSelector",
+            "MediaRecorder",
+            "AudioRecord",
+            "requestPermissions",
+            "ActivityResultContracts.RequestPermission",
+            "startForeground",
+            "startService",
+            "bindService"
+        )
+        prohibitedCaptureTokens.forEach { token ->
+            assertFalse("Story 1.1 must not use $token", securityText.contains(token))
+        }
+
+        sourceRoot.walkTopDown()
+            .filter {
+                it.isFile && it.extension == "kt" &&
+                    !it.toPath().startsWith(securityRoot.toPath()) &&
+                    it.relativeTo(sourceRoot).invariantSeparatorsPath != "br/com/calcmot/ui/CalcMotNavigation.kt"
+            }
+            .forEach { source ->
+                val relativePath = source.relativeTo(sourceRoot).invariantSeparatorsPath
+                assertFalse(
+                    "$relativePath must not reference securityrecording",
+                    source.readText(Charsets.UTF_8).contains("securityrecording")
+                )
+            }
+
+        val manifest = projectFile("app/src/main/AndroidManifest.xml").readText(Charsets.UTF_8)
+        listOf(
+            "android.permission.CAMERA",
+            "android.permission.RECORD_AUDIO",
+            "android:foregroundServiceType=\"camera",
+            "android:foregroundServiceType=\"microphone"
+        ).forEach { token -> assertFalse("Story 1.1 manifest must not contain $token", manifest.contains(token)) }
+    }
+
+    @Test
+    fun `financial and metrics research data are excluded from backup and transfer`() {
+        val backupRules = projectFile("app/src/main/res/xml/backup_rules.xml").readText()
+        val extractionRules = projectFile("app/src/main/res/xml/data_extraction_rules.xml").readText()
+
+        listOf("calcmot_finance.db", "calcmot_finance_settings.xml", "calcmot_metrics_research.xml")
+            .forEach { privateStore ->
+                assertTrue(backupRules.contains(privateStore))
+                assertTrue(extractionRules.contains(privateStore))
+            }
+    }
+
+    private fun String.removesPermission(permission: String): Boolean =
+        Regex(
+            "<uses-permission[\\s\\S]*?android:name=\\\"${Regex.escape(permission)}\\\"" +
+                "[\\s\\S]*?tools:node=\\\"remove\\\"[\\s\\S]*?/>",
+            RegexOption.MULTILINE
+        ).containsMatchIn(this)
 
     @Test
     fun `release manifest does not export debug receiver`() {

@@ -10,14 +10,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -29,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,26 +92,95 @@ fun CalcMotTopBar(
     title: String,
     modifier: Modifier = Modifier,
     navigation: @Composable (() -> Unit)? = null,
-    action: @Composable (() -> Unit)? = null
+    action: @Composable (() -> Unit)? = null,
+    onBack: (() -> Unit)? = null
 ) {
+    val hasNavigation = navigation != null || onBack != null
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = CalcMotSpacing.Md, vertical = CalcMotSpacing.Sm),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        navigation?.invoke()
+        if (navigation != null) {
+            navigation()
+        } else if (onBack != null) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Voltar",
+                    tint = CalcMotColors.TextPrimary
+                )
+            }
+        }
         Text(
             text = title,
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = if (navigation == null) 0.dp else CalcMotSpacing.Sm),
+                .padding(horizontal = if (hasNavigation) CalcMotSpacing.Sm else 0.dp),
             color = CalcMotColors.TextPrimary,
             style = CalcMotTypography.SectionTitle,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
         action?.invoke()
+    }
+}
+
+@Composable
+fun CalcMotListItem(
+    title: String,
+    description: String?,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    accent: Color = CalcMotColors.BrandPrimary,
+    compact: Boolean = false
+) {
+    CalcMotCard(modifier = modifier, onClick = onClick) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(CalcMotSpacing.CardPadding),
+            horizontalArrangement = Arrangement.spacedBy(CalcMotSpacing.Md),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(CalcMotSpacing.Xl),
+                tint = accent
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(CalcMotSpacing.Xs)
+            ) {
+                Text(
+                    text = title,
+                    style = if (compact) CalcMotTypography.BodyStrong else CalcMotTypography.CardTitle,
+                    color = CalcMotColors.TextPrimary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                description?.let {
+                    Text(
+                        text = it,
+                        style = CalcMotTypography.Caption,
+                        color = CalcMotColors.TextSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Icon(
+                imageVector = Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = CalcMotColors.TextMuted
+            )
+        }
     }
 }
 

@@ -7,6 +7,8 @@ import br.com.calcmot.model.ProfitabilitySettings
 
 object AppSettings {
     private const val PREFS_NAME = "calcmot_settings"
+    private const val FINANCIAL_PREFS_NAME = "calcmot_finance_settings"
+    private const val KEY_FINANCIAL_PREFS_MIGRATED = "general_prefs_migrated_v1"
     private const val KEY_MONITORING_ENABLED = "monitoring_enabled"
     private const val KEY_OVERLAY_POSITION = "overlay_position"
     private const val KEY_OVERLAY_THEME = "overlay_theme"
@@ -26,6 +28,11 @@ object AppSettings {
     private const val KEY_LAST_DRIVER_APP = "last_driver_app"
     private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
     private const val KEY_DIAGNOSTICS_ENABLED = "diagnostics_enabled"
+    private const val KEY_FINANCIAL_HISTORY_DISCLOSURE_DECIDED = "financial_history_disclosure_decided_v1"
+    private const val KEY_FINANCIAL_HISTORY_CONSENTED = "financial_history_consented_v1"
+    private const val KEY_FINANCIAL_HISTORY_ENABLED = "financial_history_enabled"
+    private const val KEY_DAILY_GROSS_GOAL_CENTS = "daily_gross_goal_cents"
+    private const val KEY_METRICS_RESEARCH_ENABLED = "metrics_research_enabled_v1"
 
     fun isMonitoringEnabled(context: Context): Boolean {
         return context.applicationContext
@@ -238,6 +245,102 @@ object AppSettings {
             .edit()
             .putBoolean(KEY_DIAGNOSTICS_ENABLED, enabled)
             .apply()
+    }
+
+    fun hasFinancialHistoryDisclosureDecision(context: Context): Boolean =
+        financialPrefs(context)
+            .getBoolean(KEY_FINANCIAL_HISTORY_DISCLOSURE_DECIDED, false)
+
+    fun hasFinancialHistoryConsent(context: Context): Boolean =
+        financialPrefs(context)
+            .getBoolean(KEY_FINANCIAL_HISTORY_CONSENTED, false)
+
+    fun setFinancialHistoryConsent(context: Context, consented: Boolean) {
+        financialPrefs(context)
+            .edit()
+            .putBoolean(KEY_FINANCIAL_HISTORY_DISCLOSURE_DECIDED, true)
+            .putBoolean(KEY_FINANCIAL_HISTORY_CONSENTED, consented)
+            .putBoolean(KEY_FINANCIAL_HISTORY_ENABLED, consented)
+            .apply()
+    }
+
+    fun isFinancialHistoryEnabled(context: Context): Boolean {
+        val prefs = financialPrefs(context)
+        return prefs.getBoolean(KEY_FINANCIAL_HISTORY_CONSENTED, false) &&
+            prefs.getBoolean(KEY_FINANCIAL_HISTORY_ENABLED, false)
+    }
+
+    fun setFinancialHistoryEnabled(context: Context, enabled: Boolean) {
+        val consented = hasFinancialHistoryConsent(context)
+        financialPrefs(context)
+            .edit()
+            .putBoolean(KEY_FINANCIAL_HISTORY_ENABLED, enabled && consented)
+            .apply()
+    }
+
+    fun getDailyGrossGoalCents(context: Context): Long =
+        financialPrefs(context)
+            .getLong(KEY_DAILY_GROSS_GOAL_CENTS, DEFAULT_DAILY_GROSS_GOAL_CENTS)
+            .coerceAtLeast(0L)
+
+    fun setDailyGrossGoalCents(context: Context, value: Long) {
+        financialPrefs(context)
+            .edit()
+            .putLong(KEY_DAILY_GROSS_GOAL_CENTS, value.coerceAtLeast(0L))
+            .apply()
+    }
+
+    fun isMetricsResearchEnabled(context: Context): Boolean =
+        financialPrefs(context).getBoolean(KEY_METRICS_RESEARCH_ENABLED, false)
+
+    fun setMetricsResearchEnabled(context: Context, enabled: Boolean) {
+        financialPrefs(context)
+            .edit()
+            .putBoolean(KEY_METRICS_RESEARCH_ENABLED, enabled)
+            .apply()
+    }
+
+    private const val DEFAULT_DAILY_GROSS_GOAL_CENTS = 20_000L
+
+    private fun financialPrefs(context: Context): android.content.SharedPreferences {
+        val appContext = context.applicationContext
+        val financial = appContext.getSharedPreferences(FINANCIAL_PREFS_NAME, Context.MODE_PRIVATE)
+        if (financial.getBoolean(KEY_FINANCIAL_PREFS_MIGRATED, false)) return financial
+
+        val general = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val financialEditor = financial.edit()
+        if (general.contains(KEY_FINANCIAL_HISTORY_DISCLOSURE_DECIDED)) {
+            financialEditor.putBoolean(
+                KEY_FINANCIAL_HISTORY_DISCLOSURE_DECIDED,
+                general.getBoolean(KEY_FINANCIAL_HISTORY_DISCLOSURE_DECIDED, false)
+            )
+        }
+        if (general.contains(KEY_FINANCIAL_HISTORY_CONSENTED)) {
+            financialEditor.putBoolean(
+                KEY_FINANCIAL_HISTORY_CONSENTED,
+                general.getBoolean(KEY_FINANCIAL_HISTORY_CONSENTED, false)
+            )
+        }
+        if (general.contains(KEY_FINANCIAL_HISTORY_ENABLED)) {
+            financialEditor.putBoolean(
+                KEY_FINANCIAL_HISTORY_ENABLED,
+                general.getBoolean(KEY_FINANCIAL_HISTORY_ENABLED, false)
+            )
+        }
+        if (general.contains(KEY_DAILY_GROSS_GOAL_CENTS)) {
+            financialEditor.putLong(
+                KEY_DAILY_GROSS_GOAL_CENTS,
+                general.getLong(KEY_DAILY_GROSS_GOAL_CENTS, DEFAULT_DAILY_GROSS_GOAL_CENTS)
+            )
+        }
+        financialEditor.putBoolean(KEY_FINANCIAL_PREFS_MIGRATED, true).commit()
+        general.edit()
+            .remove(KEY_FINANCIAL_HISTORY_DISCLOSURE_DECIDED)
+            .remove(KEY_FINANCIAL_HISTORY_CONSENTED)
+            .remove(KEY_FINANCIAL_HISTORY_ENABLED)
+            .remove(KEY_DAILY_GROSS_GOAL_CENTS)
+            .apply()
+        return financial
     }
 }
 

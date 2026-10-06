@@ -5,15 +5,19 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="database" path="calcmot_finance.db" />
+        <exclude domain="database" path="calcmot_finance.db-wal" />
+        <exclude domain="database" path="calcmot_finance.db-shm" />
+        <exclude domain="sharedpref" path="calcmot_finance.xml" />
+        <exclude domain="sharedpref" path="calcmot_finance_settings.xml" />
+        <exclude domain="sharedpref" path="calcmot_metrics_research.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="database" path="calcmot_finance.db" />
+        <exclude domain="database" path="calcmot_finance.db-wal" />
+        <exclude domain="database" path="calcmot_finance.db-shm" />
+        <exclude domain="sharedpref" path="calcmot_finance.xml" />
+        <exclude domain="sharedpref" path="calcmot_finance_settings.xml" />
+        <exclude domain="sharedpref" path="calcmot_metrics_research.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>

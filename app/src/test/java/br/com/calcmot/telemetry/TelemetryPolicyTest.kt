@@ -27,7 +27,17 @@ class TelemetryPolicyTest {
                 "ninetynine_ocr_failed",
                 "pipeline_reset",
                 "manual_restart_reading",
-                "paywall_viewed"
+                "paywall_viewed",
+                "open_dashboard_finance_opened",
+                "financial_record_created",
+                "financial_history_consent",
+                "financial_history_deleted",
+                "financial_report_exported",
+                "financial_record_corrected",
+                "financial_session_updated",
+                "financial_report_opened",
+                "metrics_study_consent",
+                "metrics_study_daily_summary"
             ),
             AnalyticsEvents.allowed
         )
@@ -59,6 +69,61 @@ class TelemetryPolicyTest {
                 params = mapOf(AnalyticsParams.SOURCE to "accessibility_tree")
             )
         )
+    }
+
+    @Test
+    fun `dashboard event accepts only boolean availability flags`() {
+        val safeEvent = SafeTelemetryPolicy.sanitizeEvent(
+            event = AnalyticsEvents.OPEN_DASHBOARD_FINANCE_OPENED,
+            params = mapOf(
+                AnalyticsParams.HAS_ANY_DATA to "true",
+                AnalyticsParams.HAS_UBER_DATA to "false",
+                AnalyticsParams.HAS_NINETY_NINE_DATA to "true",
+                "financial_value" to "123.45"
+            )
+        )
+
+        requireNotNull(safeEvent)
+        assertEquals(3, safeEvent.params.size)
+        assertFalse(safeEvent.params.containsKey("financial_value"))
+    }
+
+    @Test
+    fun `metrics study accepts only categorical daily summaries`() {
+        val safeEvent = SafeTelemetryPolicy.sanitizeEvent(
+            event = AnalyticsEvents.METRICS_STUDY_DAILY_SUMMARY,
+            params = mapOf(
+                AnalyticsParams.PLATFORM to "uber",
+                AnalyticsParams.SOURCE to "accessibility_tree",
+                AnalyticsParams.STUDY_VERSION to "offer_episode_v1",
+                AnalyticsParams.STUDY_STRATEGY to "strict_90",
+                AnalyticsParams.STUDY_LEDGER_RESULT to "deduplicated",
+                AnalyticsParams.SAMPLE_BUCKET to "6_to_20",
+                "exact_fare" to "37.90",
+                "offer_fingerprint" to "37.90|1.0|5|8.0|20"
+            )
+        )
+
+        requireNotNull(safeEvent)
+        assertEquals(6, safeEvent.params.size)
+        assertFalse(safeEvent.params.containsKey("exact_fare"))
+        assertFalse(safeEvent.params.containsKey("offer_fingerprint"))
+    }
+
+    @Test
+    fun `metrics study discards unknown strategies and free form values`() {
+        val safeEvent = SafeTelemetryPolicy.sanitizeEvent(
+            event = AnalyticsEvents.METRICS_STUDY_DAILY_SUMMARY,
+            params = mapOf(
+                AnalyticsParams.STUDY_VERSION to "secret_experiment_42",
+                AnalyticsParams.STUDY_STRATEGY to "driver_at_avenida_brasil",
+                AnalyticsParams.STUDY_LEDGER_RESULT to "R$ 99,00",
+                AnalyticsParams.SAMPLE_BUCKET to "1234"
+            )
+        )
+
+        requireNotNull(safeEvent)
+        assertTrue(safeEvent.params.isEmpty())
     }
 
     @Test

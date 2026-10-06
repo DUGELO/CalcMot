@@ -118,6 +118,20 @@ internal object SafeTelemetryPolicy {
         AnalyticsParams.DURATION_BUCKET,
         AnalyticsParams.VALUE_PER_KM_BUCKET,
         AnalyticsParams.VALUE_PER_HOUR_BUCKET -> value in buckets
+        AnalyticsParams.HAS_ANY_DATA,
+        AnalyticsParams.HAS_UBER_DATA,
+        AnalyticsParams.HAS_NINETY_NINE_DATA -> value == "true" || value == "false"
+        AnalyticsParams.RECORD_TYPE -> value in setOf(
+            "offer", "trip", "earning", "expense", "session", "correction", "report", "history"
+        )
+        AnalyticsParams.STUDY_VERSION -> value == "offer_episode_v1"
+        AnalyticsParams.STUDY_STRATEGY -> value in setOf(
+            "exact_match", "strict_60", "strict_90", "strict_180", "new_observation"
+        )
+        AnalyticsParams.STUDY_LEDGER_RESULT -> value in setOf(
+            "new_record", "deduplicated", "not_recorded"
+        )
+        AnalyticsParams.SAMPLE_BUCKET -> value in setOf("1", "2_to_5", "6_to_20", "21_plus")
         else -> false
     }
 

@@ -6,8 +6,10 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="database" path="calcmot_finance.db" />
+    <exclude domain="database" path="calcmot_finance.db-wal" />
+    <exclude domain="database" path="calcmot_finance.db-shm" />
+    <exclude domain="sharedpref" path="calcmot_finance.xml" />
+    <exclude domain="sharedpref" path="calcmot_finance_settings.xml" />
+    <exclude domain="sharedpref" path="calcmot_metrics_research.xml" />
 </full-backup-content>

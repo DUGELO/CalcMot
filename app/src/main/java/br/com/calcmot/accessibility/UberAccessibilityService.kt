@@ -16,6 +16,7 @@ import br.com.calcmot.AppSettings
 import br.com.calcmot.BuildConfig
 import br.com.calcmot.DriverApp
 import br.com.calcmot.DriverAppPackagePolicy
+import br.com.calcmot.finance.ledger.DriverDataRecorderProvider
 import br.com.calcmot.PackageDecision
 import br.com.calcmot.ReadingPipelineRuntime
 import br.com.calcmot.ReadingPipelineWatchdogPolicy
@@ -2852,6 +2853,11 @@ class UberAccessibilityService : AccessibilityService() {
         )
         if (decision is CaptureDecision.ShowOverlay) {
             trace?.mark(OverlayLatencyTrace.Stage.T8_STABILITY_ACCEPTED)
+            DriverDataRecorderProvider.get(this).recordStableOffer(
+                driverApp = trustedForegroundDriverApp,
+                source = source,
+                candidate = candidate
+            )
         }
         if (trustedSingleFrame && decision is CaptureDecision.ShowOverlay && BuildConfig.DEBUG) {
             Log.w(

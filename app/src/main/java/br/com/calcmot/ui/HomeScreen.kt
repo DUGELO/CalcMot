@@ -36,9 +36,11 @@ import androidx.compose.material.icons.outlined.AccessibilityNew
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.TextFields
@@ -174,7 +176,9 @@ private fun LegacyHomeScreen(
                 onSettings = { navigate(HomeDestination.SETTINGS) },
                 onHelp = { navigate(HomeDestination.HELP) },
                 onPrivacy = { navigate(HomeDestination.PRIVACY) },
-                onFeedback = { navigate(HomeDestination.FEEDBACK) }
+                onFeedback = { navigate(HomeDestination.FEEDBACK) },
+                onDashboardFinance = {},
+                onTools = {}
             )
         }
     ) {
@@ -327,6 +331,8 @@ internal fun AppDrawer(
     onHelp: () -> Unit,
     onPrivacy: () -> Unit,
     onFeedback: () -> Unit,
+    onDashboardFinance: () -> Unit,
+    onTools: () -> Unit,
     diagnosticsEnabled: Boolean = false,
     onVersionTap: () -> Unit = {},
     onDiagnostics: () -> Unit = {}
@@ -378,6 +384,20 @@ internal fun AppDrawer(
                     selected = false,
                     testTag = UiTestTags.DRAWER_FINANCE_ITEM,
                     onClick = onGoal
+                )
+                DrawerMenuItem(
+                    text = "Dashboard Financeiro",
+                    icon = Icons.Outlined.QueryStats,
+                    selected = false,
+                    testTag = UiTestTags.DRAWER_DASHBOARD_FINANCE_ITEM,
+                    onClick = onDashboardFinance
+                )
+                DrawerMenuItem(
+                    text = "Ferramentas",
+                    icon = Icons.Outlined.Build,
+                    selected = false,
+                    testTag = UiTestTags.DRAWER_TOOLS_ITEM,
+                    onClick = onTools
                 )
                 DrawerMenuItem(
                     text = "Configurações",

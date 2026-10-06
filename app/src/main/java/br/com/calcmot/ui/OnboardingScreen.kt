@@ -424,7 +424,7 @@ private fun CalcMotOnboardingCanonicalPage(
             text = when (card) {
                 PermissionPageCard.BENEFITS -> "Decida corridas com\nmais clareza"
                 PermissionPageCard.USE,
-                PermissionPageCard.LIMITATIONS -> "Permissão de\nacessibilidade"
+                PermissionPageCard.LIMITATIONS -> "Permissão de acessibilidade"
             },
             color = CalcMotColors.TextPrimary,
             fontSize = 29.sp,
@@ -882,15 +882,15 @@ private fun permissionUseRows(): List<PermissionRowData> {
     return listOf(
         PermissionRowData(
             icon = PermissionRowIcon.VISIBILITY,
-            text = "Identifica valor, distância e\ntempo visíveis na oferta"
+            text = "Identifica valor, distância e tempo visíveis na oferta"
         ),
         PermissionRowData(
             icon = PermissionRowIcon.CALCULATE,
-            text = "Calcula R$/km e R$/h\nautomaticamente"
+            text = "Calcula R$/km e R$/h automaticamente"
         ),
         PermissionRowData(
             icon = PermissionRowIcon.CHECK,
-            text = "Mostra se a corrida está\nBoa, Média ou Ruim"
+            text = "Mostra se a corrida está Boa, Média ou Ruim"
         )
     )
 }

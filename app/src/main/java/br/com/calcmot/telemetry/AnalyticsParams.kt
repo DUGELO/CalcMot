@@ -15,6 +15,14 @@ object AnalyticsParams {
     const val DURATION_BUCKET = "duration_bucket"
     const val VALUE_PER_KM_BUCKET = "value_per_km_bucket"
     const val VALUE_PER_HOUR_BUCKET = "value_per_hour_bucket"
+    const val HAS_ANY_DATA = "has_any_data"
+    const val HAS_UBER_DATA = "has_uber_data"
+    const val HAS_NINETY_NINE_DATA = "has_99_data"
+    const val RECORD_TYPE = "record_type"
+    const val STUDY_VERSION = "study_version"
+    const val STUDY_STRATEGY = "study_strategy"
+    const val STUDY_LEDGER_RESULT = "study_ledger_result"
+    const val SAMPLE_BUCKET = "sample_bucket"
 
     internal val allowed = setOf(
         PLATFORM,
@@ -30,7 +38,15 @@ object AnalyticsParams {
         KM_BUCKET,
         DURATION_BUCKET,
         VALUE_PER_KM_BUCKET,
-        VALUE_PER_HOUR_BUCKET
+        VALUE_PER_HOUR_BUCKET,
+        HAS_ANY_DATA,
+        HAS_UBER_DATA,
+        HAS_NINETY_NINE_DATA,
+        RECORD_TYPE,
+        STUDY_VERSION,
+        STUDY_STRATEGY,
+        STUDY_LEDGER_RESULT,
+        SAMPLE_BUCKET
     )
 }
 

@@ -170,6 +170,15 @@ object AppDiagnostics {
         )
     }
 
+    fun readCompletedCaptures(context: Context): CompletedCaptures {
+        val appContext = context.safeApplicationContext() ?: return CompletedCaptures()
+        val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return CompletedCaptures(
+            uber = prefs.getLong(captureCompleteKey(OfferCaptureSource.ACCESSIBILITY_TREE), 0L),
+            ninetyNine = prefs.getLong(captureCompleteKey(OfferCaptureSource.NINETY_NINE_OCR), 0L)
+        )
+    }
+
     private fun stageCountKey(stage: Stage): String = STAGE_COUNT_PREFIX + stage.value
     private fun captureCountKey(source: OfferCaptureSource): String = CAPTURE_COUNT_PREFIX + source.id
     private fun captureCompleteKey(source: OfferCaptureSource): String = CAPTURE_COMPLETE_PREFIX + source.id
@@ -234,6 +243,14 @@ object AppDiagnostics {
         val lastCaptureSource: OfferCaptureSource?,
         val lastCaptureRejectionReason: OfferCaptureRejectionReason?
     )
+
+    data class CompletedCaptures(
+        val uber: Long = 0L,
+        val ninetyNine: Long = 0L
+    ) {
+        val total: Long get() = uber + ninetyNine
+        val hasAnyData: Boolean get() = total > 0L
+    }
 
     enum class Stage(val value: String, val label: String) {
         NEVER("never", "Aguardando evento da Uber"),

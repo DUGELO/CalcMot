@@ -5,12 +5,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import br.com.calcmot.ui.design.components.CalcMotButton
 import br.com.calcmot.ui.design.components.CalcMotCard
 import br.com.calcmot.ui.design.components.CalcMotInfoBanner
+import br.com.calcmot.ui.design.components.CalcMotListItem
 import br.com.calcmot.ui.design.domain.DailySummaryCard
 import br.com.calcmot.ui.design.domain.DailySummaryUiState
 import br.com.calcmot.ui.design.domain.PermissionStatus
@@ -45,6 +48,12 @@ private fun CalcMotDesignSystemPreview() {
                     averagePerKm = "R$ 2,10",
                     averagePerHour = "R$ 61"
                 )
+            )
+            CalcMotListItem(
+                title = "Extrato do motorista",
+                description = "Veja as ofertas confirmadas e revise uma leitura.",
+                icon = Icons.Outlined.ReceiptLong,
+                onClick = {}
             )
             CalcMotCard {
                 Row(

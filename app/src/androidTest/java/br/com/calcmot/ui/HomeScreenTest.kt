@@ -193,6 +193,8 @@ class HomeScreenTest {
         composeRule.onNodeWithTag(UiTestTags.DRAWER_PANEL).assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.DRAWER_HOME_ITEM).assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.DRAWER_FINANCE_ITEM).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_DASHBOARD_FINANCE_ITEM).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_TOOLS_ITEM).assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.DRAWER_SETTINGS_ITEM).assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.DRAWER_HELP_ITEM).assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.DRAWER_PRIVACY_ITEM).assertIsDisplayed()

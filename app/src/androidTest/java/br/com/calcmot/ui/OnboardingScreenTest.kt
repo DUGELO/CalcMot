@@ -3,12 +3,16 @@ package br.com.calcmot.ui
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.runtime.mutableStateOf
 import br.com.calcmot.AppPermissionState
 import br.com.calcmot.ui.theme.MetricaTheme
 import org.junit.Rule
@@ -46,7 +50,10 @@ class OnboardingScreenTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_PERMISSION_ITEM).assertIsDisplayed()
-        composeRule.onNodeWithText("Permissão de acessibilidade").assertIsDisplayed()
+        composeRule.onNode(
+            hasText("Permissão de acessibilidade") and
+                hasAnyAncestor(hasTestTag(UiTestTags.ACCESSIBILITY_PERMISSION_ITEM))
+        ).assertIsDisplayed()
         composeRule.onNodeWithText("Como o CalcMot usa essa permissão").assertIsDisplayed()
         composeRule.onNodeWithText("Identifica valor, distância e tempo", substring = true)
             .performScrollTo()
@@ -90,12 +97,21 @@ class OnboardingScreenTest {
 
     @Test
     fun privacyPolicyOpensInsideOnboarding() {
+        val privacyVisible = mutableStateOf(false)
         composeRule.setContent {
             MetricaTheme {
-                OnboardingScreen(
-                    permissionState = AppPermissionState(hasAccessibilityService = false),
-                    onPermissionsRefresh = {}
-                )
+                if (privacyVisible.value) {
+                    PrivacyPolicyScreen(
+                        onBack = { privacyVisible.value = false },
+                        onSupport = {}
+                    )
+                } else {
+                    OnboardingScreen(
+                        permissionState = AppPermissionState(hasAccessibilityService = false),
+                        onPermissionsRefresh = {},
+                        onOpenPrivacy = { privacyVisible.value = true }
+                    )
+                }
             }
         }
 
