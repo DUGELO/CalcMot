@@ -10,14 +10,15 @@
 - Descrição curta sugerida: Assistente de leitura de ofertas para motoristas de app.
 - Evitar uso de marca Uber no título, ícone, screenshots e texto principal da loja.
 
-## Data Safety
+## Data Safety — revisão técnica pendente
 
-Preencher como sem coleta e sem compartilhamento se a implementação continuar local:
+Não preencher como “sem coleta/compartilhamento” a partir das notas antigas. O código inicializa Firebase Analytics e Crashlytics e integra Microsoft Clarity em todo o app; a declaração global exige conferência dos eventos, coleta automática, OCR e configuração efetiva dos SDKs. A revisão da câmera não altera a telemetria existente.
 
-- Leitura local da árvore de acessibilidade.
-- Sem backend.
-- Sem analytics.
-- Sem envio de screenshots, cards, endereços, localização ou métricas.
+A vertical de gravação não importa telemetria nem envia áudio, vídeo, duração, tamanho, hash ou URI a servidor. Arquivos privados e banco ficam no aparelho, fora de backup. Salvar na galeria cria cópia independente; compartilhar entrega acesso temporário ao aplicativo escolhido, que pode reter uma cópia.
+
+Conferir também [Clarity e monetização](clarity-integration.md): captura visual/interações, painel, política publicada e consentimento aplicável.
+
+Consultar [revisão de dados e release da câmera](camera/camera-data-release-review.md). LEGAL-01, DEVICE-01, DESIGN-01, ENGINE-01 e RELEASE-01 continuam abertos até evidência/aprovação correspondente. Estes documentos não autorizam publicação.
 
 ## Accessibility API Declaration
 
