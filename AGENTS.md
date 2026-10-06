@@ -122,3 +122,38 @@ Se a infraestrutura de screenshot test ainda nao existir para uma tela, o agente
 - Na resposta final, informar arquivos alterados, validacao feita e qualquer risco restante.
 
 O objetivo nao e criar uma tela "bonita". O objetivo e criar a tela correta para o CalcMot, fiel ao prototipo, responsiva, acessivel e sustentavel dentro do Design System.
+
+
+## CalcMot - Contexto Tecnico
+
+Assistente Android local para motoristas avalia ofertas de Uber e 99, calcula rentabilidade e exibe resultados em overlay. O projeto e um modulo Kotlin/Jetpack Compose; UI, AccessibilityService, OCR, calculos e persistencia convivem no `:app`. O codigo atual esta em producao; apenas o dashboard financeiro presente no worktree e trabalho em andamento e nao deve ser tratado como funcionalidade publicada. Documentacao de produto, design, privacidade e entrega fica em `docs/`; artefatos de planejamento ficam em `docs/project-artifacts/`.
+
+## Policy
+
+- Nunca execute ADB, instale APK, altere dispositivo ou publique artefato sem autorizacao explicita.
+- Nunca imprima ou versione conteudo de `keystore.properties`, chaves, certificados ou identificadores de configuracao; mantenha material de assinatura fora do Git.
+- Trate fixtures e dumps UIAutomator como dados sensiveis; nao adicione nem compartilhe capturas brutas sem origem, consentimento e anonimizacao confirmados.
+- Em tarefas de Play Store ou privacidade, confronte codigo, Manifest mesclado, telemetria, OCR e SDKs com os documentos; nao repita declaracoes locais desatualizadas.
+
+## Where Things Are
+
+- UI e navegacao: `app/src/main/java/br/com/calcmot/MainActivity.kt` e `app/src/main/java/br/com/calcmot/ui/CalcMotNavigation.kt`
+- Captura Uber/99 e seguranca de foreground: `app/src/main/java/br/com/calcmot/accessibility/UberAccessibilityService.kt`
+- Parsing e regras de oferta: `app/src/main/java/br/com/calcmot/processor/`; calculos de negocio: `app/src/main/java/br/com/calcmot/model/`
+- Overlay: `app/src/main/java/br/com/calcmot/overlay/`; OCR 99: `app/src/main/java/br/com/calcmot/ninetynine/`; telemetria: `app/src/main/java/br/com/calcmot/telemetry/`
+- Configuracoes locais: `app/src/main/java/br/com/calcmot/AppSettings.kt`; ledger e dashboard financeiro WIP: `app/src/main/java/br/com/calcmot/finance/ledger/`
+- Entrega, privacidade e validacao em dispositivo: `docs/play-store-submission.md`, `docs/privacy-policy.md` e `docs/e2e-real-device.md`
+
+## Running and Verifying
+
+- No PowerShell, defina `JAVA_HOME=C:\Program Files\Android\Android Studio\jbr` antes do wrapper; sem isso o terminal usa Java 8 e o Gradle 9.1 falha.
+- `lintDebug` nao esta verde: ha chamadas incompativeis com `minSdk 24`; nao crie baseline nem declare lint aprovado.
+- Nao use `scripts/run-real-device-e2e.ps1` sem corrigir ou fornecer o APK: o build gera splits por ABI e o script espera `app-debug.apk`.
+
+## Known Pitfalls
+
+- Codigo e documentacao divergem sobre Firebase, envio de metricas e captura visual da 99; reconcilie antes de qualquer release.
+- `android:isAccessibilityTool="true"` diverge da finalidade declarada nos documentos da Play Store; confirme a declaracao aprovada antes de publicar.
+- Com `keystore.properties` presente, debug usa a chave release; nao distribua nem instale builds debug sem autorizacao.
+- Logs de overlay nao protegidos por `BuildConfig.DEBUG` podem incluir fingerprints de oferta em release.
+- Executar tasks `assemble*` e `bundle*` juntas pode mudar os outputs ABI por causa da deteccao global de task no Gradle.
