@@ -1,5 +1,7 @@
 package br.com.calcmot.ui
 
+import android.app.Activity
+import android.app.Instrumentation
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -18,6 +20,7 @@ import android.view.View
 import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
 import br.com.calcmot.OverlayThemePreference
+import br.com.calcmot.securityrecording.ui.SecurityRecordingActivity
 import br.com.calcmot.ui.theme.MetricaTheme
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -114,15 +117,27 @@ class CalcMotNavigationTest {
     }
 
     @Test
-    fun recordingDiscoveryReachesPassiveHubWithoutOpeningPreview() {
-        composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
-        composeRule.onNodeWithTag(UiTestTags.DRAWER_SECURITY_ITEM).performClick()
-        composeRule.onNodeWithText("Câmera secreta").performClick()
+    fun recordingDiscoveryRequestsIsolatedActivityWithoutOpeningPreview() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val monitor = instrumentation.addMonitor(
+            SecurityRecordingActivity::class.java.name,
+            Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null),
+            true
+        )
+        try {
+            composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
+            composeRule.onNodeWithTag(UiTestTags.DRAWER_SECURITY_ITEM).performClick()
+            composeRule.onNodeWithTag(UiTestTags.SECURITY_TOOLS_SCREEN).assertIsDisplayed()
+            composeRule.onAllNodesWithTag(UiTestTags.SECURITY_RECORDING_PREVIEW).assertCountEquals(0)
+            composeRule.onNodeWithText("Gravação de segurança").performClick()
+            composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("Hub de Gravação de Segurança").assertIsDisplayed()
-        composeRule.onNodeWithText("Nenhuma captura é iniciada aqui.").assertIsDisplayed()
-        composeRule.onAllNodesWithTag(UiTestTags.SECURITY_RECORDING_PREVIEW).assertCountEquals(0)
-        assertEquals(CalcMotRoute.SECURITY_HUB, navController.currentDestination?.route)
+            assertEquals(1, monitor.hits)
+            assertEquals(CalcMotRoute.SECURITY_TOOLS, navController.currentDestination?.route)
+            composeRule.onAllNodesWithTag(UiTestTags.SECURITY_RECORDING_PREVIEW).assertCountEquals(0)
+        } finally {
+            instrumentation.removeMonitor(monitor)
+        }
     }
 
     private fun openSettings() {
