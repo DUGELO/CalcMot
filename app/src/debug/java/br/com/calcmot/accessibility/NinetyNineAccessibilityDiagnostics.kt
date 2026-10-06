@@ -1,6 +1,7 @@
 package br.com.calcmot.accessibility
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import br.com.calcmot.model.OfferCandidate
@@ -53,7 +54,8 @@ class NinetyNineAccessibilityDiagnostics(context: Context) {
             "EVENT",
             "type=$eventName typeId=${event.eventType} package=${event.packageName} " +
                 "class=${event.className} window=${event.windowId} contentChanges=${event.contentChangeTypes} " +
-                "windowChanges=${event.windowChanges} action=${event.action} movement=${event.movementGranularity} " +
+                "windowChanges=${if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) event.windowChanges else 0} " +
+                "action=${event.action} movement=${event.movementGranularity} " +
                 "recordCount=${event.recordCount} text=${eventText.quoted()} " +
                 "description=${event.contentDescription?.toString().orEmpty().take(MAX_FIELD_LENGTH).quoted()} " +
                 "source={$sourceSummary}"
