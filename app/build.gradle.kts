@@ -40,8 +40,8 @@ android {
         applicationId = "br.com.calcmot"
         minSdk = 24
         targetSdk = 36
-        versionCode = 10
-        versionName = "3.3"
+        versionCode = 12
+        versionName = "3.5"
         buildConfigField("String", "CLARITY_PROJECT_ID", "\"$clarityProjectId\"")
 
         if (buildsAppBundle) {
