@@ -19,6 +19,7 @@ interface IOverlayManager {
     fun hideDebugOverlay() = Unit
     fun hideOverlay()
     fun expireOverlay(fingerprint: String? = null) = hideOverlay()
+    fun close() = removeOverlay()
     fun removeOverlay()
     fun removeOverlayWindowsForScan(): Boolean = false
     fun setOnUserDismissed(callback: (() -> Unit)?) = Unit

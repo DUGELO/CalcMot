@@ -56,9 +56,15 @@ import kotlin.math.roundToInt
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicBoolean
+import br.com.calcmot.ReadingPipelineRuntime
 
 open class OverlayManager(private val context: Context) : IOverlayManager {
 
+    private val operationGeneration = AtomicLong(0L)
+    private val closed = AtomicBoolean(false)
+    private val windowOwnership = OverlayWindowOwnership()
     private val baseWindowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var composeView: ComposeView? = null
     private var debugComposeView: ComposeView? = null
@@ -132,22 +138,23 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
 
     @SuppressLint("ClickableViewAccessibility")
     override fun showOverlay(data: TripData) {
-        runOverlayBoundary("showOverlay", Unit) {
+        runOverlayBoundary("showOverlay", Unit) { call ->
+            if (!AppSettings.isMonitoringEnabled(context)) return@runOverlayBoundary
             if (!isOverlayAllowed()) {
                 blockOverlayOutsideDriverApp("showOverlay")
                 return@runOverlayBoundary
             }
-            showOverlayInternal(data, retryOnBadToken = true)
+            showOverlayInternal(data, retryOnBadToken = true, call = call)
         }
     }
 
     override fun showDebugOverlay(state: AccessibilityDebugOverlayState) {
-        runOverlayBoundary("showDebugOverlay", Unit) {
+        runOverlayBoundary("showDebugOverlay", Unit) { call ->
             if (!isOverlayAllowed()) {
                 blockOverlayOutsideDriverApp("showDebugOverlay")
                 return@runOverlayBoundary
             }
-            showDebugOverlayInternal(state, retryOnBadToken = true, forceApplicationOverlay = false)
+            showDebugOverlayInternal(state, retryOnBadToken = true, forceApplicationOverlay = false, call = call)
         }
     }
 
@@ -214,7 +221,8 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     private fun showDebugOverlayInternal(
         state: AccessibilityDebugOverlayState,
         retryOnBadToken: Boolean,
-        forceApplicationOverlay: Boolean
+        forceApplicationOverlay: Boolean,
+        call: OverlayFailureContext
     ) {
         val windowType = getWindowType(forceApplicationOverlay)
         try {
@@ -230,7 +238,8 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
                 debugLifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
             }
 
-            debugComposeView?.visibility = View.VISIBLE
+            if (!isRequestCurrent(call)) { resetDebugOverlayView(); return }
+            if (debugComposeView?.parent == null) debugComposeView?.visibility = View.GONE
             if (debugComposeView?.parent == null) {
                 requireNotNull(debugWindowManager).addView(
                     debugComposeView,
@@ -238,25 +247,30 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
                 )
                 if (BuildConfig.DEBUG) Log.i("OverlayManager", "Debug overlay shown")
             }
+            if (!isRequestCurrent(call)) { resetDebugOverlayView(); return }
+            debugComposeView?.visibility = View.VISIBLE
         } catch (e: WindowManager.BadTokenException) {
             resetDebugOverlayView()
             Log.w("OverlayManager", "OVERLAY_TOKEN_RECOVERING_DEBUG")
             if (retryOnBadToken) {
                 retryAfterBadToken(
+                    call = call,
                     primaryWindowType = windowType,
                     allowApplicationOverlayFallback = true,
                     retryAccessibilityOverlay = {
                         showDebugOverlayInternal(
                             state,
                             retryOnBadToken = false,
-                            forceApplicationOverlay = false
+                            forceApplicationOverlay = false,
+                            call = call
                         )
                     },
                     retryApplicationOverlay = {
                         showDebugOverlayInternal(
                             state,
                             retryOnBadToken = false,
-                            forceApplicationOverlay = true
+                            forceApplicationOverlay = true,
+                            call = call
                         )
                     }
                 )
@@ -267,15 +281,16 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    private fun showOverlayInternal(data: TripData, retryOnBadToken: Boolean) {
-        showOverlayInternal(data, retryOnBadToken, forceApplicationOverlay = false)
+    private fun showOverlayInternal(data: TripData, retryOnBadToken: Boolean, call: OverlayFailureContext) {
+        showOverlayInternal(data, retryOnBadToken, forceApplicationOverlay = false, call = call)
     }
 
     @SuppressLint("ClickableViewAccessibility")
     private fun showOverlayInternal(
         data: TripData,
         retryOnBadToken: Boolean,
-        forceApplicationOverlay: Boolean
+        forceApplicationOverlay: Boolean,
+        call: OverlayFailureContext
     ) {
         val windowType = getWindowType(forceApplicationOverlay)
         val newFingerprint = data.overlayFingerprint()
@@ -285,6 +300,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
         val requestedAtElapsed = android.os.SystemClock.elapsedRealtime()
         val latencyTrace = pendingLatencyTrace?.withTripData(data)
 
+        ReadingPipelineRuntime.markOverlayStatus(ReadingPipelineRuntime.OverlayStatus.REQUESTED)
         Log.w("OverlayManager", "OVERLAY_SHOW_REQUESTED fingerprint=$newFingerprint")
         Log.w("OverlayManager", "CALCMOT_OVERLAY_REQUEST fingerprint=$newFingerprint")
         latencyTrace?.mark(OverlayLatencyTrace.Stage.T10_OVERLAY_ADD_OR_UPDATE_START)
@@ -341,13 +357,21 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
                 )
             }
 
+            if (!isRequestCurrent(call) || !AppSettings.isMonitoringEnabled(context)) {
+                resetOverlayView()
+                overlayStateMachine.markHidden()
+                return
+            }
+            windowOwnership.attach(call.pending)
             composeView?.registerVisibleTelemetry(
                 fingerprint = newFingerprint,
                 requestedAt = requestedAt,
                 requestedAtElapsed = requestedAtElapsed,
-                trace = latencyTrace
+                trace = latencyTrace,
+                call = call
             )
-            composeView?.visibility = View.VISIBLE
+            // Attach hidden; a late native addView must not reveal an expired request.
+            if (composeView?.parent == null) composeView?.visibility = View.GONE
 
             if (composeView?.parent == null) {
                 val params = getLayoutParams(windowType)
@@ -376,8 +400,15 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             } else if (transition == OverlayTransition.AttachOrReplace) {
                 overlayStateMachine.markShown(newFingerprint)
             }
+            if (!isRequestCurrent(call) || !AppSettings.isMonitoringEnabled(context)) {
+                resetOverlayView()
+                overlayStateMachine.markHidden()
+                return
+            }
+            composeView?.visibility = View.VISIBLE
             latencyTrace?.mark(OverlayLatencyTrace.Stage.T11_OVERLAY_ADD_OR_UPDATE_END)
             Log.w("OverlayManager", "CALCMOT_OVERLAY_WINDOW fingerprint=$newFingerprint")
+            ReadingPipelineRuntime.markOverlayStatus(ReadingPipelineRuntime.OverlayStatus.WINDOW_ADDED)
             AppDiagnostics.recordStage(context, AppDiagnostics.Stage.OVERLAY_SHOWN)
             TelemetryProvider.analytics.track(
                 AnalyticsEvents.OVERLAY_SHOWN,
@@ -400,20 +431,23 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             Log.w("OverlayManager", "OVERLAY_TOKEN_RECOVERING fingerprint=$newFingerprint")
             if (retryOnBadToken) {
                 retryAfterBadToken(
+                    call = call,
                     primaryWindowType = windowType,
                     allowApplicationOverlayFallback = true,
                     retryAccessibilityOverlay = {
                         showOverlayInternal(
                             data,
                             retryOnBadToken = false,
-                            forceApplicationOverlay = false
+                            forceApplicationOverlay = false,
+                            call = call
                         )
                     },
                     retryApplicationOverlay = {
                         showOverlayInternal(
                             data,
                             retryOnBadToken = false,
-                            forceApplicationOverlay = true
+                            forceApplicationOverlay = true,
+                            call = call
                         )
                     }
                 )
@@ -424,6 +458,9 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             AppDiagnostics.recordStage(context, AppDiagnostics.Stage.OVERLAY_ERROR)
             trackOverlayFailure(AnalyticsValues.REASON_EXCEPTION, e, reportCrash = true)
             latencyTrace?.close(OverlayLatencyTrace.EndReason.CARD_GONE)
+            resetOverlayView()
+            overlayStateMachine.markHidden()
+            ReadingPipelineRuntime.markOverlayStatus(ReadingPipelineRuntime.OverlayStatus.FAILED)
             Log.e("OverlayManager", "Erro showOverlay: ", e)
         }
     }
@@ -485,6 +522,12 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
         }
     }
 
+    override fun close() {
+        closed.set(true)
+        removeOverlay()
+        userDismissedCallback = null
+    }
+
     override fun removeOverlay() {
         runOverlayBoundary("removeOverlay", Unit) {
             resetOverlayView()
@@ -510,6 +553,8 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     }
 
     private fun resetOverlayView() {
+        windowOwnership.clear()
+        ReadingPipelineRuntime.markOverlayStatus(ReadingPipelineRuntime.OverlayStatus.ABSENT)
         val viewToRemove = composeView
         val ownerToDestroy = lifecycleOwner
         val manager = overlayWindowManager ?: baseWindowManager
@@ -572,22 +617,63 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
         }
     }
 
-    private fun <T> runOnMainBlocking(block: () -> T): T {
+    private class ObsoleteOverlayOperation : IllegalStateException("Overlay operation superseded")
+
+    private data class OverlayFailureContext(
+        val operation: String,
+        val callerThread: String,
+        val generation: Long,
+        val pending: PendingOverlayOperation,
+        var failureKind: String = "operation_exception"
+    )
+
+    private fun <T> runOnMainBlocking(failureContext: OverlayFailureContext, generation: Long, block: () -> T): T {
         if (Looper.myLooper() == Looper.getMainLooper()) {
+            if (!failureContext.pending.tryStart(SystemClock.elapsedRealtime(), true)) throw ObsoleteOverlayOperation()
             return block()
         }
 
         val latch = CountDownLatch(1)
         val result = AtomicReference<Result<T>>()
-        val posted = mainHandler.post {
-            result.set(runCatching(block))
+        val pending = failureContext.pending
+        val runnable = Runnable {
+            val contextCurrent = when {
+                isCleanup(failureContext.operation) -> operationGeneration.get() == generation
+                failureContext.operation in setOf("show_overlay", "show_debug_overlay") -> !closed.get() && operationGeneration.get() == generation
+                else -> !closed.get()
+            }
+            if (!contextCurrent) {
+                result.set(Result.failure(ObsoleteOverlayOperation()))
+            } else if (!pending.tryStart(SystemClock.elapsedRealtime(), true) && !isCleanup(failureContext.operation)) {
+                failureContext.failureKind = "main_wait_timeout"
+                result.set(Result.failure(IllegalStateException("Overlay deadline expired before execution")))
+            } else {
+                result.set(runCatching(block))
+            }
             latch.countDown()
         }
-        check(posted) { "Main looper rejected overlay operation" }
-        check(latch.await(MAIN_THREAD_OPERATION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+        val posted = mainHandler.post(runnable)
+        check(posted) {
+            failureContext.failureKind = "main_post_rejected"
+            "Main looper rejected overlay operation"
+        }
+        val completed = try {
+            latch.await(MAIN_THREAD_OPERATION_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        } catch (error: InterruptedException) {
+            pending.cancel()
+            if (!isCleanup(failureContext.operation)) mainHandler.removeCallbacks(runnable)
+            failureContext.failureKind = "main_wait_interrupted"
+            Thread.currentThread().interrupt()
+            throw error
+        }
+        check(completed) {
+            pending.cancel()
+            if (!isCleanup(failureContext.operation)) mainHandler.removeCallbacks(runnable)
+            failureContext.failureKind = "main_wait_timeout"
             "Timed out waiting for overlay operation on main thread"
         }
         return checkNotNull(result.get()) {
+            failureContext.failureKind = "main_result_missing"
             "Overlay operation completed without a result"
         }.getOrThrow()
     }
@@ -595,24 +681,73 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
     private fun <T> runOverlayBoundary(
         operation: String,
         fallback: T,
-        block: () -> T
+        block: (OverlayFailureContext) -> T
     ): T {
+        if (closed.get() && operation != "removeOverlay") return fallback
+        val generation = if (operation in setOf(
+                "showOverlay", "hideOverlay", "expireOverlay", "removeOverlay",
+                "removeOverlayWindowsForScan"
+            )) operationGeneration.incrementAndGet() else operationGeneration.get()
+        val failureContext = OverlayFailureContext(
+            operation = when (operation) {
+                "isVisible" -> "is_visible"
+                "visibleBounds" -> "visible_bounds"
+                "showOverlay" -> "show_overlay"
+                "showDebugOverlay" -> "show_debug_overlay"
+                "setForegroundPackage" -> "set_foreground_package"
+                "setLatencyTrace" -> "set_latency_trace"
+                "hideOverlay" -> "hide_overlay"
+                "expireOverlay" -> "expire_overlay"
+                "hideDebugOverlay" -> "hide_debug_overlay"
+                "removeOverlay" -> "remove_overlay"
+                "removeOverlayWindowsForScan" -> "remove_overlay_windows_for_scan"
+                else -> "unknown"
+            },
+            callerThread = if (Looper.myLooper() == Looper.getMainLooper()) "main" else "background",
+            generation = generation,
+            pending = PendingOverlayOperation(SystemClock.elapsedRealtime() + MAIN_THREAD_OPERATION_TIMEOUT_MS)
+        )
         return runCatching {
-            runOnMainBlocking(block)
+            runOnMainBlocking(failureContext, generation) { block(failureContext) }
         }.getOrElse { error ->
+            if (error is ObsoleteOverlayOperation) return@getOrElse fallback
             AppDiagnostics.recordStage(context, AppDiagnostics.Stage.OVERLAY_ERROR)
-            trackOverlayFailure(AnalyticsValues.REASON_BOUNDARY_FAILURE, error, reportCrash = true)
-            Log.e(TAG, "OVERLAY_BOUNDARY_FAILURE operation=$operation", error)
+            ReadingPipelineRuntime.markOverlayStatus(ReadingPipelineRuntime.OverlayStatus.FAILED)
+            trackOverlayFailure(
+                AnalyticsValues.REASON_BOUNDARY_FAILURE,
+                error,
+                reportCrash = true,
+                operation = failureContext.operation,
+                failureKind = failureContext.failureKind,
+                callerThread = failureContext.callerThread
+            )
+            Log.e(
+                TAG,
+                "OVERLAY_BOUNDARY_FAILURE overlay_operation=${failureContext.operation} " +
+                    "overlay_failure_kind=${failureContext.failureKind} " +
+                    "overlay_caller_thread=${failureContext.callerThread}",
+                error
+            )
             fallback
         }
     }
 
-    private fun trackOverlayFailure(reason: String, error: Throwable, reportCrash: Boolean) {
+    private fun trackOverlayFailure(
+        reason: String,
+        error: Throwable,
+        reportCrash: Boolean,
+        operation: String = "unknown",
+        failureKind: String = "not_applicable",
+        callerThread: String = "unknown"
+    ) {
         val params = mapOf(
             AnalyticsParams.PLATFORM to currentTelemetryPlatform(),
             AnalyticsParams.SOURCE to AnalyticsValues.SOURCE_OVERLAY,
             AnalyticsParams.REASON to reason,
-            AnalyticsParams.PIPELINE_STATE to "failed"
+            AnalyticsParams.PIPELINE_STATE to "failed",
+            AnalyticsParams.OVERLAY_OPERATION to operation,
+            AnalyticsParams.OVERLAY_FAILURE_KIND to failureKind,
+            AnalyticsParams.OVERLAY_CALLER_THREAD to callerThread
         )
         TelemetryProvider.analytics.track(AnalyticsEvents.OVERLAY_FAILED, params)
         if (reportCrash) {
@@ -654,11 +789,27 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
         fingerprint: String,
         requestedAt: Long,
         requestedAtElapsed: Long,
-        trace: OverlayLatencyTrace?
+        trace: OverlayLatencyTrace?,
+        call: OverlayFailureContext
     ) {
         viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
                 viewTreeObserver.removeOnPreDrawListener(this)
+                if (!windowOwnership.owns(call.pending) || composeView !== this@registerVisibleTelemetry ||
+                    overlayStateMachine.currentFingerprint() != fingerprint) return true
+                if (!isRequestCurrent(call) || !AppSettings.isMonitoringEnabled(context)) {
+                    visibility = View.GONE
+                    mainHandler.post {
+                        if (windowOwnership.owns(call.pending) && operationGeneration.get() == call.generation &&
+                            composeView === this@registerVisibleTelemetry &&
+                            overlayStateMachine.currentFingerprint() == fingerprint) {
+                            resetOverlayView()
+                            overlayStateMachine.markHidden()
+                        }
+                    }
+                    return false
+                }
+                ReadingPipelineRuntime.markOverlayStatus(ReadingPipelineRuntime.OverlayStatus.PREDRAW_CONFIRMED)
                 val drawnAt = System.currentTimeMillis()
                 val drawnAtElapsed = android.os.SystemClock.elapsedRealtime()
                 Log.w("OverlayManager", "OVERLAY_FIRST_DRAWN fingerprint=$fingerprint")
@@ -792,12 +943,28 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
         }
     }
 
+    private fun isCleanup(operation: String): Boolean = operation in setOf(
+        "hide_overlay", "expire_overlay", "remove_overlay", "remove_overlay_windows_for_scan"
+    )
+
+    private fun isRequestCurrent(call: OverlayFailureContext): Boolean =
+        call.pending.isValid(SystemClock.elapsedRealtime(), !closed.get() && operationGeneration.get() == call.generation)
+
     private fun retryAfterBadToken(
+        call: OverlayFailureContext,
         primaryWindowType: Int,
         allowApplicationOverlayFallback: Boolean,
         retryAccessibilityOverlay: () -> Unit,
         retryApplicationOverlay: () -> Unit
     ) {
+        fun retryIfCurrent(retry: () -> Unit) {
+            if (isRequestCurrent(call) &&
+                AppSettings.isMonitoringEnabled(context) && isOverlayAllowed()) {
+                retry()
+            } else {
+                Log.i(TAG, "OVERLAY_OBSOLETE_RETRY_DROPPED")
+            }
+        }
         if (
             BuildConfig.DEBUG &&
             allowApplicationOverlayFallback &&
@@ -806,9 +973,9 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
         ) {
             preferDebugApplicationOverlay = true
             Log.w("OverlayManager", "Retrying overlay immediately with application overlay fallback")
-            mainHandler.post(retryApplicationOverlay)
+            mainHandler.post { retryIfCurrent(retryApplicationOverlay) }
         } else {
-            mainHandler.postDelayed(retryAccessibilityOverlay, BAD_TOKEN_RETRY_DELAY_MS)
+            mainHandler.postDelayed({ retryIfCurrent(retryAccessibilityOverlay) }, BAD_TOKEN_RETRY_DELAY_MS)
         }
     }
 

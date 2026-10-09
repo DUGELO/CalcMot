@@ -17,6 +17,29 @@ internal object SafeTelemetryPolicy {
         "uiautomator_lab"
     )
     private val pipelineStates = setOf("idle", "capturing", "ocr", "busy", "failed")
+    private val overlayOperations = setOf(
+        "is_visible",
+        "visible_bounds",
+        "show_overlay",
+        "show_debug_overlay",
+        "set_foreground_package",
+        "set_latency_trace",
+        "hide_overlay",
+        "expire_overlay",
+        "hide_debug_overlay",
+        "remove_overlay",
+        "remove_overlay_windows_for_scan",
+        "unknown"
+    )
+    private val overlayFailureKinds = setOf(
+        "main_post_rejected",
+        "main_wait_timeout",
+        "main_wait_interrupted",
+        "main_result_missing",
+        "operation_exception",
+        "not_applicable"
+    )
+    private val overlayCallerThreads = setOf("main", "background", "unknown")
     private val classifications = setOf("good", "medium", "bad", "excellent", "unknown")
     private val reasons = setOf(
         "active",
@@ -108,6 +131,9 @@ internal object SafeTelemetryPolicy {
         AnalyticsParams.SOURCE -> value in sources
         AnalyticsParams.REASON -> value in reasons
         AnalyticsParams.PIPELINE_STATE -> value in pipelineStates
+        AnalyticsParams.OVERLAY_OPERATION -> value in overlayOperations
+        AnalyticsParams.OVERLAY_FAILURE_KIND -> value in overlayFailureKinds
+        AnalyticsParams.OVERLAY_CALLER_THREAD -> value in overlayCallerThreads
         AnalyticsParams.CLASSIFICATION -> value in classifications
         AnalyticsParams.APP_VERSION,
         AnalyticsParams.ANDROID_VERSION -> safeVersion.matches(value)

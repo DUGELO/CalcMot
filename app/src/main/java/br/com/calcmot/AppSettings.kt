@@ -39,6 +39,7 @@ object AppSettings {
             .edit()
             .putBoolean(KEY_MONITORING_ENABLED, enabled)
             .apply()
+        if (enabled) ExecutionPowerState.refresh(context, ExecutionPowerState.Trigger.READING_START)
     }
 
     fun getOverlayPosition(context: Context): OverlayPositionPreference {

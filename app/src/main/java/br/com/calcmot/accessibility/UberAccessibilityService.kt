@@ -5,6 +5,14 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.graphics.Rect
 import android.os.Build
 import android.os.Looper
+import android.os.Handler
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.BroadcastReceiver
+import br.com.calcmot.ExecutionPowerState
+import br.com.calcmot.RuntimeRetirement
+import br.com.calcmot.ServiceConnectionRecovery
+import br.com.calcmot.WatchdogRecoveryBudget
 import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
@@ -59,6 +67,8 @@ import br.com.calcmot.telemetry.AnalyticsEvents
 import br.com.calcmot.telemetry.AnalyticsParams
 import br.com.calcmot.telemetry.AnalyticsValues
 import br.com.calcmot.telemetry.TelemetryProvider
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +85,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.yield
 import java.util.concurrent.Executors
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
@@ -86,7 +97,10 @@ class UberAccessibilityService : AccessibilityService() {
     }
     private var captureDispatcher = newCaptureDispatcher()
     private var serviceScope = CoroutineScope(SupervisorJob() + captureDispatcher + serviceExceptionHandler)
-    private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main + serviceExceptionHandler)
+    private var mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main + serviceExceptionHandler)
+    @Volatile
+    private var accessibilityEvents = AccessibilityEventQueue<AccessibilityEvent> { it.recycle() }
+    private var accessibilityEventJob: Job? = null
 
     private fun newCaptureDispatcher(): ExecutorCoroutineDispatcher {
         return Executors.newSingleThreadExecutor { runnable ->
@@ -173,25 +187,149 @@ class UberAccessibilityService : AccessibilityService() {
         }
     }
 
+    private val connectionHandler = Handler(Looper.getMainLooper())
+    private val connectionScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var connectionInitializationJob: Job? = null
+    private val retiringInitializations = mutableSetOf<Job>()
+    @Volatile private var runtimeReady = false
+    private val connectionRecovery = ServiceConnectionRecovery()
+    private val watchdogRecoveryBudget = WatchdogRecoveryBudget()
+    @Volatile private var connectionAvailable = false
+    private var powerReceiverRegistered = false
+    private val powerReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            ExecutionPowerState.refresh(this@UberAccessibilityService, ExecutionPowerState.Trigger.POWER_CHANGED)
+        }
+    }
+    private val initializeConnection = Runnable { initializeConnectionAttempt() }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
-        runCatching {
-            initializeConnectedService()
-        }.onFailure { error ->
-            recordServiceFailure(stage = "service_connected", error = error)
+        connectionAvailable = true
+        runtimeReady = false
+        retireInitialization()
+        serviceScope.cancel()
+        accessibilityEvents.cancel()
+        overlayManager?.close()
+        ReadingPipelineRuntime.unregister(readingCommandHandler)
+        connectionHandler.removeCallbacks(initializeConnection)
+        connectionRecovery.connected()
+        initializeConnectionAttempt()
+    }
+
+    private fun initializeConnectionAttempt() {
+        if (!connectionAvailable || connectionInitializationJob?.isActive == true || !connectionRecovery.beginAttempt()) return
+        val predecessors = retiringInitializations.filterNot { it.isCompleted } +
+            listOfNotNull(serviceScope.coroutineContext[Job])
+        connectionInitializationJob = connectionScope.launch {
+            try {
+                // Suspending join: never replace an executor while its native call is still running.
+                RuntimeRetirement.awaitAll(predecessors, MAIN_CONNECTION_DRAIN_TIMEOUT_MS)
+                if (!connectionAvailable) return@launch
+                initializeConnectedService()
+            } catch (error: TimeoutCancellationException) {
+                handleConnectionInitializationFailure(error)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                handleConnectionInitializationFailure(error)
+            } finally {
+                retiringInitializations.removeAll { it.isCompleted }
+                if (connectionInitializationJob == kotlin.coroutines.coroutineContext[Job]) connectionInitializationJob = null
+            }
         }
     }
 
-    private fun initializeConnectedService() {
+    private fun retireInitialization() {
+        retiringInitializations.removeAll { it.isCompleted }
+        connectionInitializationJob?.let { job -> retiringInitializations.add(job); job.cancel() }
+        connectionInitializationJob = null
+    }
+
+    private fun handleConnectionInitializationFailure(error: Exception) {
+        runtimeReady = false
+        recordServiceFailure(stage = "service_connected", error = error)
+        ReadingPipelineRuntime.unregister(readingCommandHandler)
+        serviceScope.cancel()
+        mainScope.cancel()
+        accessibilityEvents.cancel()
+        overlayManager?.close()
+        overlayManager = null
+        if (powerReceiverRegistered) {
+            unregisterReceiver(powerReceiver)
+            powerReceiverRegistered = false
+        }
+        val retry = connectionAvailable && connectionRecovery.canRetry()
+        ReadingPipelineRuntime.markFailure(AppSettings.getLastDriverApp(this), if (retry)
+            "Inicialização aguardando encerramento do runtime anterior; recuperação limitada" else
+            "Recuperação automática esgotada; serviço precisa de atenção")
+        if (retry) connectionHandler.postDelayed(initializeConnection, 1_000L)
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        disconnectRuntime()
+        return super.onUnbind(intent)
+    }
+
+    @Synchronized
+    private fun disconnectRuntime() {
+        connectionAvailable = false
+        runtimeReady = false
+        RuntimeRetirement.retain(retiringInitializations.toList() +
+            listOfNotNull(serviceScope.coroutineContext[Job], connectionInitializationJob))
+        retireInitialization()
+        connectionRecovery.disconnected()
+        connectionHandler.removeCallbacks(initializeConnection)
+        accessibilityEvents.cancel()
+        accessibilityEventJob?.cancel()
+        serviceScope.cancel()
+        mainScope.cancel()
+        cancelCapturePipeline(OverlayLatencyTrace.EndReason.INVALID_CONTEXT)
+        cancelOverlayExpiry()
+        safelyTearDown("99_disconnect") { releaseNinetyNineCaptureEngine() }
+        ReadingPipelineRuntime.unregister(readingCommandHandler)
+        overlayManager?.close()
+        overlayManager = null
+        if (powerReceiverRegistered) {
+            unregisterReceiver(powerReceiver)
+            powerReceiverRegistered = false
+        }
+        if (BuildConfig.DEBUG) ShellOfferBridge.unregister(shellOfferHandler)
+    }
+
+    private suspend fun initializeConnectedService() {
+        // Cancel the old connection's jobs before installing a new runtime.
+        serviceScope.cancel()
+        mainScope.cancel()
         ensureServiceScopeActive()
-        configureRuntimeAccessibilityInfo()
+        mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main + serviceExceptionHandler)
+        runtimeAccessibilityInfoConfigured = false
+        readingResetJob = null
+        trustedForegroundPackageName = null
+        trustedForegroundDecision = null
+        trustedForegroundDriverApp = DriverApp.UNKNOWN
+        trustedForegroundSeenAtElapsed = 0L
+        rawForegroundPackageName = null
+        withContext(captureDispatcher) {
+            releaseNinetyNineCaptureEngine()
+            configureRuntimeAccessibilityInfo()
+        }
+        ExecutionPowerState.refresh(this, ExecutionPowerState.Trigger.SERVICE_CONNECTED)
+        if (!powerReceiverRegistered) {
+            androidx.core.content.ContextCompat.registerReceiver(this, powerReceiver, IntentFilter().apply {
+                addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+                addAction(Intent.ACTION_POWER_CONNECTED)
+                addAction(Intent.ACTION_POWER_DISCONNECTED)
+            }, androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
+            powerReceiverRegistered = true
+        }
         val reconnectBaselineFingerprint = captureCoordinator.currentOverlayFingerprint()
         cancelCapturePipeline()
         cancelOverlayExpiry()
         captureCoordinator.reset()
         lastParsedOfferAudit = null
         postReconnectCandidateGuard.onServiceConnected(reconnectBaselineFingerprint)
-        overlayManager?.removeOverlay()
+        overlayManager?.close()
         overlayManager = OverlayManager(this).also { manager ->
             manager.setOnUserDismissed {
                 handleOverlayDismissedByUser()
@@ -200,6 +338,8 @@ class UberAccessibilityService : AccessibilityService() {
         if (BuildConfig.DEBUG) {
             ShellOfferBridge.register(shellOfferHandler)
         }
+        runtimeReady = true
+        startAccessibilityEventProcessing()
         startContinuousAccessibilityPolling()
         ReadingPipelineRuntime.register(readingCommandHandler)
         val selectedPlatform = AppSettings.getLastDriverApp(this)
@@ -220,14 +360,16 @@ class UberAccessibilityService : AccessibilityService() {
             )
         }
         if (BuildConfig.DEBUG) Log.d(TAG, "Service connected")
-        ninetyNineDiagnostics.recordServiceConfiguration(
-            "eventTypes=${serviceInfo?.eventTypes} flags=${serviceInfo?.flags} " +
-                "notificationTimeout=${serviceInfo?.notificationTimeout}"
-        )
+        serviceScope.launch {
+            ninetyNineDiagnostics.recordServiceConfiguration(
+                "eventTypes=${serviceInfo?.eventTypes} flags=${serviceInfo?.flags} " +
+                    "notificationTimeout=${serviceInfo?.notificationTimeout}"
+            )
+        }
     }
 
     private fun configureRuntimeAccessibilityInfo() {
-        if (runtimeAccessibilityInfoConfigured || runtimeAccessibilityInfoConfiguredOnce) return
+        if (runtimeAccessibilityInfoConfigured) return
         val currentInfo = serviceInfo ?: return
         currentInfo.eventTypes = DriverAccessibilityEventPolicy.baseEventTypes
         currentInfo.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
@@ -238,7 +380,6 @@ class UberAccessibilityService : AccessibilityService() {
             AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
         serviceInfo = currentInfo
         runtimeAccessibilityInfoConfigured = true
-        runtimeAccessibilityInfoConfiguredOnce = true
 
         if (BuildConfig.DEBUG) {
             Log.i(
@@ -250,10 +391,54 @@ class UberAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null) return
+        if (event == null || !runtimeReady) return
+        // Framework events are recycled after this callback. Copy only local payload here;
+        // root/window/source queries and diagnostic initialization belong to the worker.
+        val eventCopy = AccessibilityEvent.obtain(event)
+        val decision = DriverAppPackagePolicy.classify(eventCopy.packageName?.toString())
+        rawForegroundPackageName = DriverAppPackagePolicy.normalize(eventCopy.packageName?.toString())
+        accessibilityEvents.offer(
+            eventCopy,
+            changesContext = eventCopy.isForegroundDefiningEvent() &&
+                (decision == PackageDecision.DRIVER_APP ||
+                    decision == PackageDecision.ALLOWED_USER_APP ||
+                    decision == PackageDecision.BLOCKED_USER_APP)
+        )
+    }
+
+    private fun startAccessibilityEventProcessing() {
+        accessibilityEvents.cancel()
+        accessibilityEventJob?.cancel()
+        val queue = AccessibilityEventQueue<AccessibilityEvent> { it.recycle() }
+        accessibilityEvents = queue
+        accessibilityEventJob = serviceScope.launch {
+            while (isActive) {
+                val pending = queue.receive()
+                try {
+                    if (queue.isCurrent(pending)) {
+                        processAccessibilityEvent(pending.value, queue, pending.contextRevision)
+                        queue.markApplied(pending)
+                    }
+                } finally {
+                    queue.release(pending)
+                }
+                // Let capture/polling jobs on the same serial executor make progress in bursts.
+                yield()
+            }
+        }
+    }
+
+    private fun processAccessibilityEvent(
+        event: AccessibilityEvent,
+        queue: AccessibilityEventQueue<AccessibilityEvent>,
+        contextRevision: Long
+    ) {
         try {
-            handleAccessibilityEvent(event)
+            handleAccessibilityEvent(event, queue, contextRevision)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
+            if (!queue.isCurrent(contextRevision)) return
             recordServiceFailure(stage = "accessibility_event", error = error)
             runCatching {
                 cancelCapturePipeline(OverlayLatencyTrace.EndReason.INVALID_CONTEXT)
@@ -265,12 +450,15 @@ class UberAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun handleAccessibilityEvent(event: AccessibilityEvent) {
+    private fun handleAccessibilityEvent(
+        event: AccessibilityEvent,
+        queue: AccessibilityEventQueue<AccessibilityEvent>,
+        contextRevision: Long
+    ) {
         startContinuousAccessibilityPolling()
         val eventPackage = event.packageName?.toString()
         val packageDecision = DriverAppPackagePolicy.classify(eventPackage)
         val eventDriverApp = DriverAppPackagePolicy.driverAppForPackage(eventPackage)
-        rawForegroundPackageName = DriverAppPackagePolicy.normalize(eventPackage)
 
         when (packageDecision) {
             PackageDecision.UNKNOWN -> {
@@ -304,9 +492,10 @@ class UberAccessibilityService : AccessibilityService() {
 
             PackageDecision.ALLOWED_USER_APP -> {
                 if (event.isForegroundDefiningEvent()) {
-                    if (trustedForegroundDriverApp == DriverApp.NINETY_NINE &&
+                    val hasVisible99 = trustedForegroundDriverApp == DriverApp.NINETY_NINE &&
                         runCatching(::hasVisibleNinetyNineRoot).getOrDefault(false)
-                    ) {
+                    if (!queue.isCurrent(contextRevision)) return
+                    if (hasVisible99) {
                         Log.w(
                             TAG,
                             "CALCMOT_99_BACKGROUND_COMMON_EVENT_IGNORED " +
@@ -329,9 +518,10 @@ class UberAccessibilityService : AccessibilityService() {
 
             PackageDecision.BLOCKED_USER_APP -> {
                 if (event.isForegroundDefiningEvent()) {
-                    if (trustedForegroundDriverApp == DriverApp.NINETY_NINE &&
+                    val hasVisible99 = trustedForegroundDriverApp == DriverApp.NINETY_NINE &&
                         runCatching(::hasVisibleNinetyNineRoot).getOrDefault(false)
-                    ) {
+                    if (!queue.isCurrent(contextRevision)) return
+                    if (hasVisible99) {
                         Log.w(
                             TAG,
                             "CALCMOT_99_BACKGROUND_BLOCKED_EVENT_IGNORED " +
@@ -354,6 +544,8 @@ class UberAccessibilityService : AccessibilityService() {
         }
 
         val activeFocusedDriverApp = activeFocusedDriverAppForGuard()
+        // A Binder read can finish after the user has already switched apps.
+        if (!queue.isCurrent(contextRevision)) return
         if (activeFocusedDriverApp != DriverApp.UNKNOWN &&
             activeFocusedDriverApp != eventDriverApp &&
             !event.isForegroundDefiningEvent()
@@ -410,8 +602,7 @@ class UberAccessibilityService : AccessibilityService() {
                 captureCoordinator.reset()
                 mainScope.launch { overlayManager?.hideOverlay() }
                 closeAllLatencyTraces(OverlayLatencyTrace.EndReason.MONITORING_DISABLED)
-                eventCopy.recycle()
-            }
+            }.invokeOnCompletion { eventCopy.recycle() }
             return
         }
 
@@ -449,17 +640,16 @@ class UberAccessibilityService : AccessibilityService() {
             return
         }
 
-        capturePipelineJob = serviceScope.launch {
-            try {
-                ReadingPipelineRuntime.markPipelineState(
-                    eventDriverApp,
-                    ReadingPipelineRuntime.PipelineState.BUSY
-                )
-                runCapturePipelineSafely(eventCopy, eventAtMillis, generation)
-            } finally {
-                eventCopy.recycle()
-            }
+        val pipelineJob = serviceScope.launch {
+            ReadingPipelineRuntime.markPipelineState(
+                eventDriverApp,
+                ReadingPipelineRuntime.PipelineState.BUSY
+            )
+            runCapturePipelineSafely(eventCopy, eventAtMillis, generation)
         }
+        capturePipelineJob = pipelineJob
+        // Also release when cancellation happens before the coroutine gets its first turn.
+        pipelineJob.invokeOnCompletion { eventCopy.recycle() }
     }
 
     private fun enterIdleForAllowedUserApp(packageName: String?, eventType: Int) {
@@ -957,6 +1147,7 @@ class UberAccessibilityService : AccessibilityService() {
             lastResetElapsedRealtime = lastPipelineWatchdogResetAtElapsed
         ) ?: return
 
+        if (!watchdogRecoveryBudget.allow(ReadingPipelineRuntime.current().lastSuccessfulReadAtMillis)) return
         lastPipelineWatchdogResetAtElapsed = now
         if (reason == ReadingPipelineRuntime.RestartReason.WATCHDOG_BUSY) {
             ReadingPipelineRuntime.markBusyTooLong(platform)
@@ -1190,13 +1381,18 @@ class UberAccessibilityService : AccessibilityService() {
         ninetyNineCaptureEngine = null
     }
 
+    @Synchronized
     private fun requestReadingRestart(
         platform: DriverApp?,
         reason: ReadingPipelineRuntime.RestartReason
     ) {
+        if (!connectionAvailable || !runtimeReady || !AppSettings.isMonitoringEnabled(this)) return
         ensureServiceScopeActive()
         if (readingResetJob?.isActive == true) return
-        readingResetJob = serviceScope.launch {
+        if (reason == ReadingPipelineRuntime.RestartReason.MANUAL || reason == ReadingPipelineRuntime.RestartReason.PLATFORM_SELECTED) {
+            watchdogRecoveryBudget.reset()
+        }
+        readingResetJob = serviceScope.launch(start = CoroutineStart.LAZY) {
             val selectedPlatform = platform
                 ?.takeIf { it != DriverApp.UNKNOWN }
                 ?: AppSettings.getLastDriverApp(this@UberAccessibilityService)
@@ -1227,6 +1423,8 @@ class UberAccessibilityService : AccessibilityService() {
                     ninetyNineCaptureEngine?.resetTransientState()
                 }
 
+                if (!connectionAvailable || !AppSettings.isMonitoringEnabled(this@UberAccessibilityService)) return@launch
+                ExecutionPowerState.refresh(this@UberAccessibilityService, ExecutionPowerState.Trigger.READING_START)
                 configureRuntimeProfileForDriverApp(selectedPlatform)
                 withContext(Dispatchers.Main.immediate) {
                     if (overlayManager == null) {
@@ -1253,20 +1451,21 @@ class UberAccessibilityService : AccessibilityService() {
                     "Falha ao reiniciar leitura: ${error.javaClass.simpleName}"
                 )
             } finally {
-                readingResetJob = null
+                val finishedJob = kotlin.coroutines.coroutineContext[Job]
+                synchronized(this@UberAccessibilityService) {
+                    if (readingResetJob == finishedJob) readingResetJob = null
+                }
             }
         }
+        readingResetJob?.start()
     }
 
     private fun logRuntimePermissionStatuses() {
         val accessibilityActive = ReadingPipelineRuntime.current().serviceConnected
-        val powerManager = getSystemService(POWER_SERVICE) as? PowerManager
-        val batteryValue = if (
-            powerManager?.isIgnoringBatteryOptimizations(packageName) == true
-        ) {
-            "unrestricted"
-        } else {
-            "optimized"
+        val batteryValue = when (ExecutionPowerState.snapshot.value.dozeExempt) {
+            true -> "doze_exempt"
+            false -> "optimized"
+            null -> "unknown"
         }
         Log.w(TAG, "CALCMOT_ACCESSIBILITY_STATUS active=$accessibilityActive")
         Log.w(TAG, "CALCMOT_OVERLAY_PERMISSION_STATUS active=$accessibilityActive")
@@ -1371,10 +1570,12 @@ class UberAccessibilityService : AccessibilityService() {
                 trace = latencyTraceForGeneration(captureGeneration)
             )
         } finally {
-            ReadingPipelineRuntime.markPipelineState(
-                DriverApp.UBER,
-                ReadingPipelineRuntime.PipelineState.IDLE
-            )
+            if (kotlin.coroutines.coroutineContext.isActive) {
+                ReadingPipelineRuntime.markPipelineState(
+                    DriverApp.UBER,
+                    ReadingPipelineRuntime.PipelineState.IDLE
+                )
+            }
         }
     }
 
@@ -1419,7 +1620,8 @@ class UberAccessibilityService : AccessibilityService() {
     }
 
     private fun isCurrentForegroundPackageAllowed(): Boolean {
-        return trustedForegroundDecision == PackageDecision.DRIVER_APP &&
+        return accessibilityEvents.isContextSettled &&
+            trustedForegroundDecision == PackageDecision.DRIVER_APP &&
             DriverAppPackagePolicy.isDriverPackage(trustedForegroundPackageName)
     }
 
@@ -3006,21 +3208,15 @@ class UberAccessibilityService : AccessibilityService() {
     }
 
     private fun showOverlay(tripData: TripData, trace: OverlayLatencyTrace?) {
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            if (isCurrentForegroundPackageAllowed()) {
-                overlayManager?.setForegroundPackage(trustedForegroundPackageName)
-            }
-            overlayManager?.setLatencyTrace(trace)
-            overlayManager?.showOverlay(tripData)
-        } else {
-            runBlocking(Dispatchers.Main.immediate) {
-                if (isCurrentForegroundPackageAllowed()) {
-                    overlayManager?.setForegroundPackage(trustedForegroundPackageName)
-                }
-                overlayManager?.setLatencyTrace(trace)
-                overlayManager?.showOverlay(tripData)
-            }
-        }
+        if (!connectionAvailable || !runtimeReady || !AppSettings.isMonitoringEnabled(this) || !isCurrentForegroundPackageAllowed()) return
+        val manager = overlayManager ?: return
+        val generation = captureGeneration
+        // OverlayManager owns bounded main-thread dispatch. An outer runBlocking(Main)
+        // would bypass its 2-second boundary while the main queue is stalled.
+        manager.setForegroundPackage(trustedForegroundPackageName)
+        manager.setLatencyTrace(trace)
+        if (generation != captureGeneration || !connectionAvailable || !isCurrentForegroundPackageAllowed()) return
+        manager.showOverlay(tripData)
     }
 
     private fun handleOverlayDismissedByUser() {
@@ -3206,6 +3402,10 @@ class UberAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        safelyTearDown("disconnect") { disconnectRuntime() }
+        connectionScope.cancel()
+        accessibilityEvents.cancel()
+        accessibilityEventJob?.cancel()
         Log.w(TAG, "CALCMOT_ACCESSIBILITY_SERVICE_DESTROY instance=${System.identityHashCode(this)}")
         safelyTearDown("shell_bridge") {
             if (BuildConfig.DEBUG) {
@@ -3238,7 +3438,7 @@ class UberAccessibilityService : AccessibilityService() {
         safelyTearDown("reading_runtime") {
             ReadingPipelineRuntime.unregister(readingCommandHandler)
         }
-        safelyTearDown("overlay") { overlayManager?.removeOverlay() }
+        safelyTearDown("overlay") { overlayManager?.close() }
         safelyTearDown("service_scope") { serviceScope.cancel() }
         safelyTearDown("main_scope") { mainScope.cancel() }
         safelyTearDown("capture_dispatcher") { captureDispatcher.close() }
@@ -3323,7 +3523,7 @@ class UberAccessibilityService : AccessibilityService() {
 
     private companion object {
         const val TAG = "UberReader"
-        var runtimeAccessibilityInfoConfiguredOnce = false
+        const val MAIN_CONNECTION_DRAIN_TIMEOUT_MS = 2_000L
         const val UBER_DRIVER_PACKAGE = "com.ubercab.driver"
         const val MAX_ACCESSIBILITY_LOG_REASONS = 40
         const val EVENT_SOURCE_PARENT_ATTEMPTS = 8
