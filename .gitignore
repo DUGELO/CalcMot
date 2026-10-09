@@ -20,6 +20,14 @@ captures/
 .cxx/
 
 .tmp/
+# Local production metrics and user evidence stay outside version control.
+/CalcMot-Metrics-2026-08-to-current/
+# Local investigation reports and QA fingerprints; keep the evidence on disk.
+/docs/quality/anr-mitigation-2026-10-07.md
+/docs/quality/android-reliability-self-recovery.md
+/docs/quality/physical-qa-samsung-2026-10-08.md
+/docs/quality/reliability-qa-source-fingerprint.json
+/docs/quality/reliability-stabilization-qa-2026-10-08.md
 *.tar
 *.apk
 *.aab

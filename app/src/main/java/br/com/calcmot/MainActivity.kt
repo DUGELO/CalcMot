@@ -67,6 +67,7 @@ private fun CalcMotApp() {
             val observer = LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_RESUME) {
                     refreshPermissions()
+                    ExecutionPowerState.refresh(context, ExecutionPowerState.Trigger.APP_RESUMED)
                 }
             }
             lifecycleOwner.lifecycle.addObserver(observer)

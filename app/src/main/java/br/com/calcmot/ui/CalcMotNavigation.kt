@@ -237,7 +237,6 @@ fun CalcMotNavHost(
         composable(CalcMotRoute.DIAGNOSTICS) {
             ReadingDiagnosticsScreen(
                 accessibilityActive = permissionState.hasAccessibilityService,
-                batteryOptimization = ReadingPipelineRuntime.batteryOptimizationLabel(context),
                 diagnosticsEnabled = diagnosticsEnabled,
                 onBack = { navController.popBackStack() },
                 onDiagnosticsEnabledChange = { enabled ->
@@ -258,7 +257,7 @@ fun CalcMotNavHost(
                     val restarted = ReadingPipelineRuntime.manualRestart(context)
                     Toast.makeText(
                         context,
-                        if (restarted) "Leitura reiniciada" else "Ative a acessibilidade para reiniciar",
+                        if (restarted) "Reinício solicitado" else "Ligue a leitura e confira a acessibilidade",
                         Toast.LENGTH_SHORT
                     ).show()
                 }

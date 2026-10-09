@@ -10,6 +10,74 @@ import org.junit.Test
 
 class TelemetryPolicyTest {
     @Test
+    fun `overlay failure context preserves every approved combination`() {
+        val operations = setOf(
+            "is_visible", "visible_bounds", "show_overlay", "show_debug_overlay",
+            "set_foreground_package", "set_latency_trace", "hide_overlay", "expire_overlay",
+            "hide_debug_overlay", "remove_overlay", "remove_overlay_windows_for_scan", "unknown"
+        )
+        val failureKinds = setOf(
+            "main_post_rejected", "main_wait_timeout", "main_wait_interrupted",
+            "main_result_missing", "operation_exception", "not_applicable"
+        )
+        val callerThreads = setOf("main", "background", "unknown")
+
+        for (operation in operations) {
+            for (failureKind in failureKinds) {
+                for (callerThread in callerThreads) {
+                    val params = mapOf(
+                        AnalyticsParams.REASON to "boundary_failure",
+                        AnalyticsParams.SOURCE to "overlay",
+                        AnalyticsParams.OVERLAY_OPERATION to operation,
+                        AnalyticsParams.OVERLAY_FAILURE_KIND to failureKind,
+                        AnalyticsParams.OVERLAY_CALLER_THREAD to callerThread
+                    )
+                    val event = requireNotNull(
+                        SafeTelemetryPolicy.sanitizeEvent(AnalyticsEvents.OVERLAY_FAILED, params)
+                    )
+                    assertEquals("overlay_failed", event.name)
+                    assertEquals(params, event.params)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `overlay failure context rejects free text and unapproved tokens`() {
+        val keys = listOf(
+            AnalyticsParams.OVERLAY_OPERATION,
+            AnalyticsParams.OVERLAY_FAILURE_KIND,
+            AnalyticsParams.OVERLAY_CALLER_THREAD
+        )
+        val invalidValues = listOf(
+            "", "showOverlay", "other_operation", "worker_42",
+            "Rua Exemplo 123", "R$ 15,00 passageiro", "main_wait_timeout: offer text"
+        )
+        for (key in keys) {
+            for (value in invalidValues) {
+                val params = mapOf(AnalyticsParams.REASON to "boundary_failure", key to value)
+                val event = requireNotNull(
+                    SafeTelemetryPolicy.sanitizeEvent(AnalyticsEvents.OVERLAY_FAILED, params)
+                )
+                assertEquals(mapOf(AnalyticsParams.REASON to "boundary_failure"), event.params)
+            }
+        }
+    }
+
+    @Test
+    fun `overlay failure fallbacks remain explicit for non boundary reasons`() {
+        for (reason in listOf("bad_token", "exception")) {
+            val params = mapOf(
+                AnalyticsParams.REASON to reason,
+                AnalyticsParams.OVERLAY_OPERATION to "unknown",
+                AnalyticsParams.OVERLAY_FAILURE_KIND to "not_applicable",
+                AnalyticsParams.OVERLAY_CALLER_THREAD to "unknown"
+            )
+            assertEquals(params, SafeTelemetryPolicy.sanitizeParams(params))
+        }
+    }
+
+    @Test
     fun `event whitelist contains exactly the approved product events`() {
         assertEquals(
             setOf(

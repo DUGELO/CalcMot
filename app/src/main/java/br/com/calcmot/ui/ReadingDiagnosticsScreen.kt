@@ -22,7 +22,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import br.com.calcmot.ExecutionPowerState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -38,24 +43,20 @@ import br.com.calcmot.ui.design.tokens.CalcMotSpacing
 import br.com.calcmot.ui.design.tokens.CalcMotTypography
 import java.text.DateFormat
 import java.util.Date
-import kotlinx.coroutines.delay
 
 @Composable
 internal fun ReadingDiagnosticsScreen(
     accessibilityActive: Boolean,
-    batteryOptimization: String,
     diagnosticsEnabled: Boolean,
     onBack: () -> Unit,
     onDiagnosticsEnabledChange: (Boolean) -> Unit,
     onCopy: () -> Unit,
     onRestart: () -> Unit
 ) {
-    val snapshot by produceState(initialValue = ReadingPipelineRuntime.current()) {
-        while (true) {
-            value = ReadingPipelineRuntime.current()
-            delay(DIAGNOSTICS_REFRESH_INTERVAL_MS)
-        }
-    }
+    val context = LocalContext.current
+    val snapshot by ReadingPipelineRuntime.snapshot.collectAsState()
+    val power by ExecutionPowerState.snapshot.collectAsState()
+    var oemReviewed by remember { mutableStateOf(ExecutionPowerState.oemReviewed(context)) }
 
     Column(
         modifier = Modifier
@@ -104,8 +105,13 @@ internal fun ReadingDiagnosticsScreen(
                 )
                 DiagnosticRow("Plataforma selecionada", snapshot.selectedPlatform.displayName)
                 DiagnosticRow("Acessibilidade", activeLabel(accessibilityActive))
-                DiagnosticRow("Overlay", if (accessibilityActive) "Permitido" else "Não permitido")
-                DiagnosticRow("Bateria", batteryOptimization)
+                DiagnosticRow("Overlay", snapshot.overlayStatus.label)
+                DiagnosticRow("Bateria", power.optimizationLabel())
+                DiagnosticRow("Background restrito", power.backgroundRestricted?.let { if (it) "Sim" else "Não" } ?: "Desconhecido")
+                DiagnosticRow("Economia de energia", power.powerSave?.let { if (it) "Ativa" else "Inativa" } ?: "Desconhecida")
+                DiagnosticRow("Carregando", power.charging?.let { if (it) "Sim" else "Não" } ?: "Desconhecido")
+                DiagnosticRow("App standby", power.standbyBucket?.toString() ?: "Desconhecido")
+                DiagnosticRow("Configuração OEM", if (oemReviewed) "Conferida pelo motorista; não verificada por API" else "Não verificada")
                 DiagnosticRow("Serviço", if (snapshot.serviceConnected) "Conectado" else "Desconectado")
             }
         }
@@ -145,6 +151,18 @@ internal fun ReadingDiagnosticsScreen(
             }
         }
 
+        if (!oemReviewed || (!snapshot.serviceConnected || snapshot.overlayStatus == ReadingPipelineRuntime.OverlayStatus.FAILED) && power.identifiedRestriction()) {
+            Text(text = ExecutionPowerState.oemGuide(power.manufacturer), style = CalcMotTypography.Body,
+                color = CalcMotColors.TextSecondary)
+            CalcMotButton(text = "Abrir configurações de bateria", onClick = { ExecutionPowerState.openBatterySettings(context) },
+                modifier = Modifier.fillMaxWidth(), variant = CalcMotButtonVariant.SECONDARY)
+            if (!oemReviewed) {
+                CalcMotButton(text = "Já conferi as configurações do fabricante", onClick = {
+                    ExecutionPowerState.confirmOemReview(context)
+                    oemReviewed = true
+                }, modifier = Modifier.fillMaxWidth(), variant = CalcMotButtonVariant.SECONDARY)
+            }
+        }
         CalcMotButton(
             text = "Reiniciar leitura",
             onClick = onRestart,
@@ -210,5 +228,3 @@ private fun formatTimestamp(timestamp: Long): String {
     if (timestamp <= 0L) return "Ainda não houve"
     return DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(Date(timestamp))
 }
-
-private const val DIAGNOSTICS_REFRESH_INTERVAL_MS = 500L

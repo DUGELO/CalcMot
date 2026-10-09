@@ -5,6 +5,9 @@ object AnalyticsParams {
     const val SOURCE = "source"
     const val REASON = "reason"
     const val PIPELINE_STATE = "pipeline_state"
+    const val OVERLAY_OPERATION = "overlay_operation"
+    const val OVERLAY_FAILURE_KIND = "overlay_failure_kind"
+    const val OVERLAY_CALLER_THREAD = "overlay_caller_thread"
     const val CLASSIFICATION = "classification"
     const val APP_VERSION = "app_version"
     const val ANDROID_VERSION = "android_version"
@@ -21,6 +24,9 @@ object AnalyticsParams {
         SOURCE,
         REASON,
         PIPELINE_STATE,
+        OVERLAY_OPERATION,
+        OVERLAY_FAILURE_KIND,
+        OVERLAY_CALLER_THREAD,
         CLASSIFICATION,
         APP_VERSION,
         ANDROID_VERSION,

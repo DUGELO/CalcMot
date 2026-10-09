@@ -1,7 +1,6 @@
 package br.com.calcmot
 
 import android.content.Context
-import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import br.com.calcmot.telemetry.AnalyticsEvents
@@ -14,6 +13,7 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /** Process-local bridge between the product UI and the AccessibilityService runtime. */
 object ReadingPipelineRuntime {
@@ -62,6 +62,8 @@ object ReadingPipelineRuntime {
     }
 
     fun manualRestart(context: Context): Boolean {
+        if (!AppSettings.isMonitoringEnabled(context)) return false
+        ExecutionPowerState.refresh(context, ExecutionPowerState.Trigger.READING_START)
         val platform = AppSettings.getLastDriverApp(context)
         Log.w(TAG, "CALCMOT_MANUAL_RESTART_READING platform=${platform.id}")
         TelemetryProvider.analytics.track(
@@ -183,20 +185,28 @@ object ReadingPipelineRuntime {
         Log.w(TAG, "CALCMOT_PIPELINE_BUSY_TOO_LONG platform=${platform.id}")
     }
 
+    fun markOverlayStatus(status: OverlayStatus) { update { it.copy(overlayStatus = status) } }
+
+    enum class OverlayStatus(val label: String) {
+        ABSENT("Sem janela"), REQUESTED("Solicitado"), WINDOW_ADDED("Janela adicionada"),
+        PREDRAW_CONFIRMED("Pré-desenho confirmado"), FAILED("Falha técnica")
+    }
+
     fun current(): Snapshot = mutableSnapshot.value
 
     fun diagnosticsText(context: Context, accessibilityActive: Boolean): String {
         val current = current()
-        val overlayActive = accessibilityActive
-        val battery = batteryOptimizationLabel(context)
+        val power = ExecutionPowerState.refresh(context, ExecutionPowerState.Trigger.DIAGNOSTICS)
+        val battery = power.optimizationLabel()
         Log.w(TAG, "CALCMOT_ACCESSIBILITY_STATUS active=$accessibilityActive")
-        Log.w(TAG, "CALCMOT_OVERLAY_PERMISSION_STATUS active=$overlayActive")
+        Log.w(TAG, "CALCMOT_OVERLAY_STATUS value=${current.overlayStatus.name}")
         Log.w(TAG, "CALCMOT_BATTERY_OPTIMIZATION_STATUS value=$battery")
         return buildString {
             appendLine("CalcMot ${BuildConfig.VERSION_NAME}")
             appendLine("Plataforma: ${current.selectedPlatform.displayName}")
             appendLine("Acessibilidade: ${activeLabel(accessibilityActive)}")
-            appendLine("Overlay: ${activeLabel(overlayActive)}")
+            appendLine("Overlay: ${current.overlayStatus.label}")
+            appendLine(power.summary())
             appendLine("Bateria: $battery")
             appendLine("Pipeline: ${current.pipelineState.label}")
             appendLine("Serviço conectado: ${activeLabel(current.serviceConnected)}")
@@ -206,14 +216,8 @@ object ReadingPipelineRuntime {
         }.trim()
     }
 
-    fun batteryOptimizationLabel(context: Context): String {
-        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
-        return if (powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true) {
-            "Sem restrição"
-        } else {
-            "Otimização ativa"
-        }
-    }
+    fun batteryOptimizationLabel(context: Context): String =
+        ExecutionPowerState.refresh(context, ExecutionPowerState.Trigger.DIAGNOSTICS).optimizationLabel()
 
     private fun requestRestart(platform: DriverApp?, reason: RestartReason): Boolean {
         val handler = commandHandler.get()
@@ -232,7 +236,7 @@ object ReadingPipelineRuntime {
     }
 
     private fun update(transform: (Snapshot) -> Snapshot) {
-        mutableSnapshot.value = transform(mutableSnapshot.value)
+        mutableSnapshot.update(transform)
     }
 
     private fun activeLabel(active: Boolean): String = if (active) "Ativa" else "Inativa"
@@ -263,6 +267,7 @@ object ReadingPipelineRuntime {
     }
 
     data class Snapshot(
+        val overlayStatus: OverlayStatus = OverlayStatus.ABSENT,
         val selectedPlatform: DriverApp = DriverApp.UBER,
         val serviceConnected: Boolean = false,
         val pipelineState: PipelineState = PipelineState.IDLE,
