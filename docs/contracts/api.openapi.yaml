@@ -1,0 +1,1051 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: CalcMot Growth & Monetization V1 — S01
+  version: 1.0.0
+  description: Contrato documental congelado em 2026-10-09. Nenhum endpoint foi implementado/deployado. Backend/base
+    URL/audience/ambiente são AR-01; configuração comercial e evidência financeira permanecem abertas no README.
+    Relative local schemas are normative. Firebase token não concede autoridade financeira.
+security:
+- FirebaseIdToken: []
+paths:
+  /v1/me/entitlement:
+    get:
+      operationId: getMyEntitlement
+      description: UID da sessão; GET read-only. grant permanente, Play/promo/review normalizados e serverNow.
+        Não consultar a partir da execução de oferta.
+      responses:
+        '200':
+          description: Snapshot próprio confirmado.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-implementation-story: S07
+  /v1/legacy/claim:
+    post:
+      operationId: claimLegacyCore
+      description: Abre/reobtém claim do próprio UID; evidência/hash cliente não são prova para concessão.
+        Sem cutoff/prazo provisório inventados. Mesmo key/body retorna mesmo protocolo.
+      responses:
+        '200':
+          description: Protocolo/estado próprio, incluindo UNDER_REVIEW; não grant por autodeclaração.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegacyClaimView'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-implementation-story: S06
+      x-blocked-by:
+      - OQ-02
+      - OQ-07
+      - AR-01
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegacyClaimRequest'
+  /v1/billing/purchases:
+    post:
+      operationId: verifyPlayPurchase
+      description: Token Play vinculado ao titular da sessão; GET Play/ownership/package/catalog/ACK/revisão.
+        ACTIVE/trial não prova pagamento. Chave econômica não é substituída por Idempotency-Key cliente.
+      responses:
+        '200':
+          description: state VERIFIED; fonte Play confirmada, não necessariamente firstPaid.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/VerificationResult'
+                - type: object
+                  properties:
+                    state:
+                      const: VERIFIED
+        '202':
+          description: state VERIFYING; pending/atraso com restauração/reconciliação; não concede para sempre.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/VerificationResult'
+                - type: object
+                  properties:
+                    state:
+                      const: VERIFYING
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          description: state REJECTED; token/produto/titular não verificados. Não revela outro titular.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/VerificationResult'
+                - type: object
+                  properties:
+                    state:
+                      const: REJECTED
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-implementation-story: S19
+      x-blocked-by:
+      - OQ-05
+      - AR-01
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseRequest'
+  /v1/attribution/claim:
+    post:
+      operationId: claimOrLockAttribution
+      description: CLAIM registra primeira origem válida; LOCK antes do checkout congela existente ou organic/unknown.
+        Servidor determina sourceType/sourceId/UID e timestamps. Repetição idêntica retorna original; fonte
+        diferente após lock é ALREADY_LOCKED. Código tardio não retroatribui.
+      responses:
+        '200':
+          description: Estado/projeção própria sem UID/sourceId de terceiros.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributionView'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-implementation-story: S28
+      x-blocked-by:
+      - OQ-06
+      - AR-01
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttributionClaimRequest'
+  /v1/referrals/me:
+    get:
+      operationId: getMyReferralSummary
+      description: Somente counts/dias/datas/rewards do titular. Não revela identidade individual de indicado.
+        REWARDS_PAUSED mantém créditos anteriores visíveis.
+      responses:
+        '200':
+          description: Agregado próprio; orgânico não promete dias.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferralSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-implementation-story: S32/S40/S43
+  /v1/rewards/{rewardId}/redeem:
+    post:
+      operationId: requestRewardRedemption
+      description: Intenção voluntária do dono; servidor resolve elegibilidade/coexistência/janela/datas. Não
+        escolhe dias/token/UID nem chama endpoint internal pelo cliente. Já aplicado retorna view sem efeito
+        duplicado; dono inválido/ausente usa NOT_FOUND sem expor titular.
+      responses:
+        '200':
+          description: View corrente; nenhuma aplicação duplicada.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardView'
+        '202':
+          description: Crédito aguardando decisão/aplicação/reconciliação; não APPLIED inventado.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardView'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-implementation-story: S42
+      x-blocked-by:
+      - OQ-06
+      parameters:
+      - name: rewardId
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedeemRequest'
+  /v1/creators/me/summary:
+    get:
+      operationId: getMyCreatorSummary
+      description: Papel creator validado; agregado do próprio creator, nunca dados/UID de indicado.
+      responses:
+        '200':
+          description: Etapas/valores agregados BRL conforme ledger, não lucro presumido.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatorSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-required-role: creator
+      x-implementation-story: S45
+  /internal/play/rtdn:
+    post:
+      operationId: receivePlayRtdn
+      description: 'Identidade Pub/Sub verificada/audience configurada em AR-01. Dedupe messageId + objeto
+        econômico. RTDN é pista: consultar Play, não conceder dinheiro por tipo de notificação. Responder 200
+        após aceite seguro, job reconcilia falha parcial.'
+      responses:
+        '200':
+          description: Receipt aceito/repetido; não estado financeiro final.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceReceipt'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      security:
+      - ServiceIdentity: []
+      x-implementation-story: S20
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PubSubPush'
+  /internal/reconcile:
+    post:
+      operationId: reconcileExistingOperations
+      description: Job de serviço autenticado; consulta Play/financeiro disponível, ACK/RTDN perdidos/void/defer
+        incerto. Continua com flags OFF; sem retry cego de efeito externo.
+      responses:
+        '200':
+          description: Resultado auditável do job.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceReceipt'
+        '202':
+          description: Reconciliação aceita/em processamento.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceReceipt'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      security:
+      - ServiceIdentity: []
+      x-implementation-story: S23/S41
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconcileRequest'
+  /internal/reward/apply:
+    post:
+      operationId: applyEarnedReward
+      description: Somente serviço. Carrega ledger EARNED e reserva operação/destino; não aceita dias/datas/amount
+        escolhidos pelo caller. Defer fora de transação, etag/preExpiry e confirmação; timeout enviado exige
+        reconciliação.
+      responses:
+        '200':
+          description: Estado/efeito corrente confirmado ou já processado.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardView'
+        '202':
+          description: Aplicação/reconciliação pendente; direitos reservados preservados.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardView'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      security:
+      - ServiceIdentity: []
+      x-implementation-story: S41/S42
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RewardApplyRequest'
+  /internal/creator/settle:
+    post:
+      operationId: recordCreatorSettlement
+      description: Somente serviço autorizado pelo operador. Registra lote/pagamento comprovado; não executa
+        transferência bancária genérica nem calcula payout por percentual fixo. Confere obrigações e proof
+        ref, idempotência por linha/batch.
+      responses:
+        '200':
+          description: Lote conciliado/repetido com auditoria.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceReceipt'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      security:
+      - ServiceIdentity: []
+      x-implementation-story: S47
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatorSettleRequest'
+  /admin/legacy/grant:
+    post:
+      operationId: grantReviewedLegacyCore
+      description: Firebase admin/RBAC; UID alvo é permitido nesta operação administrativa, conferido com claim/policy/justificativa.
+        Grant/datas/evidência reais são construídos e auditados no servidor; nunca revoga grant por rollout.
+      responses:
+        '200':
+          description: Protocolo/decisão após grant auditado.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/LegacyClaimView'
+                - type: object
+                  properties:
+                    state:
+                      const: GRANTED
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-required-role: admin
+      x-implementation-story: S06
+      x-blocked-by:
+      - OQ-02
+      - OQ-07
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLegacyGrantRequest'
+  /admin/reward/reconcile:
+    post:
+      operationId: reviewRewardReconciliation
+      description: Admin autorizado; busca dados reais e resolve APPLIED/NEEDS_RECONCILIATION/VOID quando permitido.
+        Não permite repetir defer incerto ou apagar dias consumidos.
+      responses:
+        '200':
+          description: View/estado conciliado e auditado.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardView'
+        '202':
+          description: Prova ainda insuficiente, revisão/reconciliação mantida.
+          headers:
+            X-Request-ID:
+              description: Correlação opaca; não purchase token nem UID de terceiros.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardView'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-required-role: admin
+      x-implementation-story: S41
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRewardReconcileRequest'
+components:
+  securitySchemes:
+    FirebaseIdToken:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase ID token
+      description: Verificar assinatura/issuer/audience/expiry/UID; admin/creator também RBAC. Configuração
+        real em AR-01.
+    ServiceIdentity:
+      type: http
+      scheme: bearer
+      bearerFormat: OIDC service identity
+      description: Verificar identidade/audience de PubSub/scheduler/service account permitidos; Firebase token
+        usuário não é credencial internal.
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Chave opaca vinculada a caller/operação/body. Mesma chave/corpo não repete efeito; mesma
+        chave com corpo divergente é 409 INVALID_REQUEST. Não substitui chaves econômicas/server-side e unique
+        ledgers.
+      schema:
+        type: string
+        minLength: 1
+  schemas:
+    UtcInstant:
+      type: string
+      format: date-time
+      pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+    ErrorCode:
+      type: string
+      enum:
+      - AUTH_REQUIRED
+      - FORBIDDEN
+      - INVALID_REQUEST
+      - NOT_FOUND
+      - ALREADY_LOCKED
+      - SELF_REFERRAL
+      - NOT_ELIGIBLE
+      - PLAY_NOT_VERIFIED
+      - PURCHASE_PENDING
+      - REWARD_ALREADY_APPLIED
+      - LEGACY_REVIEW
+      - RATE_LIMITED
+      - RETRY_LATER
+    Error:
+      type: object
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        requestId:
+          type: string
+          minLength: 1
+        serverNow:
+          $ref: '#/components/schemas/UtcInstant'
+        retryable:
+          type: boolean
+      required:
+      - code
+      - requestId
+      - serverNow
+      - retryable
+      additionalProperties: false
+    EntitlementSnapshot:
+      $ref: ./entitlement.schema.json#/$defs/EntitlementSnapshot
+    SubscriptionState:
+      $ref: ./entitlement.schema.json#/$defs/SubscriptionState
+    VerificationState:
+      $ref: ./entitlement.schema.json#/$defs/VerificationState
+    AttributionView:
+      $ref: ./referral.schema.json#/$defs/AttributionView
+    ReferralSummary:
+      $ref: ./referral.schema.json#/$defs/ReferralSummary
+    RewardView:
+      $ref: ./referral.schema.json#/$defs/RewardView
+    CreatorSummary:
+      $ref: ./referral.schema.json#/$defs/CreatorSummary
+    LegacyClaimRequest:
+      type: object
+      properties:
+        evidenceType:
+          type: string
+          minLength: 1
+        evidenceHash:
+          anyOf:
+          - type: string
+            minLength: 1
+          - type: 'null'
+      required:
+      - evidenceType
+      - evidenceHash
+      additionalProperties: false
+    LegacyClaimView:
+      type: object
+      properties:
+        claimId:
+          type: string
+          minLength: 1
+        state:
+          $ref: ./entitlement.schema.json#/$defs/LegacyClaim/properties/state
+        openedAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+        resolvedAt:
+          anyOf:
+          - type: string
+            format: date-time
+            pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+          - type: 'null'
+        provisionalUntil:
+          anyOf:
+          - type: string
+            format: date-time
+            pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+          - type: 'null'
+        revision:
+          type: integer
+          minimum: 0
+        serverNow:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+      required:
+      - claimId
+      - state
+      - openedAt
+      - resolvedAt
+      - provisionalUntil
+      - revision
+      - serverNow
+      additionalProperties: false
+      allOf:
+      - if:
+          properties:
+            state:
+              const: UNDER_REVIEW
+        then:
+          properties:
+            resolvedAt:
+              type: 'null'
+        else:
+          properties:
+            resolvedAt:
+              type: string
+              format: date-time
+            provisionalUntil:
+              type: 'null'
+    PurchaseRequest:
+      type: object
+      properties:
+        purchaseToken:
+          type: string
+          minLength: 1
+          writeOnly: true
+          description: Obtido da Play; transporte protegido para verificação. Nunca Analytics/log. Não permite
+            transferência de titular.
+      required:
+      - purchaseToken
+      additionalProperties: false
+    VerificationResult:
+      type: object
+      properties:
+        state:
+          $ref: '#/components/schemas/VerificationState'
+        entitlementRevision:
+          anyOf:
+          - type: integer
+            minimum: 0
+          - type: 'null'
+        reason:
+          anyOf:
+          - $ref: '#/components/schemas/ErrorCode'
+          - type: 'null'
+        requestId:
+          type: string
+          minLength: 1
+        serverNow:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+      required:
+      - state
+      - entitlementRevision
+      - reason
+      - requestId
+      - serverNow
+      additionalProperties: false
+      allOf:
+      - if:
+          properties:
+            state:
+              const: VERIFIED
+        then:
+          properties:
+            entitlementRevision:
+              type: integer
+              minimum: 0
+            reason:
+              type: 'null'
+        else:
+          properties:
+            entitlementRevision:
+              type: 'null'
+    AttributionClaimRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+          - CLAIM
+          - LOCK
+        code:
+          anyOf:
+          - type: string
+            minLength: 1
+          - type: 'null'
+        method:
+          type: string
+          enum:
+          - APP_LINK
+          - INSTALL_REFERRER
+          - MANUAL_CODE
+          - ORGANIC
+          - UNKNOWN
+      required:
+      - action
+      - code
+      - method
+      additionalProperties: false
+      allOf:
+      - if:
+          properties:
+            action:
+              const: CLAIM
+        then:
+          properties:
+            code:
+              type: string
+              minLength: 1
+            method:
+              enum:
+              - APP_LINK
+              - INSTALL_REFERRER
+              - MANUAL_CODE
+    RedeemRequest:
+      type: object
+      properties: {}
+      required: []
+      additionalProperties: false
+    ServiceReceipt:
+      type: object
+      properties:
+        requestId:
+          type: string
+          minLength: 1
+        serverNow:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+        result:
+          type: string
+          enum:
+          - ACCEPTED
+          - ALREADY_PROCESSED
+          - RECONCILIATION_REQUIRED
+      required:
+      - requestId
+      - serverNow
+      - result
+      additionalProperties: false
+    PubSubPush:
+      type: object
+      properties:
+        message:
+          type: object
+          properties:
+            messageId:
+              type: string
+              minLength: 1
+            data:
+              type: string
+              minLength: 1
+              contentEncoding: base64
+              description: RTDN recebido; decodificar/validar e consultar Play. Data bruto não é log/Analytics.
+            publishTime:
+              type: string
+              format: date-time
+              pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+          required:
+          - messageId
+          - data
+          additionalProperties: false
+        subscription:
+          type: string
+          minLength: 1
+      required:
+      - message
+      - subscription
+      additionalProperties: false
+    ReconcileRequest:
+      type: object
+      properties:
+        jobId:
+          type: string
+          minLength: 1
+      required:
+      - jobId
+      additionalProperties: false
+    RewardApplyRequest:
+      type: object
+      properties:
+        rewardId:
+          type: string
+          minLength: 1
+      required:
+      - rewardId
+      additionalProperties: false
+    CreatorSettleRequest:
+      type: object
+      properties:
+        batchId:
+          type: string
+          minLength: 1
+        paymentProofRef:
+          type: string
+          minLength: 1
+      required:
+      - batchId
+      - paymentProofRef
+      additionalProperties: false
+    AdminLegacyGrantRequest:
+      type: object
+      properties:
+        uid:
+          type: string
+          minLength: 1
+        claimId:
+          type: string
+          minLength: 1
+        policyVersion:
+          type: string
+          minLength: 1
+        justification:
+          type: string
+          minLength: 1
+      required:
+      - uid
+      - claimId
+      - policyVersion
+      - justification
+      additionalProperties: false
+    AdminRewardReconcileRequest:
+      type: object
+      properties:
+        rewardId:
+          type: string
+          minLength: 1
+        justification:
+          type: string
+          minLength: 1
+      required:
+      - rewardId
+      - justification
+      additionalProperties: false
+  responses:
+    InvalidRequest:
+      description: 400 INVALID_REQUEST; payload/shape inválido, inclusive campos de autoridade cliente.
+      headers:
+        X-Request-ID:
+          description: Correlação opaca; não purchase token nem UID de terceiros.
+          schema:
+            type: string
+            minLength: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: 401 AUTH_REQUIRED; sessão/identidade ausente ou inválida.
+      headers:
+        X-Request-ID:
+          description: Correlação opaca; não purchase token nem UID de terceiros.
+          schema:
+            type: string
+            minLength: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: 403 FORBIDDEN; papel/identidade de serviço inválidos, sem detalhes de terceiros.
+      headers:
+        X-Request-ID:
+          description: Correlação opaca; não purchase token nem UID de terceiros.
+          schema:
+            type: string
+            minLength: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: 404 NOT_FOUND; objeto próprio inexistente ou indisponível ao caller.
+      headers:
+        X-Request-ID:
+          description: Correlação opaca; não purchase token nem UID de terceiros.
+          schema:
+            type: string
+            minLength: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: '409 conflito de operação/política: ALREADY_LOCKED/SELF_REFERRAL/NOT_ELIGIBLE/REWARD_ALREADY_APPLIED/LEGACY_REVIEW/INVALID_REQUEST.'
+      headers:
+        X-Request-ID:
+          description: Correlação opaca; não purchase token nem UID de terceiros.
+          schema:
+            type: string
+            minLength: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: 429 RATE_LIMITED; limite configurado, nenhum valor comercial escolhido por S01.
+      headers:
+        X-Request-ID:
+          schema:
+            type: string
+            minLength: 1
+        Retry-After:
+          description: Quando disponível, atraso definido pelo servidor/política; não um default da S01.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unavailable:
+      description: 503 RETRY_LATER; sem nova concessão indefinida por erro; cache/direitos existentes e reconciliação
+        conforme política.
+      headers:
+        X-Request-ID:
+          description: Correlação opaca; não purchase token nem UID de terceiros.
+          schema:
+            type: string
+            minLength: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

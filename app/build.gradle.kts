@@ -40,8 +40,8 @@ android {
         applicationId = "br.com.calcmot"
         minSdk = 24
         targetSdk = 36
-        versionCode = 10
-        versionName = "3.3"
+        versionCode = 11
+        versionName = "3.4"
         buildConfigField("String", "CLARITY_PROJECT_ID", "\"$clarityProjectId\"")
 
         if (buildsAppBundle) {
@@ -82,6 +82,21 @@ android {
                 "proguard-rules.pro"
             )
         }
+        create("identityDev") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".identitydev"
+            matchingFallbacks += listOf("debug")
+            val workerUrl = providers.gradleProperty("calcmot.identityDevWorkerUrl").orElse("").get().trim()
+            require(workerUrl.isEmpty() || workerUrl.matches(Regex("https://calcmot-api-dev\\.[a-z0-9-]+\\.workers\\.dev/?"))) {
+                "identityDev requires a verified development Worker URL, never a production API."
+            }
+            buildConfigField("String", "IDENTITY_DEV_WORKER_URL", "\"$workerUrl\"")
+        }
+    }
+    sourceSets.getByName("identityDev") {
+        java.srcDir("src/debug/java")
+        kotlin.directories += "src/debug/java"
+        res.srcDir("src/debug/res")
     }
 
     splits {
@@ -139,8 +154,14 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:34.17.0"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-crashlytics")
+    implementation("com.google.firebase:firebase-auth")
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
 
     testImplementation(libs.junit)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
     androidTestImplementation("androidx.room:room-testing:2.8.4")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -110,7 +110,7 @@ class ReleaseReadinessTest {
     }
 
     @Test
-    fun `firebase telemetry is isolated and advertising identifiers are disabled`() {
+    fun `firebase adapters stay isolated and advertising identifiers are disabled`() {
         val manifest = projectFile("app/src/main/AndroidManifest.xml").readText()
         val rootBuild = projectFile("build.gradle.kts").readText()
         val appBuild = projectFile("app/build.gradle.kts").readText()
@@ -133,10 +133,21 @@ class ReleaseReadinessTest {
         assertEquals(
             setOf(
                 "br/com/calcmot/telemetry/FirebaseAnalyticsTracker.kt",
-                "br/com/calcmot/telemetry/FirebaseCrashReporter.kt"
+                "br/com/calcmot/telemetry/FirebaseCrashReporter.kt",
+                "br/com/calcmot/identity/FirebaseIdentityAuth.kt",
+                "br/com/calcmot/identity/GoogleIdentityClient.kt"
             ),
             directFirebaseFiles
         )
+        // Auth is authorized in S04, but identity must not become telemetry or a Core dependency.
+        projectFile("app/src/main/java/br/com/calcmot/identity").walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }.forEach { file ->
+                val source = file.readText()
+                listOf("com.google.firebase.analytics", "com.google.firebase.crashlytics",
+                    "br.com.calcmot.accessibility", "br.com.calcmot.processor",
+                    "br.com.calcmot.ninetynine", "br.com.calcmot.overlay")
+                    .forEach { forbidden -> assertFalse("Identity must not import $forbidden", source.contains("import $forbidden")) }
+            }
         assertTrue(manifest.contains("com.google.android.gms.permission.AD_ID"))
         assertTrue(manifest.contains("android.permission.ACCESS_ADSERVICES_AD_ID"))
         assertTrue(manifest.contains("android.permission.ACCESS_ADSERVICES_ATTRIBUTION"))
