@@ -32,12 +32,13 @@ internal object GrowthShareStore {
     }
 
     @Synchronized
-    fun claimPrompt(context: Context): Boolean {
+    fun claimPrompt(context: Context, notificationsAllowed: Boolean): GrowthShareSurface? {
         val now = System.currentTimeMillis()
         val state = read(context.applicationContext)
-        if (!GrowthSharePolicy.eligible(state, now, GrowthSharePolicy.localDay(now))) return false
+        if (!GrowthSharePolicy.eligible(state, now, GrowthSharePolicy.localDay(now))) return null
+        val surface = GrowthSharePolicy.surface(state, notificationsAllowed)
         save(context.applicationContext, GrowthSharePolicy.shown(state, now))
-        return true
+        return surface
     }
 
     @Synchronized

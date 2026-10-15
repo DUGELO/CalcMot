@@ -12,6 +12,8 @@ internal data class GrowthShareState(
     val dismissals: Int = 0
 )
 
+internal enum class GrowthShareSurface { CARD, NOTIFICATION }
+
 internal object GrowthSharePolicy {
     private const val DAY_MS = 86_400_000L
     private const val THIRTY_DAYS_MS = 30 * DAY_MS
@@ -38,6 +40,10 @@ internal object GrowthSharePolicy {
         ) return false
         return true
     }
+
+    fun surface(state: GrowthShareState, notificationsAllowed: Boolean): GrowthShareSurface =
+        if (state.lastPromptAt > 0L && notificationsAllowed) GrowthShareSurface.NOTIFICATION
+        else GrowthShareSurface.CARD
 
     fun shown(state: GrowthShareState, nowMillis: Long): GrowthShareState =
         state.copy(
