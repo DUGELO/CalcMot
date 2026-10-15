@@ -50,9 +50,6 @@ internal object GrowthShareStore {
         GrowthSharePolicy.shared(it, System.currentTimeMillis())
     }
 
-    @Synchronized
-    fun optOut(context: Context) = change(context, GrowthSharePolicy::optOut)
-
     private fun change(context: Context, update: (GrowthShareState) -> GrowthShareState) {
         val appContext = context.applicationContext
         save(appContext, update(read(appContext)))
@@ -66,8 +63,7 @@ internal object GrowthShareStore {
             previousPromptAt = prefs.getLong("previous_prompt", 0L),
             lastPromptAt = prefs.getLong("last_prompt", 0L),
             quietUntil = prefs.getLong("quiet_until", 0L),
-            dismissals = prefs.getInt("dismissals", 0),
-            optedOut = prefs.getBoolean("opted_out", false)
+            dismissals = prefs.getInt("dismissals", 0)
         )
     }
 
@@ -79,7 +75,6 @@ internal object GrowthShareStore {
             .putLong("last_prompt", state.lastPromptAt)
             .putLong("quiet_until", state.quietUntil)
             .putInt("dismissals", state.dismissals)
-            .putBoolean("opted_out", state.optedOut)
             .apply()
     }
 }

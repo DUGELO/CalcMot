@@ -9,8 +9,7 @@ internal data class GrowthShareState(
     val previousPromptAt: Long = 0L,
     val lastPromptAt: Long = 0L,
     val quietUntil: Long = 0L,
-    val dismissals: Int = 0,
-    val optedOut: Boolean = false
+    val dismissals: Int = 0
 )
 
 internal object GrowthSharePolicy {
@@ -30,7 +29,7 @@ internal object GrowthSharePolicy {
     }
 
     fun eligible(state: GrowthShareState, nowMillis: Long, today: Long): Boolean {
-        if (state.optedOut || state.consecutiveDays < 2) return false
+        if (state.consecutiveDays < 2) return false
         if (state.lastUsageDay !in (today - 1L)..today) return false
         if (nowMillis < state.quietUntil) return false
         // At most two prompts in any rolling 30-day window.
@@ -44,7 +43,7 @@ internal object GrowthSharePolicy {
         state.copy(
             previousPromptAt = state.lastPromptAt,
             lastPromptAt = nowMillis,
-            quietUntil = nowMillis + FOURTEEN_DAYS_MS
+            quietUntil = nowMillis + if (state.lastPromptAt > 0L) SIXTY_DAYS_MS else FOURTEEN_DAYS_MS
         )
 
     fun dismissed(state: GrowthShareState, nowMillis: Long): GrowthShareState {
@@ -58,5 +57,4 @@ internal object GrowthSharePolicy {
     fun shared(state: GrowthShareState, nowMillis: Long): GrowthShareState =
         state.copy(dismissals = 0, quietUntil = maxOf(state.quietUntil, nowMillis + SIXTY_DAYS_MS))
 
-    fun optOut(state: GrowthShareState): GrowthShareState = state.copy(optedOut = true)
 }

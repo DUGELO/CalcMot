@@ -72,7 +72,6 @@ fun HomeReadyScreen(
     showGrowthSharePrompt: Boolean = false,
     onGrowthShare: () -> Unit = {},
     onGrowthDismiss: () -> Unit = {},
-    onGrowthOptOut: () -> Unit = {},
     modifier: Modifier = Modifier,
     goalPerKm: String = "R$ 1,80/km",
     goalPerHour: String = "R$ 35/h"
@@ -90,7 +89,8 @@ fun HomeReadyScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = 20.dp)
+                .padding(bottom = if (showGrowthSharePrompt) 180.dp else 0.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             HomeReadyTopBar(onMenu = onMenu)
@@ -138,13 +138,6 @@ fun HomeReadyScreen(
                         .weight(1f)
                         .testTag(UiTestTags.HOME_SETTINGS_ACTION),
                     onClick = onOpenSettings
-                )
-            }
-            if (showGrowthSharePrompt) {
-                GrowthShareInviteCard(
-                    onShare = onGrowthShare,
-                    onDismiss = onGrowthDismiss,
-                    onOptOut = onGrowthOptOut
                 )
             }
             OutlinedButton(
@@ -205,6 +198,16 @@ fun HomeReadyScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp, bottom = 18.dp)
+            )
+        }
+        if (showGrowthSharePrompt) {
+            GrowthShareInviteCard(
+                onShare = onGrowthShare,
+                onDismiss = onGrowthDismiss,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             )
         }
     }

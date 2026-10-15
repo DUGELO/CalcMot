@@ -33,7 +33,6 @@ object UiTestTags {
     const val GROWTH_SHARE_PROMPT = "growth_share_prompt"
     const val GROWTH_SHARE_PROMPT_ACTION = "growth_share_prompt_action"
     const val GROWTH_SHARE_PROMPT_DISMISS = "growth_share_prompt_dismiss"
-    const val GROWTH_SHARE_PROMPT_OPT_OUT = "growth_share_prompt_opt_out"
     const val DRAWER_DIAGNOSTICS_ITEM = "drawer_diagnostics_item"
     const val DIAGNOSTICS_SCREEN = "diagnostics_screen"
     const val RESTART_READING_BUTTON = "restart_reading_button"

@@ -18,6 +18,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import br.com.calcmot.growth.GrowthShareStore
+import br.com.calcmot.growth.GrowthShareNotification
+import br.com.calcmot.growth.GrowthShareSurface
 import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
 import br.com.calcmot.DriverAppLauncher
@@ -79,7 +81,13 @@ internal fun HomeScreen(
 
     fun checkGrowthPrompt() {
         if (status == HomeStatus.READY && !growthPromptVisible) {
-            growthPromptVisible = GrowthShareStore.claimPrompt(context)
+            when (GrowthShareStore.claimPrompt(context, GrowthShareNotification.canNotify(context))) {
+                GrowthShareSurface.CARD -> growthPromptVisible = true
+                GrowthShareSurface.NOTIFICATION -> if (!GrowthShareNotification.show(context)) {
+                    growthPromptVisible = true
+                }
+                null -> Unit
+            }
         }
     }
 
@@ -167,15 +175,12 @@ internal fun HomeScreen(
             onGrowthShare = {
                 growthPromptVisible = false
                 GrowthShareStore.shared(context)
+                GrowthShareNotification.cancel(context)
                 CalcMotSharing.share(context, "home")
             },
             onGrowthDismiss = {
                 growthPromptVisible = false
                 GrowthShareStore.dismiss(context)
-            },
-            onGrowthOptOut = {
-                growthPromptVisible = false
-                GrowthShareStore.optOut(context)
             },
             onRestartReading = {
                 val restarted = ReadingPipelineRuntime.manualRestart(context)

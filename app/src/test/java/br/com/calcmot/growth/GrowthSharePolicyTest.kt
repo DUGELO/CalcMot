@@ -47,12 +47,20 @@ class GrowthSharePolicyTest {
     }
 
     @Test
-    fun `opt out is permanent and share tap suppresses sixty days`() {
+    fun `share tap suppresses sixty days`() {
         val initial = GrowthShareState(lastUsageDay = 201, consecutiveDays = 2)
-        assertFalse(GrowthSharePolicy.eligible(GrowthSharePolicy.optOut(initial), now(201), 201))
         val shared = GrowthSharePolicy.shared(initial, now(201))
         assertFalse(GrowthSharePolicy.eligible(shared.copy(lastUsageDay = 260), now(260), 260))
         assertTrue(GrowthSharePolicy.eligible(shared.copy(lastUsageDay = 261), now(261), 261))
+    }
+
+    @Test
+    fun `first prompt is a card and a later eligible one can be a notification`() {
+        val initial = GrowthShareState(lastUsageDay = 201, consecutiveDays = 2)
+        assertEquals(GrowthShareSurface.CARD, GrowthSharePolicy.surface(initial, true))
+        val prior = GrowthSharePolicy.shown(initial, now(201))
+        assertEquals(GrowthShareSurface.NOTIFICATION, GrowthSharePolicy.surface(prior, true))
+        assertEquals(GrowthShareSurface.CARD, GrowthSharePolicy.surface(prior, false))
     }
 
     @Test

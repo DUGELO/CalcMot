@@ -18,7 +18,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.testTag
@@ -35,7 +34,6 @@ import br.com.calcmot.ui.design.tokens.CalcMotColors
 internal fun GrowthShareInviteCard(
     onShare: () -> Unit,
     onDismiss: () -> Unit,
-    onOptOut: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(18.dp)
@@ -84,15 +82,6 @@ internal fun GrowthShareInviteCard(
             ) {
                 Text("Agora não", color = CalcMotColors.TextSecondary)
             }
-        }
-        TextButton(
-            onClick = onOptOut,
-            modifier = Modifier
-                .align(Alignment.End)
-                .heightIn(min = 48.dp)
-                .testTag(UiTestTags.GROWTH_SHARE_PROMPT_OPT_OUT)
-        ) {
-            Text("Não mostrar novamente", color = CalcMotColors.TextSecondary, fontSize = 12.sp)
         }
     }
 }

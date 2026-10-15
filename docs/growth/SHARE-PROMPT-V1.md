@@ -1,37 +1,29 @@
-# CalcMot — convite orgânico após uso real
+# Growth V1 — convite discreto por uso recorrente
 
-## Regra
+## Gatilho e proteção
+- Só conta **um dia local em que um overlay de oferta foi efetivamente exibido**. Duas datas consecutivas habilitam a primeira oportunidade.
+- Não solicita permissões de notificação. O cartão aparece apenas na **Home em primeiro plano**; nunca na Uber/99, sobre oferta ou ao dirigir.
+- **Primeira oportunidade:** cartão na parte inferior da Home, acima da barra de navegação, com somente **Compartilhar** e **Agora não**.
+- **Segunda oportunidade:** notificação Android silenciosa (canal de baixa importância) ao retornar à Home, **apenas** se notificações já estiverem liberadas. Se não estiverem, mostra cartão outra vez. A notificação nunca é enviada em background nem por OCR/serviço.
+- Tocar na notificação abre o CalcMot e seu compartilhador Android; não envia mensagem automaticamente. A notificação é cancelada ao compartilhar por esse fluxo.
 
-- Conta **dia local distinto com aviso de oferta realmente exibido**, não uma abertura de app nem um OCR rejeitado.
-- Elegível quando houver **2 dias consecutivos** de uso confirmado; no retorno à Home no dia 2 ou 3 (uso ontem), se houver permissão ativa.
-- Primeira instalação desta versão começa com o contador zerado: não recupera histórico passado, pois o app v3.5 não persistia essa métrica.
-- O rastreamento é local em SharedPreferences isolado (`calcmot_growth_share_v1`), sem contato, identidade, localização ou conteúdo das ofertas.
-- Escritas acionadas pelo overlay ocorrem em `Dispatchers.IO`, no máximo um agendamento por dia por processo.
+## Frequência persistida
+- Mínimo de **14 dias entre oportunidades**.
+- **Máximo de duas** oportunidades em janela móvel de 30 dias.
+- Após duas dispensas, silêncio de **60 dias**.
+- Após escolher compartilhar, silêncio de 60 dias, independentemente de envio real.
+- **Não existe opção “Não mostrar novamente” nem opt-out permanente.** O usuário ainda pode dispensar com “Agora não” e pode bloquear o canal de convite nas configurações de notificação do Android. As notificações críticas de serviço não são afetadas.
 
-## UX segura
+## Implementação
+- Estado salvo localmente em `calcmot_growth_share_v1`, sem dados de ofertas, contatos ou dados de identidade.
+- Registros de overlay agendados em `Dispatchers.IO`; ações do card disparadas apenas pela Home.
+- Não usa FCM, alarmes, novas permissões, link personalizado, Billing ou backend.
+- Primeira instalação desta versão inicia sem histórico anterior (v3.5 não persistia os dias de overlays).
 
-- Um cartão discreto **somente na Home visível**, nunca sobre a Uber/99, nunca via push ou por AccessibilityService.
-- Não abre Sharesheet nem envia mensagens automaticamente.
-- Ações: Compartilhar, Agora não e Não mostrar novamente (opt-out persistente).
-- Ao sair da Home (Activity ON_PAUSE), o cartão some e o próximo retorno obedece ao cooldown.
-- Abertura do Sharesheet é diferente de mensagem efetivamente enviada.
-
-## Frequência
-
-- Primeiro convite apenas após 2 dias consecutivos confirmados.
-- No máximo duas apresentações em qualquer janela móvel de 30 dias.
-- Depois de aparecer/dispensar: 14 dias de silêncio.
-- Após a segunda dispensa: 60 dias de silêncio.
-- Após tocar Compartilhar no convite: 60 dias de silêncio, mesmo que o Sharesheet seja cancelado.
-- Após Não mostrar novamente: não há reexibição. Compartilhamento voluntário no menu/Home permanece disponível.
-
-## QA
-
-1. Testes unitários: `./gradlew :app:testDebugUnitTest`.
-2. Teste instrumentado de UI: `./gradlew :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=br.com.calcmot.ui.CalcMotGrowthSharingUiTest'`.
-3. Verificar manualmente após **dois dias reais distintos** de ofertas, retornando à Home.
-4. Confirmar que não aparece em Uber, 99, quando a app está em background, nem enquanto a permissão está inativa.
-5. Confirmar fechamento, opt-out e todos os intervalos de silêncio sem mudar o relógio do aparelho de produção.
-6. Revalidar pipeline Uber/99, ANRs e performance antes de release.
-
-**Não alterar o relógio principal do motorista para simular dois dias.** Use testes puros da política ou aparelho/emulador dedicado para validação acelerada.
+## Validação antes de produção
+```powershell
+git pull --ff-only origin feat/growth-organico-v1
+.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug --no-daemon
+.\gradlew.bat :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=br.com.calcmot.ui.CalcMotGrowthSharingUiTest' --no-daemon
+```
+Testar botão inferior em Samsung com fontes maiores, retorno após dois dias reais, cooldowns da política, notificação em segundo ciclo, ausência de notificações quando bloqueadas e regressão Uber/99/ANR.
