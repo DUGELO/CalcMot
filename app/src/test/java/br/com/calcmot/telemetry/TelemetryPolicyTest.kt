@@ -95,10 +95,32 @@ class TelemetryPolicyTest {
                 "ninetynine_ocr_failed",
                 "pipeline_reset",
                 "manual_restart_reading",
-                "paywall_viewed"
+                "paywall_viewed",
+                "share_sheet_opened"
             ),
             AnalyticsEvents.allowed
         )
+    }
+
+    @Test
+    fun `sharing event tracks only allowlisted entry point`() {
+        for (source in listOf("home", "drawer")) {
+            val event = requireNotNull(
+                SafeTelemetryPolicy.sanitizeEvent(
+                    AnalyticsEvents.SHARE_SHEET_OPENED,
+                    mapOf(AnalyticsParams.SOURCE to source)
+                )
+            )
+            assertEquals("share_sheet_opened", event.name)
+            assertEquals(mapOf(AnalyticsParams.SOURCE to source), event.params)
+        }
+        val event = requireNotNull(
+            SafeTelemetryPolicy.sanitizeEvent(
+                AnalyticsEvents.SHARE_SHEET_OPENED,
+                mapOf(AnalyticsParams.SOURCE to "Grupo de motoristas 123")
+            )
+        )
+        assertTrue(event.params.isEmpty())
     }
 
     @Test

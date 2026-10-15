@@ -41,6 +41,7 @@ import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.outlined.TrendingUp
@@ -329,6 +330,7 @@ internal fun AppDrawer(
     onPrivacy: () -> Unit,
     onFeedback: () -> Unit,
     onTools: () -> Unit = {},
+    onShare: () -> Unit = {},
     diagnosticsEnabled: Boolean = false,
     onVersionTap: () -> Unit = {},
     onDiagnostics: () -> Unit = {}
@@ -380,6 +382,13 @@ internal fun AppDrawer(
                     selected = false,
                     testTag = UiTestTags.DRAWER_FINANCE_ITEM,
                     onClick = onGoal
+                )
+                DrawerMenuItem(
+                    text = "Compartilhar CalcMot",
+                    icon = Icons.Outlined.Share,
+                    selected = false,
+                    testTag = UiTestTags.DRAWER_SHARE_ITEM,
+                    onClick = onShare
                 )
                 DrawerMenuItem(
                     text = "Ferramentas",
@@ -628,7 +637,8 @@ internal fun HomeContent(
     onOpenSettings: () -> Unit,
     onOpenHelp: () -> Unit,
     onOpenPrivacy: () -> Unit,
-    onRestartReading: () -> Unit = {}
+    onRestartReading: () -> Unit = {},
+    onShare: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val storedDriverGoal = remember { AppSettings.getDriverGoal(context) }
@@ -656,6 +666,7 @@ internal fun HomeContent(
             onOpenSettings = onOpenSettings,
             onOpenHelp = onOpenHelp,
             onRestartReading = onRestartReading,
+            onShare = onShare,
             goalPerKm = "${driverGoal.minValuePerKm.toGoalMoney()}/km",
             goalPerHour = "${driverGoal.minValuePerHour.toGoalMoneyNoCentsIfRound()}/h"
         )

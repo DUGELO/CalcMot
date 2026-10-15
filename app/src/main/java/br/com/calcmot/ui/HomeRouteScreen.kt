@@ -100,6 +100,7 @@ internal fun HomeScreen(
                 onPrivacy = { closeDrawerAnd(onOpenPrivacy) },
                 onFeedback = { closeDrawerAnd(onOpenFeedback) },
                 onTools = { closeDrawerAnd(onOpenTools) },
+                onShare = { closeDrawerAnd { CalcMotSharing.share(context, "drawer") } },
                 diagnosticsEnabled = diagnosticsEnabled,
                 onVersionTap = ::handleVersionTap,
                 onDiagnostics = { closeDrawerAnd(onOpenDiagnostics) }
@@ -128,6 +129,7 @@ internal fun HomeScreen(
             onOpenSettings = onOpenSettings,
             onOpenHelp = onOpenHelp,
             onOpenPrivacy = onOpenPrivacy,
+            onShare = { CalcMotSharing.share(context, "home") },
             onRestartReading = {
                 val restarted = ReadingPipelineRuntime.manualRestart(context)
                 Toast.makeText(

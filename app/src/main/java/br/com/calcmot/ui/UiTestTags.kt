@@ -28,6 +28,8 @@ object UiTestTags {
     const val DRAWER_HELP_ITEM = "drawer_help_item"
     const val DRAWER_PRIVACY_ITEM = "drawer_privacy_item"
     const val DRAWER_FEEDBACK_ITEM = "drawer_feedback_item"
+    const val DRAWER_SHARE_ITEM = "drawer_share_item"
+    const val HOME_SHARE_BUTTON = "home_share_button"
     const val DRAWER_DIAGNOSTICS_ITEM = "drawer_diagnostics_item"
     const val DIAGNOSTICS_SCREEN = "diagnostics_screen"
     const val RESTART_READING_BUTTON = "restart_reading_button"
