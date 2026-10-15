@@ -69,6 +69,10 @@ fun HomeReadyScreen(
     onOpenHelp: () -> Unit,
     onRestartReading: () -> Unit = {},
     onShare: () -> Unit = {},
+    showGrowthSharePrompt: Boolean = false,
+    onGrowthShare: () -> Unit = {},
+    onGrowthDismiss: () -> Unit = {},
+    onGrowthOptOut: () -> Unit = {},
     modifier: Modifier = Modifier,
     goalPerKm: String = "R$ 1,80/km",
     goalPerHour: String = "R$ 35/h"
@@ -134,6 +138,13 @@ fun HomeReadyScreen(
                         .weight(1f)
                         .testTag(UiTestTags.HOME_SETTINGS_ACTION),
                     onClick = onOpenSettings
+                )
+            }
+            if (showGrowthSharePrompt) {
+                GrowthShareInviteCard(
+                    onShare = onGrowthShare,
+                    onDismiss = onGrowthDismiss,
+                    onOptOut = onGrowthOptOut
                 )
             }
             OutlinedButton(

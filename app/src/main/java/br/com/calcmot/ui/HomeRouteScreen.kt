@@ -5,6 +5,8 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -12,6 +14,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import br.com.calcmot.growth.GrowthShareStore
 import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
 import br.com.calcmot.DriverAppLauncher
@@ -61,12 +67,39 @@ internal fun HomeScreen(
     val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var growthPromptVisible by remember { mutableStateOf(false) }
     var versionTapCount by remember { mutableStateOf(0) }
     var lastVersionTapAt by remember { mutableStateOf(0L) }
     val status = when {
         !permissionState.hasAccessibilityService -> HomeStatus.PERMISSION_PENDING
         monitoringEnabled -> HomeStatus.READY
         else -> HomeStatus.PAUSED
+    }
+
+    fun checkGrowthPrompt() {
+        if (status == HomeStatus.READY && !growthPromptVisible) {
+            growthPromptVisible = GrowthShareStore.claimPrompt(context)
+        }
+    }
+
+    LaunchedEffect(status) {
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            checkGrowthPrompt()
+        } else {
+            growthPromptVisible = false
+        }
+    }
+    DisposableEffect(lifecycleOwner, status) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> checkGrowthPrompt()
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> growthPromptVisible = false
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     fun closeDrawerAnd(action: () -> Unit) {
@@ -130,6 +163,20 @@ internal fun HomeScreen(
             onOpenHelp = onOpenHelp,
             onOpenPrivacy = onOpenPrivacy,
             onShare = { CalcMotSharing.share(context, "home") },
+            showGrowthSharePrompt = growthPromptVisible,
+            onGrowthShare = {
+                growthPromptVisible = false
+                GrowthShareStore.shared(context)
+                CalcMotSharing.share(context, "home")
+            },
+            onGrowthDismiss = {
+                growthPromptVisible = false
+                GrowthShareStore.dismiss(context)
+            },
+            onGrowthOptOut = {
+                growthPromptVisible = false
+                GrowthShareStore.optOut(context)
+            },
             onRestartReading = {
                 val restarted = ReadingPipelineRuntime.manualRestart(context)
                 Toast.makeText(
