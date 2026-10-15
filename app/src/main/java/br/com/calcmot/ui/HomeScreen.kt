@@ -176,7 +176,8 @@ private fun LegacyHomeScreen(
                 onSettings = { navigate(HomeDestination.SETTINGS) },
                 onHelp = { navigate(HomeDestination.HELP) },
                 onPrivacy = { navigate(HomeDestination.PRIVACY) },
-                onFeedback = { navigate(HomeDestination.FEEDBACK) }
+                onFeedback = { navigate(HomeDestination.FEEDBACK) },
+                onShare = { CalcMotSharing.share(context, "drawer") }
             )
         }
     ) {
@@ -226,7 +227,8 @@ private fun LegacyHomeScreen(
                     onEditGoal = { navigate(HomeDestination.FINANCE) },
                     onOpenSettings = { navigate(HomeDestination.SETTINGS) },
                     onOpenHelp = { navigate(HomeDestination.HELP) },
-                    onOpenPrivacy = { navigate(HomeDestination.PRIVACY) }
+                    onOpenPrivacy = { navigate(HomeDestination.PRIVACY) },
+                    onShare = { CalcMotSharing.share(context, "home") }
                 )
 
                 HomeDestination.FINANCE -> FinanceScreen(
@@ -678,6 +680,7 @@ internal fun HomeContent(
         onMenu = onOpenMenu,
         onResume = { onMonitoringChange(true) },
         onOpenSettings = onOpenSettings,
+        onShare = onShare,
         goalPerKm = "${driverGoal.minValuePerKm.toGoalMoney()}/km",
         goalPerHour = "${driverGoal.minValuePerHour.toGoalMoneyNoCentsIfRound()}/h"
     )

@@ -1,0 +1,82 @@
+package br.com.calcmot.ui
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import br.com.calcmot.ui.theme.MetricaTheme
+import org.junit.Assert.assertEquals
+import org.junit.Rule
+import org.junit.Test
+
+/** Isolated Compose checks: tests never open the real Android chooser or send a message. */
+class CalcMotGrowthSharingUiTest {
+    @get:Rule val rule = createComposeRule()
+
+    @Test
+    fun readyHomeNeverSharesUntilVoluntaryTap() {
+        var taps = 0
+        rule.setContent {
+            MetricaTheme {
+                HomeReadyScreen(
+                    onMenu = {},
+                    onOpenUber = {},
+                    onOpen99 = {},
+                    onOpenGoal = {},
+                    onOpenSettings = {},
+                    onOpenHelp = {},
+                    onShare = { taps++ }
+                )
+            }
+        }
+        rule.runOnIdle { assertEquals(0, taps) }
+        rule.onNodeWithTag(UiTestTags.HOME_SHARE_BUTTON)
+            .performScrollTo().assertIsDisplayed().performClick()
+        rule.runOnIdle { assertEquals(1, taps) }
+    }
+
+    @Test
+    fun pausedHomeAllowsVoluntaryShareWithoutResumingMonitoring() {
+        var shares = 0
+        var resumed = 0
+        rule.setContent {
+            MetricaTheme {
+                HomePausedScreen(
+                    onMenu = {},
+                    onResume = { resumed++ },
+                    onOpenSettings = {},
+                    onShare = { shares++ }
+                )
+            }
+        }
+        rule.onNodeWithTag(UiTestTags.HOME_SHARE_BUTTON)
+            .performScrollTo().performClick()
+        rule.runOnIdle {
+            assertEquals(1, shares)
+            assertEquals(0, resumed)
+        }
+    }
+
+    @Test
+    fun drawerHasAnExplicitShareAction() {
+        var taps = 0
+        rule.setContent {
+            MetricaTheme {
+                AppDrawer(
+                    status = HomeStatus.READY,
+                    onHome = {},
+                    onGoal = {},
+                    onSettings = {},
+                    onHelp = {},
+                    onPrivacy = {},
+                    onFeedback = {},
+                    onShare = { taps++ }
+                )
+            }
+        }
+        rule.onNodeWithTag(UiTestTags.DRAWER_SHARE_ITEM)
+            .performScrollTo().performClick()
+        rule.runOnIdle { assertEquals(1, taps) }
+    }
+}
