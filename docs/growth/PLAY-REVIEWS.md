@@ -1,18 +1,22 @@
-# CalcMot — avaliação Google Play sem atrito
+# CalcMot — avaliação Google Play baseada em engajamento
 
-## Implementação
-- **Acesso permanente:** menu lateral > Avaliar CalcMot abre `market://details?id=br.com.calcmot`, com fallback HTTPS. Essa ação não usa a API de avaliações (cota invisível) e funciona para quem procura a avaliação manualmente.
-- **Convite ocasional:** usa `com.google.android.play:review:2.0.2`, API oficial `ReviewManagerFactory`. Sem modal próprio, sem perguntas prévias, sem escolha de estrelas e sem recompensa por avaliação.
-- O Android/Google Play decide se o diálogo nativo aparece. O retorno da API **não confirma** avaliação, nota nem exibição. Não registrar “avaliação enviada”.
-- Requisito: pelo menos **5 dias consecutivos** com overlays de oferta realmente exibidos, conforme `GrowthShareStore.currentStreak`.
-- Dispara exclusivamente na Home pronta/em primeiro plano, sem painel de compartilhamento ou drawer abertos. Na mesma visita, o convite de compartilhamento tem prioridade; não disparar os dois.
-- Persistência local separada `calcmot_play_review_v1`: até 2 tentativas automáticas ao longo da instalação e 120 dias de intervalo entre elas, além da cota interna do Google Play. Sem dados pessoais nem de avaliação.
-- Não pedir notificação, não alterar Accessibility/OCR/overlay/serviço.
-- Não solicitar avaliação apenas a usuários que indiquem gostar do app; não condicionar a ajuda à nota.
+## Funcionalidade
+- **Acesso permanente:** menu lateral > Avaliar CalcMot abre `market://details?id=br.com.calcmot`, com fallback HTTPS. Não consome a cota da API nativa.
+- **Convite orgânico:** `com.google.android.play:review:2.0.2` via `ReviewManagerFactory`, exibido exclusivamente se o Google Play permitir. Sem modal prévio, perguntas sobre satisfação, incentivo por nota ou customização do cartão nativo.
+- Elegibilidade por **ofertas efetivamente exibidas**, não simplesmente por abertura do aplicativo: mínimo **5 dias consecutivos** de uso confirmado; intervalo de **21 dias** entre solicitações. Para engajamento forte (pelo menos **10 dias consecutivos**), intervalo de **14 dias**.
+- **Sem máximo de solicitações por instalação.** Cada nova tentativa exige uso ativo e o período mínimo correspondente. A cota adicional do Google Play permanece independente; intervalos curtos podem não resultar em diálogo visível.
+- **Exclusão mútua:** somente na Home pronta e em primeiro plano; compartilhar tem prioridade. Nunca solicitar sobre Uber/99 ou durante uma oferta.
+- Persistência em `calcmot_play_review_v1`: data da última solicitação e quantidade de chamadas. A contagem é de tentativas, NÃO de avaliações recebidas. Estados antigos com `attempts = 2` não são bloqueados pela nova política.
 
-## Limitações dos testes
-- O APK instalado por `installDebug` pode não mostrar o diálogo do Google Play. Para validar a UI nativa real use uma instalação elegível via Play Store (faixa de teste interno) e sua conta de teste. O `FakeReviewManager` não exibe interface.
-- É possível testar o botão manual no Samsung imediatamente; a abertura de avaliação via Play Store depende da distribuição e das cotas do Google.
-- Testar `:app:testDebugUnitTest`, `:app:assembleDebug`, testes instrumentados de menu e navegação, e regressões de compartilhamento e Uber/99 antes do merge.
+## Avaliações já feitas
+A API pública de In-App Review **não revela** se uma avaliação foi feita, se o cartão apareceu ou que nota foi dada. A arquitetura atual não dispõe desse sinal confiável. Não inferir, não consultar identidade do Google Play e não marcar como "já avaliou" apenas após um callback. O próprio Google Play pode deixar de mostrar o card, conforme sua cota interna.
 
-Referência oficial: https://developer.android.com/guide/playcore/in-app-review/kotlin-java
+## Testes
+```powershell
+git pull --ff-only origin feat/growth-organico-v1
+.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug --no-daemon
+.\gradlew.bat :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=br.com.calcmot.ui.CalcMotGrowthSharingUiTest' --no-daemon
+```
+O APK Debug instalado via ADB pode não exibir a janela oficial. Validar com instalação elegível pela Play Store (teste interno), preservar permissão do usuário para dispensar e nunca reportar "avaliou" quando apenas houve tentativa.
+
+Documentação: https://developer.android.com/guide/playcore/in-app-review
