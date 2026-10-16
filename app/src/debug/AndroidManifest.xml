@@ -3,6 +3,15 @@
 
     <application>
         <activity
+            android:name=".debug.GrowthQaActivity"
+            android:exported="true"
+            android:theme="@style/Theme.CalcMot">
+            <intent-filter>
+                <action android:name="br.com.calcmot.DEBUG_GROWTH_QA" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <activity
             android:name=".debug.PrototypePreviewActivity"
             android:exported="true"
             android:theme="@style/Theme.CalcMot">
