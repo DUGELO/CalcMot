@@ -5,6 +5,8 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -12,6 +14,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import br.com.calcmot.growth.GrowthShareStore
+import br.com.calcmot.growth.GrowthShareNotification
+import br.com.calcmot.growth.GrowthShareSurface
+import br.com.calcmot.growth.PlayReviewStore
+import br.com.calcmot.growth.PlayRatingLauncher
+import br.com.calcmot.MainActivity
 import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
 import br.com.calcmot.DriverAppLauncher
@@ -61,12 +72,106 @@ internal fun HomeScreen(
     val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var growthPromptVisible by remember { mutableStateOf(false) }
+    var reviewRequestRunning by remember { mutableStateOf(false) }
+    var sharePromptClaimedThisVisit by remember { mutableStateOf(false) }
+    var growthPromptProactive by remember { mutableStateOf(false) }
+    var shareStreakDays by remember { mutableStateOf(0) }
+    val notificationRequestPending = GrowthShareInviteRequests.pending.value
+    LaunchedEffect(notificationRequestPending) {
+        if (notificationRequestPending && GrowthShareInviteRequests.consumePending()) {
+            shareStreakDays = GrowthShareStore.currentStreak(context)
+            growthPromptProactive = false
+            growthPromptVisible = true
+        }
+    }
     var versionTapCount by remember { mutableStateOf(0) }
     var lastVersionTapAt by remember { mutableStateOf(0L) }
     val status = when {
         !permissionState.hasAccessibilityService -> HomeStatus.PERMISSION_PENDING
         monitoringEnabled -> HomeStatus.READY
         else -> HomeStatus.PAUSED
+    }
+
+    fun checkGrowthPrompt(): Boolean {
+        if (growthPromptVisible || sharePromptClaimedThisVisit ||
+            GrowthShareInviteRequests.pending.value
+        ) return true
+        if (status != HomeStatus.READY) return false
+        val surface = GrowthShareStore.claimPrompt(context, GrowthShareNotification.canNotify(context))
+        if (surface != null) sharePromptClaimedThisVisit = true
+        when (surface) {
+            GrowthShareSurface.CARD -> {
+                shareStreakDays = GrowthShareStore.currentStreak(context)
+                growthPromptProactive = true
+                growthPromptVisible = true
+            }
+            GrowthShareSurface.NOTIFICATION -> if (!GrowthShareNotification.show(context)) {
+                shareStreakDays = GrowthShareStore.currentStreak(context)
+                growthPromptProactive = true
+                growthPromptVisible = true
+            }
+            null -> Unit
+        }
+        return surface != null
+    }
+
+    fun maybeRequestReview() {
+        if (status != HomeStatus.READY || growthPromptVisible || reviewRequestRunning ||
+            drawerState.currentValue != DrawerValue.Closed
+        ) return
+        // Only the app root may request Play review; never launch it from UI test hosts.
+        val activity = context as? MainActivity ?: return
+        if (!PlayReviewStore.claimAutomaticPrompt(context, GrowthShareStore.currentStreak(context))) return
+        reviewRequestRunning = true
+        PlayRatingLauncher.requestNativeReview(activity) {
+            reviewRequestRunning = false
+        }
+    }
+
+    LaunchedEffect(status) {
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            if (!checkGrowthPrompt()) maybeRequestReview()
+        } else {
+            growthPromptVisible = false
+        }
+    }
+    DisposableEffect(lifecycleOwner, status) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    if (!checkGrowthPrompt()) maybeRequestReview()
+                }
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
+                    growthPromptVisible = false
+                    sharePromptClaimedThisVisit = false
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    fun openShareInvite() {
+        shareStreakDays = GrowthShareStore.currentStreak(context)
+        growthPromptProactive = false
+        growthPromptVisible = true
+    }
+
+    fun dismissShareInvite() {
+        growthPromptVisible = false
+        if (growthPromptProactive) GrowthShareStore.dismiss(context)
+        growthPromptProactive = false
+    }
+
+    fun confirmShareInvite() {
+        growthPromptVisible = false
+        GrowthShareStore.shared(context)
+        GrowthShareNotification.cancel(context)
+        growthPromptProactive = false
+        CalcMotSharing.share(context, "home")
     }
 
     fun closeDrawerAnd(action: () -> Unit) {
@@ -100,6 +205,8 @@ internal fun HomeScreen(
                 onPrivacy = { closeDrawerAnd(onOpenPrivacy) },
                 onFeedback = { closeDrawerAnd(onOpenFeedback) },
                 onTools = { closeDrawerAnd(onOpenTools) },
+                onShare = { closeDrawerAnd(::openShareInvite) },
+                onRate = { closeDrawerAnd { PlayRatingLauncher.openPlayStore(context) } },
                 diagnosticsEnabled = diagnosticsEnabled,
                 onVersionTap = ::handleVersionTap,
                 onDiagnostics = { closeDrawerAnd(onOpenDiagnostics) }
@@ -128,6 +235,7 @@ internal fun HomeScreen(
             onOpenSettings = onOpenSettings,
             onOpenHelp = onOpenHelp,
             onOpenPrivacy = onOpenPrivacy,
+            onShare = ::openShareInvite,
             onRestartReading = {
                 val restarted = ReadingPipelineRuntime.manualRestart(context)
                 Toast.makeText(
@@ -137,5 +245,12 @@ internal fun HomeScreen(
                 ).show()
             }
         )
+        if (growthPromptVisible) {
+            GrowthShareBottomSheet(
+                streakDays = shareStreakDays,
+                onShare = ::confirmShareInvite,
+                onDismiss = ::dismissShareInvite
+            )
+        }
     }
 }

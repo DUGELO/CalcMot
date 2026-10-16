@@ -59,6 +59,7 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
 import br.com.calcmot.ReadingPipelineRuntime
+import br.com.calcmot.growth.GrowthShareStore
 
 open class OverlayManager(private val context: Context) : IOverlayManager {
 
@@ -410,6 +411,7 @@ open class OverlayManager(private val context: Context) : IOverlayManager {
             Log.w("OverlayManager", "CALCMOT_OVERLAY_WINDOW fingerprint=$newFingerprint")
             ReadingPipelineRuntime.markOverlayStatus(ReadingPipelineRuntime.OverlayStatus.WINDOW_ADDED)
             AppDiagnostics.recordStage(context, AppDiagnostics.Stage.OVERLAY_SHOWN)
+            GrowthShareStore.recordOverlayShown(context)
             TelemetryProvider.analytics.track(
                 AnalyticsEvents.OVERLAY_SHOWN,
                 mapOf(

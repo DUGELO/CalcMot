@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -61,6 +62,7 @@ fun HomePausedScreen(
     onMenu: () -> Unit,
     onResume: () -> Unit,
     onOpenSettings: () -> Unit,
+    onShare: () -> Unit = {},
     modifier: Modifier = Modifier,
     goalPerKm: String = "R$ 1,80/km",
     goalPerHour: String = "R$ 35/h"
@@ -125,6 +127,28 @@ fun HomePausedScreen(
                 )
                 Text(
                     text = "Configurações",
+                    modifier = Modifier.padding(start = 10.dp),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            OutlinedButton(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 54.dp)
+                    .testTag(UiTestTags.HOME_SHARE_BUTTON),
+                onClick = onShare,
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, CalcMotColors.BorderSubtle),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = CalcMotColors.BrandSecondary)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Share,
+                    contentDescription = null,
+                    modifier = Modifier.size(23.dp)
+                )
+                Text(
+                    text = "Compartilhar CalcMot",
                     modifier = Modifier.padding(start = 10.dp),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Medium

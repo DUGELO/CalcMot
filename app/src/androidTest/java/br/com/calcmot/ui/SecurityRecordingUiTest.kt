@@ -4,6 +4,8 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
@@ -18,6 +20,34 @@ import org.junit.Test
 class SecurityRecordingUiTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
+
+    @Test
+    fun recordingHeaderUsesGlobalDesignSystemAndBackDoesNotStopCapture() {
+        var backTaps = 0
+        var stopTaps = 0
+        composeRule.setContent {
+            MetricaTheme {
+                SecurityPage("Gravação de segurança", onBack = { backTaps++ }) {
+                    SecurityRecordingActiveContent(
+                        RecordingRuntimeSnapshot(
+                            "session",
+                            RecordingPhase.RECORDING,
+                            2,
+                            audioVideoConfirmed = true
+                        ),
+                        onStop = { stopTaps++ },
+                        onOpenLibrary = {}
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("Gravação de segurança").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Voltar").performClick()
+        composeRule.runOnIdle {
+            org.junit.Assert.assertEquals(1, backTaps)
+            org.junit.Assert.assertEquals(0, stopTaps)
+        }
+    }
 
     @Test
     fun preparingOffersSafeStopWithoutShowingRec() {

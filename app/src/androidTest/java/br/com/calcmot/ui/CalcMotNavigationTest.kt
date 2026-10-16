@@ -117,6 +117,18 @@ class CalcMotNavigationTest {
     }
 
     @Test
+    fun toolsScreenUsesDesignSystemCardAndUpNavigation() {
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_MENU_BUTTON).performClick()
+        composeRule.onNodeWithTag(UiTestTags.DRAWER_SECURITY_ITEM).performClick()
+        composeRule.onNodeWithTag(UiTestTags.SECURITY_TOOLS_SCREEN).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTestTags.SECURITY_TOOLS_RECORDING_ITEM).assertIsDisplayed()
+        composeRule.onNodeWithText("Para sua segurança").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Voltar").performClick()
+        composeRule.onNodeWithTag(UiTestTags.HOME_READY_SCREEN).assertIsDisplayed()
+        assertEquals(CalcMotRoute.HOME, navController.currentDestination?.route)
+    }
+
+    @Test
     fun recordingDiscoveryRequestsIsolatedActivityWithoutOpeningPreview() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val monitor = instrumentation.addMonitor(

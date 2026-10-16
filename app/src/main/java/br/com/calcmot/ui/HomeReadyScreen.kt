@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -67,6 +68,7 @@ fun HomeReadyScreen(
     onOpenSettings: () -> Unit,
     onOpenHelp: () -> Unit,
     onRestartReading: () -> Unit = {},
+    onShare: () -> Unit = {},
     modifier: Modifier = Modifier,
     goalPerKm: String = "R$ 1,80/km",
     goalPerHour: String = "R$ 35/h"
@@ -157,6 +159,14 @@ fun HomeReadyScreen(
                     maxLines = 1
                 )
             }
+            HomeReadySecondaryButton(
+                text = "Compartilhar CalcMot",
+                icon = Icons.Outlined.Share,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(UiTestTags.HOME_SHARE_BUTTON),
+                onClick = onShare
+            )
             OutlinedButton(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -211,26 +221,7 @@ private fun HomeReadyTopBar(onMenu: () -> Unit) {
             )
         }
         Text(
-            text = buildAnnotatedString {
-                withStyle(
-                    SpanStyle(
-                        color = CalcMotColors.TextPrimary,
-                        fontStyle = FontStyle.Italic,
-                        fontWeight = FontWeight.Black
-                    )
-                ) {
-                    append("Calc")
-                }
-                withStyle(
-                    SpanStyle(
-                        color = CalcMotColors.Success,
-                        fontStyle = FontStyle.Italic,
-                        fontWeight = FontWeight.Black
-                    )
-                ) {
-                    append("Mot")
-                }
-            },
+            text = buildAnnotatedString { appendCalcMotWordmark() },
             modifier = Modifier.padding(start = 22.dp),
             color = CalcMotColors.TextPrimary,
             fontSize = 30.sp,

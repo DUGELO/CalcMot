@@ -79,7 +79,7 @@ class InternalScreensVisualTest {
         composeRule.onAllNodesWithTag(UiTestTags.OPEN_UBER_DRIVER_BUTTON).assertCountEquals(1)
         composeRule.onAllNodesWithTag(UiTestTags.OPEN_99_DRIVER_BUTTON).assertCountEquals(1)
         assertNoCommonUserFacingForbiddenTerms()
-        captureScreen("home_ready")
+        captureScreen("home_ready", nodeTag = UiTestTags.HOME_READY_SCREEN)
     }
 
     @Test

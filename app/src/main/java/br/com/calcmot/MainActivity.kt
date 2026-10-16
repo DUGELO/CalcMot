@@ -3,6 +3,9 @@ package br.com.calcmot
 import android.content.ComponentName
 import android.content.Context
 import android.os.Bundle
+import android.content.Intent
+import br.com.calcmot.growth.GrowthShareNotification
+import br.com.calcmot.ui.GrowthShareInviteRequests
 import android.provider.Settings
 import android.text.TextUtils
 import androidx.activity.ComponentActivity
@@ -38,6 +41,20 @@ class MainActivity : ComponentActivity() {
                 CalcMotApp()
             }
         }
+        handleGrowthShareIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleGrowthShareIntent(intent)
+    }
+
+    private fun handleGrowthShareIntent(intent: Intent?) {
+        if (intent?.action != GrowthShareNotification.ACTION_SHARE) return
+        intent.action = Intent.ACTION_MAIN
+        GrowthShareNotification.cancel(this)
+        GrowthShareInviteRequests.request()
     }
 }
 

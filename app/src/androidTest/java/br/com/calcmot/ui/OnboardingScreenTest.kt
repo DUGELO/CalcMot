@@ -3,6 +3,9 @@ package br.com.calcmot.ui
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -46,9 +49,15 @@ class OnboardingScreenTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_PERMISSION_ITEM).assertIsDisplayed()
-        composeRule.onNodeWithText("Permissão de acessibilidade").assertIsDisplayed()
-        composeRule.onNodeWithText("Como o CalcMot usa essa permissão").assertIsDisplayed()
-        composeRule.onNodeWithText("Identifica valor, distância e tempo", substring = true)
+        // HorizontalPager can compose both neighboring pages with the same heading.
+        // Anchor this assertion to the visible permission page rather than matching
+        // an ambiguous title elsewhere in the pager.
+        composeRule.onNode(
+            hasText("Permissão de\nacessibilidade") and
+                hasAnyAncestor(hasTestTag(UiTestTags.ACCESSIBILITY_PERMISSION_ITEM))
+        ).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Como o CalcMot usa essa permissão").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Identifica valor, distância e\ntempo visíveis na oferta")
             .performScrollTo()
             .assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.ONBOARDING_NEXT_BUTTON).assertIsDisplayed()
@@ -92,9 +101,13 @@ class OnboardingScreenTest {
     fun privacyPolicyOpensInsideOnboarding() {
         composeRule.setContent {
             MetricaTheme {
-                OnboardingScreen(
+                // Exercise the real route: OnboardingScreen delegates navigation
+                // through onOpenPrivacy, it does not own the Privacy screen.
+                CalcMotNavHost(
                     permissionState = AppPermissionState(hasAccessibilityService = false),
-                    onPermissionsRefresh = {}
+                    onboardingCompleted = false,
+                    onPermissionsRefresh = {},
+                    onOnboardingCompleted = {}
                 )
             }
         }

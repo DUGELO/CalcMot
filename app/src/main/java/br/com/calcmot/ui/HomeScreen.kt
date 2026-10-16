@@ -41,6 +41,8 @@ import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.outlined.TrendingUp
@@ -175,7 +177,8 @@ private fun LegacyHomeScreen(
                 onSettings = { navigate(HomeDestination.SETTINGS) },
                 onHelp = { navigate(HomeDestination.HELP) },
                 onPrivacy = { navigate(HomeDestination.PRIVACY) },
-                onFeedback = { navigate(HomeDestination.FEEDBACK) }
+                onFeedback = { navigate(HomeDestination.FEEDBACK) },
+                onShare = { CalcMotSharing.share(context, "drawer") }
             )
         }
     ) {
@@ -225,7 +228,8 @@ private fun LegacyHomeScreen(
                     onEditGoal = { navigate(HomeDestination.FINANCE) },
                     onOpenSettings = { navigate(HomeDestination.SETTINGS) },
                     onOpenHelp = { navigate(HomeDestination.HELP) },
-                    onOpenPrivacy = { navigate(HomeDestination.PRIVACY) }
+                    onOpenPrivacy = { navigate(HomeDestination.PRIVACY) },
+                    onShare = { CalcMotSharing.share(context, "home") }
                 )
 
                 HomeDestination.FINANCE -> FinanceScreen(
@@ -329,6 +333,8 @@ internal fun AppDrawer(
     onPrivacy: () -> Unit,
     onFeedback: () -> Unit,
     onTools: () -> Unit = {},
+    onShare: () -> Unit = {},
+    onRate: () -> Unit = {},
     diagnosticsEnabled: Boolean = false,
     onVersionTap: () -> Unit = {},
     onDiagnostics: () -> Unit = {}
@@ -382,6 +388,13 @@ internal fun AppDrawer(
                     onClick = onGoal
                 )
                 DrawerMenuItem(
+                    text = "Compartilhar CalcMot",
+                    icon = Icons.Outlined.Share,
+                    selected = false,
+                    testTag = UiTestTags.DRAWER_SHARE_ITEM,
+                    onClick = onShare
+                )
+                DrawerMenuItem(
                     text = "Ferramentas",
                     icon = Icons.Outlined.Handyman,
                     selected = false,
@@ -417,6 +430,7 @@ internal fun AppDrawer(
             DrawerFooter(
                 selectedFeedback = false,
                 onFeedback = onFeedback,
+                onRate = onRate,
                 diagnosticsEnabled = diagnosticsEnabled,
                 onVersionTap = onVersionTap,
                 onDiagnostics = onDiagnostics
@@ -455,26 +469,7 @@ private fun DrawerHeader() {
 @Composable
 private fun DrawerWordmark(fontSize: Int = 20) {
     Text(
-        text = buildAnnotatedString {
-            withStyle(
-                SpanStyle(
-                    color = CalcMotColors.TextPrimary,
-                    fontStyle = FontStyle.Italic,
-                    fontWeight = FontWeight.Black
-                )
-            ) {
-                append("Calc")
-            }
-            withStyle(
-                SpanStyle(
-                    color = CalcMotColors.Success,
-                    fontStyle = FontStyle.Italic,
-                    fontWeight = FontWeight.Black
-                )
-            ) {
-                append("Mot")
-            }
-        },
+        text = buildAnnotatedString { appendCalcMotWordmark() },
         fontSize = fontSize.sp,
         lineHeight = (fontSize + 2).sp
     )
@@ -580,6 +575,7 @@ private fun DrawerMenuItem(
 private fun DrawerFooter(
     selectedFeedback: Boolean,
     onFeedback: () -> Unit,
+    onRate: () -> Unit,
     diagnosticsEnabled: Boolean,
     onVersionTap: () -> Unit,
     onDiagnostics: () -> Unit
@@ -594,6 +590,13 @@ private fun DrawerFooter(
                 fontSize = 15.sp
             )
         }
+        DrawerMenuItem(
+            text = "Avaliar CalcMot",
+            icon = Icons.Outlined.StarOutline,
+            selected = false,
+            testTag = UiTestTags.DRAWER_RATE_ITEM,
+            onClick = onRate
+        )
         if (diagnosticsEnabled) {
             DrawerMenuItem(
                 text = "Diagnóstico",
@@ -628,7 +631,8 @@ internal fun HomeContent(
     onOpenSettings: () -> Unit,
     onOpenHelp: () -> Unit,
     onOpenPrivacy: () -> Unit,
-    onRestartReading: () -> Unit = {}
+    onRestartReading: () -> Unit = {},
+    onShare: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val storedDriverGoal = remember { AppSettings.getDriverGoal(context) }
@@ -656,6 +660,7 @@ internal fun HomeContent(
             onOpenSettings = onOpenSettings,
             onOpenHelp = onOpenHelp,
             onRestartReading = onRestartReading,
+            onShare = onShare,
             goalPerKm = "${driverGoal.minValuePerKm.toGoalMoney()}/km",
             goalPerHour = "${driverGoal.minValuePerHour.toGoalMoneyNoCentsIfRound()}/h"
         )
@@ -667,6 +672,7 @@ internal fun HomeContent(
         onMenu = onOpenMenu,
         onResume = { onMonitoringChange(true) },
         onOpenSettings = onOpenSettings,
+        onShare = onShare,
         goalPerKm = "${driverGoal.minValuePerKm.toGoalMoney()}/km",
         goalPerHour = "${driverGoal.minValuePerHour.toGoalMoneyNoCentsIfRound()}/h"
     )

@@ -3,6 +3,7 @@ package br.com.calcmot.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.core.app.ActivityOptionsCompat
 import android.widget.Toast
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -268,7 +269,17 @@ fun CalcMotNavHost(
         composable(CalcMotRoute.SECURITY_TOOLS) {
             br.com.calcmot.securityrecording.ui.SecurityToolsRoute(
                 onBack = { navController.popBackStack() },
-                onOpenHub = { context.startActivity(android.content.Intent(context, br.com.calcmot.securityrecording.ui.SecurityRecordingActivity::class.java)) }
+                onOpenHub = {
+                    // Match the main NavHost's no-animation transitions while retaining
+                    // the isolated Activity and camera/recording lifecycle.
+                    val intent = android.content.Intent(
+                        context, br.com.calcmot.securityrecording.ui.SecurityRecordingActivity::class.java
+                    )
+                    context.startActivity(
+                        intent,
+                        ActivityOptionsCompat.makeCustomAnimation(context, 0, 0).toBundle()
+                    )
+                }
             )
         }
 

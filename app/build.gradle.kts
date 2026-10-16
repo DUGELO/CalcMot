@@ -40,8 +40,8 @@ android {
         applicationId = "br.com.calcmot"
         minSdk = 24
         targetSdk = 36
-        versionCode = 12
-        versionName = "3.5"
+        versionCode = 13
+        versionName = "3.6"
         buildConfigField("String", "CLARITY_PROJECT_ID", "\"$clarityProjectId\"")
 
         if (buildsAppBundle) {
@@ -112,6 +112,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
     implementation("com.microsoft.clarity:clarity-compose:3.10.0")
+    implementation("com.google.android.play:review:2.0.2")
     implementation("androidx.camera:camera-core:1.6.1")
     implementation("androidx.camera:camera-camera2:1.6.1")
     implementation("androidx.camera:camera-lifecycle:1.6.1")
@@ -141,7 +142,6 @@ dependencies {
     implementation("com.google.firebase:firebase-crashlytics")
 
     testImplementation(libs.junit)
-    androidTestImplementation("androidx.room:room-testing:2.8.4")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -155,3 +155,4 @@ dependencies {
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
+

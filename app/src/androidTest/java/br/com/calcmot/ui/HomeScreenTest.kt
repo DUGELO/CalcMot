@@ -63,7 +63,7 @@ class HomeScreenTest {
         composeRule.onNodeWithText("Abrir 99").assertIsDisplayed()
         composeRule.onNodeWithText("Meta atual").assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.HOME_GOAL_ACTION).assertIsDisplayed()
-        composeRule.onNodeWithText("Como funciona").assertIsDisplayed()
+        composeRule.onNodeWithText("Como funciona").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.HOME_SETTINGS_ACTION).assertIsDisplayed()
         composeRule.onAllNodesWithTag(UiTestTags.HOME_HERO_CARD).assertCountEquals(1)
         composeRule.onAllNodesWithTag(UiTestTags.HOME_GOAL_CARD).assertCountEquals(1)

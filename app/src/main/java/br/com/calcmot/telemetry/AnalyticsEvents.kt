@@ -16,6 +16,7 @@ object AnalyticsEvents {
     const val PIPELINE_RESET = "pipeline_reset"
     const val MANUAL_RESTART_READING = "manual_restart_reading"
     const val PAYWALL_VIEWED = "paywall_viewed"
+    const val SHARE_SHEET_OPENED = "share_sheet_opened"
 
     internal val allowed = setOf(
         PLATFORM_SELECTED,
@@ -32,6 +33,7 @@ object AnalyticsEvents {
         NINETY_NINE_OCR_FAILED,
         PIPELINE_RESET,
         MANUAL_RESTART_READING,
-        PAYWALL_VIEWED
+        PAYWALL_VIEWED,
+        SHARE_SHEET_OPENED
     )
 }

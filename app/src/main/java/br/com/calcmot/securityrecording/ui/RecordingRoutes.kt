@@ -48,6 +48,7 @@ class SecurityRecordingActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        useCalcMotNavigationTransitions()
         ClarityIntegration.initialize(applicationContext)
         requestedSession = intent.getStringExtra(EXTRA_OPEN_SESSION)
         setContent { MetricaTheme { RecordingExperience({ finish() }, requestedSession, requestRevision) } }
@@ -56,6 +57,21 @@ class SecurityRecordingActivity : ComponentActivity() {
         super.onNewIntent(intent); setIntent(intent); requestRevision++
         requestedSession = intent.getStringExtra(EXTRA_OPEN_SESSION)
     }
+    /**
+     * Main CalcMot NavHost has EnterTransition.None/ExitTransition.None. Keep that
+     * visual behavior in this isolated capture Activity without changing its
+     * NavHost, Media3 players, CameraX owners or RecordingSessionService.
+     */
+    private fun useCalcMotNavigationTransitions() {
+        if (Build.VERSION.SDK_INT >= 34) {
+            overrideActivityTransition(OVERRIDE_TRANSITION_OPEN, 0, 0)
+            overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, 0, 0)
+        } else {
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
+        }
+    }
+
     companion object { const val EXTRA_OPEN_SESSION = "securityrecording.open_session" }
 }
 
@@ -144,7 +160,7 @@ private fun RecordingMainRoute(onBack: () -> Unit, prefs: RecordingPreferences?,
         resultSession = snapshot.sessionId?.let { RecordingFilesRepository(context).session(it) }
         if (snapshot.phase != RecordingPhase.IDLE) starting = false
     }
-    RecordingScaffold("Gravação", onBack = {
+    RecordingScaffold("Gravação de segurança", onBack = {
         if (active) Toast.makeText(context, "Controle a gravação pela notificação do CalcMot.", Toast.LENGTH_LONG).show()
         onBack()
     }, accessibleTitle = "Gravação de segurança", modifier = Modifier.testTag(UiTestTags.SECURITY_RECORDING_HUB_SCREEN),

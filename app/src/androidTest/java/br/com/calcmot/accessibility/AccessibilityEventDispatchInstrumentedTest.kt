@@ -38,6 +38,13 @@ class AccessibilityEventDispatchInstrumentedTest {
             val field = UberAccessibilityService::class.java.getDeclaredField("accessibilityEvents")
             field.isAccessible = true
             field.set(service, queue)
+            // The framework normally marks the service ready on connection.
+            // This standalone unit-like instrumentation bypasses connection,
+            // so explicitly enable only the dispatch gate.
+            UberAccessibilityService::class.java.getDeclaredField("runtimeReady").apply {
+                isAccessible = true
+                setBoolean(service, true)
+            }
         }
         fun submit(packageName: String, text: String) {
             instrumentation.runOnMainSync {

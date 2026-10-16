@@ -8,6 +8,7 @@ internal object SafeTelemetryPolicy {
     private val platforms = setOf("uber", "99", "unknown")
     private val sources = setOf(
         "home",
+        "drawer",
         "system",
         "accessibility_service",
         "accessibility_tree",
