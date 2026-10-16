@@ -18,7 +18,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class GrowthSharePersistenceInstrumentedTest {
     @Test
-    fun `background worker durably stores consecutive days in Android preferences`() = runBlocking {
+    fun backgroundWorkerDurablyStoresConsecutiveDaysInAndroidPreferences() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val prefs = context.getSharedPreferences(
             "calcmot_growth_async_instrumentation_test", Context.MODE_PRIVATE
