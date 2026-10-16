@@ -93,6 +93,23 @@ class CalcMotGrowthSharingUiTest {
     }
 
     @Test
+    fun drawerAllowsManualPlayStoreRating() {
+        var rateTaps = 0
+        rule.setContent {
+            MetricaTheme {
+                AppDrawer(
+                    status = HomeStatus.READY,
+                    onHome = {}, onGoal = {}, onSettings = {}, onHelp = {},
+                    onPrivacy = {}, onFeedback = {},
+                    onRate = { rateTaps++ }
+                )
+            }
+        }
+        rule.onNodeWithTag(UiTestTags.DRAWER_RATE_ITEM).performScrollTo().performClick()
+        rule.runOnIdle { assertEquals(1, rateTaps) }
+    }
+
+    @Test
     fun drawerHasAnExplicitShareAction() {
         var taps = 0
         rule.setContent {

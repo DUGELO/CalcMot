@@ -112,6 +112,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
     implementation("com.microsoft.clarity:clarity-compose:3.10.0")
+    implementation("com.google.android.play:review:2.0.2")
     implementation("androidx.camera:camera-core:1.6.1")
     implementation("androidx.camera:camera-camera2:1.6.1")
     implementation("androidx.camera:camera-lifecycle:1.6.1")

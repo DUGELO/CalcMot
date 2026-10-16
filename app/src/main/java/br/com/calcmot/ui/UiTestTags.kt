@@ -29,6 +29,7 @@ object UiTestTags {
     const val DRAWER_PRIVACY_ITEM = "drawer_privacy_item"
     const val DRAWER_FEEDBACK_ITEM = "drawer_feedback_item"
     const val DRAWER_SHARE_ITEM = "drawer_share_item"
+    const val DRAWER_RATE_ITEM = "drawer_rate_item"
     const val HOME_SHARE_BUTTON = "home_share_button"
     const val GROWTH_SHARE_PROMPT = "growth_share_prompt"
     const val GROWTH_SHARE_ART = "growth_share_art"

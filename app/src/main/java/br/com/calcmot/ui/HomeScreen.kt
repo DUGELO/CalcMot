@@ -42,6 +42,7 @@ import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.outlined.TrendingUp
@@ -333,6 +334,7 @@ internal fun AppDrawer(
     onFeedback: () -> Unit,
     onTools: () -> Unit = {},
     onShare: () -> Unit = {},
+    onRate: () -> Unit = {},
     diagnosticsEnabled: Boolean = false,
     onVersionTap: () -> Unit = {},
     onDiagnostics: () -> Unit = {}
@@ -391,6 +393,13 @@ internal fun AppDrawer(
                     selected = false,
                     testTag = UiTestTags.DRAWER_SHARE_ITEM,
                     onClick = onShare
+                )
+                DrawerMenuItem(
+                    text = "Avaliar CalcMot",
+                    icon = Icons.Outlined.StarOutline,
+                    selected = false,
+                    testTag = UiTestTags.DRAWER_RATE_ITEM,
+                    onClick = onRate
                 )
                 DrawerMenuItem(
                     text = "Ferramentas",

@@ -20,6 +20,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import br.com.calcmot.growth.GrowthShareStore
 import br.com.calcmot.growth.GrowthShareNotification
 import br.com.calcmot.growth.GrowthShareSurface
+import br.com.calcmot.growth.PlayReviewStore
+import br.com.calcmot.growth.PlayRatingLauncher
+import android.app.Activity
 import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
 import br.com.calcmot.DriverAppLauncher
@@ -71,6 +74,7 @@ internal fun HomeScreen(
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     var growthPromptVisible by remember { mutableStateOf(false) }
+    var reviewRequestRunning by remember { mutableStateOf(false) }
     var growthPromptProactive by remember { mutableStateOf(false) }
     var shareStreakDays by remember { mutableStateOf(0) }
     val notificationRequest = GrowthShareInviteRequests.requests.value
@@ -109,6 +113,18 @@ internal fun HomeScreen(
         }
     }
 
+    fun maybeRequestReview() {
+        if (status != HomeStatus.READY || growthPromptVisible || reviewRequestRunning ||
+            drawerState.currentValue != DrawerValue.Closed
+        ) return
+        val activity = context as? Activity ?: return
+        if (!PlayReviewStore.claimAutomaticPrompt(context, GrowthShareStore.currentStreak(context))) return
+        reviewRequestRunning = true
+        PlayRatingLauncher.requestNativeReview(activity) {
+            reviewRequestRunning = false
+        }
+    }
+
     LaunchedEffect(status) {
         if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
             checkGrowthPrompt()
@@ -119,7 +135,10 @@ internal fun HomeScreen(
     DisposableEffect(lifecycleOwner, status) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> checkGrowthPrompt()
+                Lifecycle.Event.ON_RESUME -> {
+                    checkGrowthPrompt()
+                    if (!growthPromptVisible) maybeRequestReview()
+                }
                 Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> growthPromptVisible = false
                 else -> Unit
             }
@@ -180,6 +199,7 @@ internal fun HomeScreen(
                 onFeedback = { closeDrawerAnd(onOpenFeedback) },
                 onTools = { closeDrawerAnd(onOpenTools) },
                 onShare = { closeDrawerAnd(::openShareInvite) },
+                onRate = { closeDrawerAnd { PlayRatingLauncher.openPlayStore(context) } },
                 diagnosticsEnabled = diagnosticsEnabled,
                 onVersionTap = ::handleVersionTap,
                 onDiagnostics = { closeDrawerAnd(onOpenDiagnostics) }
