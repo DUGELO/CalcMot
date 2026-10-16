@@ -29,10 +29,17 @@ jobs:
           java-version: '21'
       - name: Configure Gradle
         uses: gradle/actions/setup-gradle@v4
-      - name: Configure Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Install Android API 36
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Android SDK home: ${ANDROID_HOME:?ANDROID_HOME must be set by the runner}"
+          SDKMANAGER="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          fi
+          test -n "$SDKMANAGER" && test -x "$SDKMANAGER"
+          "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0"
       - name: Validate unit tests and Debug APK
         run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
       - name: Upload unit test reports
