@@ -71,6 +71,18 @@ internal fun HomeScreen(
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     var growthPromptVisible by remember { mutableStateOf(false) }
+    var growthPromptProactive by remember { mutableStateOf(false) }
+    var shareStreakDays by remember { mutableStateOf(0) }
+    val notificationRequest = GrowthShareInviteRequests.requests.value
+    var handledNotificationRequest by remember { mutableStateOf(0) }
+    LaunchedEffect(notificationRequest) {
+        if (notificationRequest > handledNotificationRequest) {
+            handledNotificationRequest = notificationRequest
+            shareStreakDays = GrowthShareStore.currentStreak(context)
+            growthPromptProactive = false
+            growthPromptVisible = true
+        }
+    }
     var versionTapCount by remember { mutableStateOf(0) }
     var lastVersionTapAt by remember { mutableStateOf(0L) }
     val status = when {
@@ -82,8 +94,14 @@ internal fun HomeScreen(
     fun checkGrowthPrompt() {
         if (status == HomeStatus.READY && !growthPromptVisible) {
             when (GrowthShareStore.claimPrompt(context, GrowthShareNotification.canNotify(context))) {
-                GrowthShareSurface.CARD -> growthPromptVisible = true
+                GrowthShareSurface.CARD -> {
+                    shareStreakDays = GrowthShareStore.currentStreak(context)
+                    growthPromptProactive = true
+                    growthPromptVisible = true
+                }
                 GrowthShareSurface.NOTIFICATION -> if (!GrowthShareNotification.show(context)) {
+                    shareStreakDays = GrowthShareStore.currentStreak(context)
+                    growthPromptProactive = true
                     growthPromptVisible = true
                 }
                 null -> Unit
@@ -108,6 +126,26 @@ internal fun HomeScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    fun openShareInvite() {
+        shareStreakDays = GrowthShareStore.currentStreak(context)
+        growthPromptProactive = false
+        growthPromptVisible = true
+    }
+
+    fun dismissShareInvite() {
+        growthPromptVisible = false
+        if (growthPromptProactive) GrowthShareStore.dismiss(context)
+        growthPromptProactive = false
+    }
+
+    fun confirmShareInvite() {
+        growthPromptVisible = false
+        GrowthShareStore.shared(context)
+        GrowthShareNotification.cancel(context)
+        growthPromptProactive = false
+        CalcMotSharing.share(context, "home")
     }
 
     fun closeDrawerAnd(action: () -> Unit) {
@@ -141,7 +179,7 @@ internal fun HomeScreen(
                 onPrivacy = { closeDrawerAnd(onOpenPrivacy) },
                 onFeedback = { closeDrawerAnd(onOpenFeedback) },
                 onTools = { closeDrawerAnd(onOpenTools) },
-                onShare = { closeDrawerAnd { CalcMotSharing.share(context, "drawer") } },
+                onShare = { closeDrawerAnd(::openShareInvite) },
                 diagnosticsEnabled = diagnosticsEnabled,
                 onVersionTap = ::handleVersionTap,
                 onDiagnostics = { closeDrawerAnd(onOpenDiagnostics) }
@@ -170,18 +208,7 @@ internal fun HomeScreen(
             onOpenSettings = onOpenSettings,
             onOpenHelp = onOpenHelp,
             onOpenPrivacy = onOpenPrivacy,
-            onShare = { CalcMotSharing.share(context, "home") },
-            showGrowthSharePrompt = growthPromptVisible,
-            onGrowthShare = {
-                growthPromptVisible = false
-                GrowthShareStore.shared(context)
-                GrowthShareNotification.cancel(context)
-                CalcMotSharing.share(context, "home")
-            },
-            onGrowthDismiss = {
-                growthPromptVisible = false
-                GrowthShareStore.dismiss(context)
-            },
+            onShare = ::openShareInvite,
             onRestartReading = {
                 val restarted = ReadingPipelineRuntime.manualRestart(context)
                 Toast.makeText(
@@ -191,5 +218,12 @@ internal fun HomeScreen(
                 ).show()
             }
         )
+        if (growthPromptVisible) {
+            GrowthShareBottomSheet(
+                streakDays = shareStreakDays,
+                onShare = ::confirmShareInvite,
+                onDismiss = ::dismissShareInvite
+            )
+        }
     }
 }

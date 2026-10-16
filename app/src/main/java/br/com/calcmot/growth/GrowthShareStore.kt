@@ -42,6 +42,15 @@ internal object GrowthShareStore {
     }
 
     @Synchronized
+    fun currentStreak(context: Context): Int {
+        val now = System.currentTimeMillis()
+        return GrowthSharePolicy.visibleStreak(
+            read(context.applicationContext),
+            GrowthSharePolicy.localDay(now)
+        )
+    }
+
+    @Synchronized
     fun dismiss(context: Context) = change(context) {
         GrowthSharePolicy.dismissed(it, System.currentTimeMillis())
     }

@@ -59,6 +59,40 @@ class CalcMotGrowthSharingUiTest {
     }
 
     @Test
+    fun shareSheetShowsDynamicStreakAndAllowsDismissal() {
+        var shares = 0
+        var dismissals = 0
+        rule.setContent {
+            MetricaTheme {
+                GrowthShareBottomSheet(
+                    streakDays = 8,
+                    onShare = { shares++ },
+                    onDismiss = { dismissals++ }
+                )
+            }
+        }
+        rule.onNodeWithTag(UiTestTags.GROWTH_SHARE_STREAK).assertIsDisplayed()
+        rule.onNodeWithTag(UiTestTags.GROWTH_SHARE_PROMPT_DISMISS).performClick()
+        rule.runOnIdle {
+            assertEquals(0, shares)
+            assertEquals(1, dismissals)
+        }
+    }
+
+    @Test
+    fun shareSheetPrimaryActionRequiresTap() {
+        var shares = 0
+        rule.setContent {
+            MetricaTheme {
+                GrowthShareBottomSheet(streakDays = 2, onShare = { shares++ }, onDismiss = {})
+            }
+        }
+        rule.runOnIdle { assertEquals(0, shares) }
+        rule.onNodeWithTag(UiTestTags.GROWTH_SHARE_PROMPT_ACTION).performClick()
+        rule.runOnIdle { assertEquals(1, shares) }
+    }
+
+    @Test
     fun drawerHasAnExplicitShareAction() {
         var taps = 0
         rule.setContent {

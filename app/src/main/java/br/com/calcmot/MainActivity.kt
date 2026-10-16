@@ -5,8 +5,7 @@ import android.content.Context
 import android.os.Bundle
 import android.content.Intent
 import br.com.calcmot.growth.GrowthShareNotification
-import br.com.calcmot.growth.GrowthShareStore
-import br.com.calcmot.ui.CalcMotSharing
+import br.com.calcmot.ui.GrowthShareInviteRequests
 import android.provider.Settings
 import android.text.TextUtils
 import androidx.activity.ComponentActivity
@@ -55,8 +54,7 @@ class MainActivity : ComponentActivity() {
         if (intent?.action != GrowthShareNotification.ACTION_SHARE) return
         intent.action = Intent.ACTION_MAIN
         GrowthShareNotification.cancel(this)
-        GrowthShareStore.shared(this)
-        CalcMotSharing.share(this, "home")
+        GrowthShareInviteRequests.request()
     }
 }
 

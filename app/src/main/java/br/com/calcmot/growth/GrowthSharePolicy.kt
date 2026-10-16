@@ -30,9 +30,11 @@ internal object GrowthSharePolicy {
         else -> state.copy(lastUsageDay = today, consecutiveDays = 1)
     }
 
+    fun visibleStreak(state: GrowthShareState, today: Long): Int =
+        if (state.lastUsageDay in (today - 1L)..today) state.consecutiveDays else 0
+
     fun eligible(state: GrowthShareState, nowMillis: Long, today: Long): Boolean {
-        if (state.consecutiveDays < 2) return false
-        if (state.lastUsageDay !in (today - 1L)..today) return false
+        if (visibleStreak(state, today) < 2) return false
         if (nowMillis < state.quietUntil) return false
         // At most two prompts in any rolling 30-day window.
         if (state.previousPromptAt > 0L && nowMillis >= state.previousPromptAt &&

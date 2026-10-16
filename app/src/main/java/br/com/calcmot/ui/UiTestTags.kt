@@ -31,6 +31,8 @@ object UiTestTags {
     const val DRAWER_SHARE_ITEM = "drawer_share_item"
     const val HOME_SHARE_BUTTON = "home_share_button"
     const val GROWTH_SHARE_PROMPT = "growth_share_prompt"
+    const val GROWTH_SHARE_PROMPT_CLOSE = "growth_share_prompt_close"
+    const val GROWTH_SHARE_STREAK = "growth_share_streak"
     const val GROWTH_SHARE_PROMPT_ACTION = "growth_share_prompt_action"
     const val GROWTH_SHARE_PROMPT_DISMISS = "growth_share_prompt_dismiss"
     const val DRAWER_DIAGNOSTICS_ITEM = "drawer_diagnostics_item"

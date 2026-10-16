@@ -640,10 +640,7 @@ internal fun HomeContent(
     onOpenHelp: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onRestartReading: () -> Unit = {},
-    onShare: () -> Unit = {},
-    showGrowthSharePrompt: Boolean = false,
-    onGrowthShare: () -> Unit = {},
-    onGrowthDismiss: () -> Unit = {}
+    onShare: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val storedDriverGoal = remember { AppSettings.getDriverGoal(context) }
@@ -672,9 +669,6 @@ internal fun HomeContent(
             onOpenHelp = onOpenHelp,
             onRestartReading = onRestartReading,
             onShare = onShare,
-            showGrowthSharePrompt = showGrowthSharePrompt,
-            onGrowthShare = onGrowthShare,
-            onGrowthDismiss = onGrowthDismiss,
             goalPerKm = "${driverGoal.minValuePerKm.toGoalMoney()}/km",
             goalPerHour = "${driverGoal.minValuePerHour.toGoalMoneyNoCentsIfRound()}/h"
         )
