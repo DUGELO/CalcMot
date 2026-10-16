@@ -3,6 +3,10 @@ package br.com.calcmot.ui
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -46,7 +50,13 @@ class OnboardingScreenTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_PERMISSION_ITEM).assertIsDisplayed()
-        composeRule.onNodeWithText("Permissão de\nacessibilidade").performScrollTo().assertIsDisplayed()
+        // HorizontalPager can compose both neighboring pages with the same heading.
+        // Anchor this assertion to the visible permission page rather than matching
+        // an ambiguous title elsewhere in the pager.
+        composeRule.onNode(
+            hasText("Permissão de\nacessibilidade") and
+                hasAnyAncestor(hasTestTag(UiTestTags.ACCESSIBILITY_PERMISSION_ITEM))
+        ).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Como o CalcMot usa essa permissão").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Identifica valor, distância e tempo", substring = true)
             .performScrollTo()
