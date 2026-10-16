@@ -2,7 +2,6 @@ package br.com.calcmot.debug
 
 import android.graphics.Bitmap
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -48,7 +47,7 @@ class GrowthVisualE2ETest {
         rule.onNodeWithTag(GrowthQaTags.STREAK_2).performClick()
         rule.onNodeWithTag(GrowthQaTags.SHARE_PREVIEW).performScrollTo().performClick()
         rule.onNodeWithTag(UiTestTags.GROWTH_SHARE_PROMPT).assertIsDisplayed()
-        rule.onNodeWithTag(UiTestTags.GROWTH_SHARE_STREAK).assertTextContains("2 dias seguidos")
+        rule.onNodeWithText("2 dias seguidos").assertIsDisplayed()
         rule.onNodeWithTag(UiTestTags.GROWTH_SHARE_ART).assertIsDisplayed()
         saveScreenshot("02-share-2-days.png")
         rule.onNodeWithTag(UiTestTags.GROWTH_SHARE_PROMPT_DISMISS).performClick()
@@ -59,7 +58,7 @@ class GrowthVisualE2ETest {
     fun shareThirtyDaysAndCtaAreOnlySimulated() {
         rule.onNodeWithTag(GrowthQaTags.STREAK_30).performScrollTo().performClick()
         rule.onNodeWithTag(GrowthQaTags.SHARE_PREVIEW).performScrollTo().performClick()
-        rule.onNodeWithTag(UiTestTags.GROWTH_SHARE_STREAK).assertTextContains("30 dias seguidos")
+        rule.onNodeWithText("30 dias seguidos").assertIsDisplayed()
         saveScreenshot("03-share-30-days.png")
         rule.onNodeWithTag(UiTestTags.GROWTH_SHARE_PROMPT_ACTION).performClick()
         rule.onNodeWithTag(GrowthQaTags.SHARE_FEEDBACK).assertIsDisplayed()

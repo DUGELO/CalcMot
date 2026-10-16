@@ -46,8 +46,8 @@ class OnboardingScreenTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag(UiTestTags.ACCESSIBILITY_PERMISSION_ITEM).assertIsDisplayed()
-        composeRule.onNodeWithText("Permissão de acessibilidade").assertIsDisplayed()
-        composeRule.onNodeWithText("Como o CalcMot usa essa permissão").assertIsDisplayed()
+        composeRule.onNodeWithText("Permissão de\nacessibilidade").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Como o CalcMot usa essa permissão").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Identifica valor, distância e tempo", substring = true)
             .performScrollTo()
             .assertIsDisplayed()
@@ -92,9 +92,13 @@ class OnboardingScreenTest {
     fun privacyPolicyOpensInsideOnboarding() {
         composeRule.setContent {
             MetricaTheme {
-                OnboardingScreen(
+                // Exercise the real route: OnboardingScreen delegates navigation
+                // through onOpenPrivacy, it does not own the Privacy screen.
+                CalcMotNavHost(
                     permissionState = AppPermissionState(hasAccessibilityService = false),
-                    onPermissionsRefresh = {}
+                    onboardingCompleted = false,
+                    onPermissionsRefresh = {},
+                    onOnboardingCompleted = {}
                 )
             }
         }

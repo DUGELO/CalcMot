@@ -22,7 +22,7 @@ import br.com.calcmot.growth.GrowthShareNotification
 import br.com.calcmot.growth.GrowthShareSurface
 import br.com.calcmot.growth.PlayReviewStore
 import br.com.calcmot.growth.PlayRatingLauncher
-import android.app.Activity
+import br.com.calcmot.MainActivity
 import br.com.calcmot.AppPermissionState
 import br.com.calcmot.AppSettings
 import br.com.calcmot.DriverAppLauncher
@@ -121,7 +121,8 @@ internal fun HomeScreen(
         if (status != HomeStatus.READY || growthPromptVisible || reviewRequestRunning ||
             drawerState.currentValue != DrawerValue.Closed
         ) return
-        val activity = context as? Activity ?: return
+        // Only the app root may request Play review; never launch it from UI test hosts.
+        val activity = context as? MainActivity ?: return
         if (!PlayReviewStore.claimAutomaticPrompt(context, GrowthShareStore.currentStreak(context))) return
         reviewRequestRunning = true
         PlayRatingLauncher.requestNativeReview(activity) {

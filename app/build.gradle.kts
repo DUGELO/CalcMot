@@ -142,7 +142,11 @@ dependencies {
     implementation("com.google.firebase:firebase-crashlytics")
 
     testImplementation(libs.junit)
+    // Room 2.8.4's generated migration serializers use the 1.7.x ABI.
+    // Keep this pin limited to tests: release/runtime dependencies are untouched.
     androidTestImplementation("androidx.room:room-testing:2.8.4")
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.7.3")
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -155,4 +159,16 @@ dependencies {
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+
+configurations.configureEach {
+    if (name.endsWith("AndroidTestRuntimeClasspath")) {
+        // Avoid AbstractMethodError in Room MigrationTestHelper's bundled serializers.
+        // Scope strictly to instrumented tests, not production.
+        resolutionStrategy.force(
+            "org.jetbrains.kotlinx:kotlinx-serialization-core:1.7.3",
+            "org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3"
+        )
+    }
 }
