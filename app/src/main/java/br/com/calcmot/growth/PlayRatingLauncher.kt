@@ -17,17 +17,27 @@ internal object PlayRatingLauncher {
     private const val WEB_URL = "https://play.google.com/store/apps/details?id=$STORE_PACKAGE"
 
     fun requestNativeReview(activity: Activity, onFinished: () -> Unit) {
-        val manager = ReviewManagerFactory.create(activity)
-        manager.requestReviewFlow().addOnCompleteListener { request ->
-            if (!request.isSuccessful || activity.isFinishing || activity.isDestroyed) {
-                onFinished()
-                return@addOnCompleteListener
-            }
-            manager.launchReviewFlow(activity, request.result)
-                .addOnCompleteListener {
-                    // Google does not report whether the dialog was shown or a rating submitted.
+        // Play Core can be missing/unavailable on some Android distributions.
+        // Neither a failed request nor a suppressed dialog may break the Home screen.
+        try {
+            val manager = ReviewManagerFactory.create(activity)
+            manager.requestReviewFlow().addOnCompleteListener { request ->
+                if (!request.isSuccessful || activity.isFinishing || activity.isDestroyed) {
+                    onFinished()
+                    return@addOnCompleteListener
+                }
+                try {
+                    manager.launchReviewFlow(activity, request.result)
+                        .addOnCompleteListener {
+                            // Not proof that the dialog appeared or a review was submitted.
+                            onFinished()
+                        }
+                } catch (_: RuntimeException) {
                     onFinished()
                 }
+            }
+        } catch (_: RuntimeException) {
+            onFinished()
         }
     }
 

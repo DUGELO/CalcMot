@@ -78,11 +78,9 @@ internal fun HomeScreen(
     var sharePromptClaimedThisVisit by remember { mutableStateOf(false) }
     var growthPromptProactive by remember { mutableStateOf(false) }
     var shareStreakDays by remember { mutableStateOf(0) }
-    val notificationRequest = GrowthShareInviteRequests.requests.value
-    var handledNotificationRequest by remember { mutableStateOf(0) }
-    LaunchedEffect(notificationRequest) {
-        if (notificationRequest > handledNotificationRequest) {
-            handledNotificationRequest = notificationRequest
+    val notificationRequestPending = GrowthShareInviteRequests.pending.value
+    LaunchedEffect(notificationRequestPending) {
+        if (notificationRequestPending && GrowthShareInviteRequests.consumePending()) {
             shareStreakDays = GrowthShareStore.currentStreak(context)
             growthPromptProactive = false
             growthPromptVisible = true
@@ -97,7 +95,9 @@ internal fun HomeScreen(
     }
 
     fun checkGrowthPrompt(): Boolean {
-        if (growthPromptVisible || sharePromptClaimedThisVisit) return true
+        if (growthPromptVisible || sharePromptClaimedThisVisit ||
+            GrowthShareInviteRequests.pending.value
+        ) return true
         if (status != HomeStatus.READY) return false
         val surface = GrowthShareStore.claimPrompt(context, GrowthShareNotification.canNotify(context))
         if (surface != null) sharePromptClaimedThisVisit = true

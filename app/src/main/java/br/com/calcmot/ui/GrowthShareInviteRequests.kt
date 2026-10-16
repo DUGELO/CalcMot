@@ -1,12 +1,23 @@
 package br.com.calcmot.ui
 
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 
-/** Consumed only while the home route is visible; a notification never starts a share by itself. */
+/**
+ * A one-shot signal from a user-tapped sharing notification.
+ * Never replays an already consumed action when the Home is recomposed or recreated.
+ * Multiple taps before the Home is visible are intentionally coalesced into one invite.
+ */
 internal object GrowthShareInviteRequests {
-    val requests: MutableState<Int> = mutableIntStateOf(0)
+    val pending: MutableState<Boolean> = mutableStateOf(false)
+
     fun request() {
-        requests.value += 1
+        pending.value = true
+    }
+
+    fun consumePending(): Boolean {
+        if (!pending.value) return false
+        pending.value = false
+        return true
     }
 }
