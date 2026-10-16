@@ -2,6 +2,7 @@ package br.com.calcmot.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,7 +11,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -19,8 +19,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Forum
-import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -33,10 +31,12 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import br.com.calcmot.R
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -209,40 +209,14 @@ internal fun GrowthShareSheetContent(
 
 @Composable
 private fun GrowthShareCommunityIllustration() {
-    Box(
+    Image(
+        painter = painterResource(id = R.drawable.growth_share_community_3d),
+        contentDescription = null,
         modifier = Modifier
-            .size(width = 150.dp, height = 112.dp)
-            .background(
-                Brush.radialGradient(
-                    0.0f to CalcMotColors.Success.copy(alpha = 0.20f),
-                    1.0f to Color.Transparent
-                ),
-                RoundedCornerShape(32.dp)
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Forum,
-            contentDescription = null,
-            modifier = Modifier.size(100.dp),
-            tint = CalcMotColors.Success.copy(alpha = 0.42f)
-        )
-        Box(
-            modifier = Modifier
-                .size(77.dp)
-                .offset(y = (-3).dp)
-                .background(
-                    Brush.linearGradient(listOf(Color(0xFF56E92E), Color(0xFF268F34))),
-                    RoundedCornerShape(22.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Groups,
-                contentDescription = null,
-                modifier = Modifier.size(54.dp),
-                tint = Color.White
-            )
-        }
-    }
+            .fillMaxWidth()
+            .heightIn(max = 156.dp)
+            .size(width = 206.dp, height = 156.dp)
+            .testTag(UiTestTags.GROWTH_SHARE_ART),
+        contentScale = ContentScale.Fit
+    )
 }
