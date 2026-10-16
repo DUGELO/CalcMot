@@ -3,7 +3,6 @@ package br.com.calcmot.securityrecording.data
 import androidx.room.Room
 import androidx.room.withTransaction
 import android.content.Context
-import android.database.sqlite.SQLiteDatabase
 import org.json.JSONObject
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
@@ -18,12 +17,13 @@ class RecordingMigrationTest {
      * serializer while preserving both schema validation and actual data checks.
      */
     @Test fun preservesLegacyFactsAndDoesNotInventExpiry() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
         val name = "recording-migration-synthetic"
         val schemaPath = "br.com.calcmot.securityrecording.data.RecordingDatabase/1.json"
         context.deleteDatabase(name)
         try {
-            val schema = context.assets.open(schemaPath).bufferedReader().use { reader ->
+            val schema = instrumentation.context.assets.open(schemaPath).bufferedReader().use { reader ->
                 JSONObject(reader.readText()).getJSONObject("database")
             }
             context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { db ->

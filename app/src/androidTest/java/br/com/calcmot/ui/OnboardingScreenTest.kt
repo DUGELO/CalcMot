@@ -57,7 +57,7 @@ class OnboardingScreenTest {
                 hasAnyAncestor(hasTestTag(UiTestTags.ACCESSIBILITY_PERMISSION_ITEM))
         ).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Como o CalcMot usa essa permissão").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Identifica valor, distância e tempo", substring = true)
+        composeRule.onNodeWithText("Identifica valor, distância e\ntempo visíveis na oferta")
             .performScrollTo()
             .assertIsDisplayed()
         composeRule.onNodeWithTag(UiTestTags.ONBOARDING_NEXT_BUTTON).assertIsDisplayed()
