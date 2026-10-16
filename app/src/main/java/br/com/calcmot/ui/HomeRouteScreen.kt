@@ -75,6 +75,7 @@ internal fun HomeScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     var growthPromptVisible by remember { mutableStateOf(false) }
     var reviewRequestRunning by remember { mutableStateOf(false) }
+    var sharePromptClaimedThisVisit by remember { mutableStateOf(false) }
     var growthPromptProactive by remember { mutableStateOf(false) }
     var shareStreakDays by remember { mutableStateOf(0) }
     val notificationRequest = GrowthShareInviteRequests.requests.value
@@ -95,22 +96,25 @@ internal fun HomeScreen(
         else -> HomeStatus.PAUSED
     }
 
-    fun checkGrowthPrompt() {
-        if (status == HomeStatus.READY && !growthPromptVisible) {
-            when (GrowthShareStore.claimPrompt(context, GrowthShareNotification.canNotify(context))) {
-                GrowthShareSurface.CARD -> {
-                    shareStreakDays = GrowthShareStore.currentStreak(context)
-                    growthPromptProactive = true
-                    growthPromptVisible = true
-                }
-                GrowthShareSurface.NOTIFICATION -> if (!GrowthShareNotification.show(context)) {
-                    shareStreakDays = GrowthShareStore.currentStreak(context)
-                    growthPromptProactive = true
-                    growthPromptVisible = true
-                }
-                null -> Unit
+    fun checkGrowthPrompt(): Boolean {
+        if (growthPromptVisible || sharePromptClaimedThisVisit) return true
+        if (status != HomeStatus.READY) return false
+        val surface = GrowthShareStore.claimPrompt(context, GrowthShareNotification.canNotify(context))
+        if (surface != null) sharePromptClaimedThisVisit = true
+        when (surface) {
+            GrowthShareSurface.CARD -> {
+                shareStreakDays = GrowthShareStore.currentStreak(context)
+                growthPromptProactive = true
+                growthPromptVisible = true
             }
+            GrowthShareSurface.NOTIFICATION -> if (!GrowthShareNotification.show(context)) {
+                shareStreakDays = GrowthShareStore.currentStreak(context)
+                growthPromptProactive = true
+                growthPromptVisible = true
+            }
+            null -> Unit
         }
+        return surface != null
     }
 
     fun maybeRequestReview() {
@@ -127,7 +131,7 @@ internal fun HomeScreen(
 
     LaunchedEffect(status) {
         if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-            checkGrowthPrompt()
+            if (!checkGrowthPrompt()) maybeRequestReview()
         } else {
             growthPromptVisible = false
         }
@@ -136,10 +140,12 @@ internal fun HomeScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
-                    checkGrowthPrompt()
-                    if (!growthPromptVisible) maybeRequestReview()
+                    if (!checkGrowthPrompt()) maybeRequestReview()
                 }
-                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> growthPromptVisible = false
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
+                    growthPromptVisible = false
+                    sharePromptClaimedThisVisit = false
+                }
                 else -> Unit
             }
         }
