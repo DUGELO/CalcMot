@@ -93,6 +93,28 @@ class CalcMotGrowthSharingUiTest {
     }
 
     @Test
+    fun ratingActionIsInFooterAboveDiagnostics() {
+        rule.setContent {
+            MetricaTheme {
+                AppDrawer(
+                    status = HomeStatus.READY,
+                    onHome = {}, onGoal = {}, onSettings = {}, onHelp = {},
+                    onPrivacy = {}, onFeedback = {},
+                    onRate = {}, diagnosticsEnabled = true,
+                    onDiagnostics = {}
+                )
+            }
+        }
+        val rating = rule.onNodeWithTag(UiTestTags.DRAWER_RATE_ITEM)
+            .performScrollTo().assertIsDisplayed()
+        val diagnostics = rule.onNodeWithTag(UiTestTags.DRAWER_DIAGNOSTICS_ITEM)
+            .performScrollTo().assertIsDisplayed()
+        val ratingBounds = rating.fetchSemanticsNode().boundsInRoot
+        val diagnosticBounds = diagnostics.fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertTrue(ratingBounds.top < diagnosticBounds.top)
+    }
+
+    @Test
     fun drawerAllowsManualPlayStoreRating() {
         var rateTaps = 0
         rule.setContent {

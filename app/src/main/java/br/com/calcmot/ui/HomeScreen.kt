@@ -395,13 +395,6 @@ internal fun AppDrawer(
                     onClick = onShare
                 )
                 DrawerMenuItem(
-                    text = "Avaliar CalcMot",
-                    icon = Icons.Outlined.StarOutline,
-                    selected = false,
-                    testTag = UiTestTags.DRAWER_RATE_ITEM,
-                    onClick = onRate
-                )
-                DrawerMenuItem(
                     text = "Ferramentas",
                     icon = Icons.Outlined.Handyman,
                     selected = false,
@@ -437,6 +430,7 @@ internal fun AppDrawer(
             DrawerFooter(
                 selectedFeedback = false,
                 onFeedback = onFeedback,
+                onRate = onRate,
                 diagnosticsEnabled = diagnosticsEnabled,
                 onVersionTap = onVersionTap,
                 onDiagnostics = onDiagnostics
@@ -475,26 +469,7 @@ private fun DrawerHeader() {
 @Composable
 private fun DrawerWordmark(fontSize: Int = 20) {
     Text(
-        text = buildAnnotatedString {
-            withStyle(
-                SpanStyle(
-                    color = CalcMotColors.TextPrimary,
-                    fontStyle = FontStyle.Italic,
-                    fontWeight = FontWeight.Black
-                )
-            ) {
-                append("Calc")
-            }
-            withStyle(
-                SpanStyle(
-                    color = CalcMotColors.Success,
-                    fontStyle = FontStyle.Italic,
-                    fontWeight = FontWeight.Black
-                )
-            ) {
-                append("Mot")
-            }
-        },
+        text = buildAnnotatedString { appendCalcMotWordmark() },
         fontSize = fontSize.sp,
         lineHeight = (fontSize + 2).sp
     )
@@ -600,6 +575,7 @@ private fun DrawerMenuItem(
 private fun DrawerFooter(
     selectedFeedback: Boolean,
     onFeedback: () -> Unit,
+    onRate: () -> Unit,
     diagnosticsEnabled: Boolean,
     onVersionTap: () -> Unit,
     onDiagnostics: () -> Unit
@@ -614,6 +590,13 @@ private fun DrawerFooter(
                 fontSize = 15.sp
             )
         }
+        DrawerMenuItem(
+            text = "Avaliar CalcMot",
+            icon = Icons.Outlined.StarOutline,
+            selected = false,
+            testTag = UiTestTags.DRAWER_RATE_ITEM,
+            onClick = onRate
+        )
         if (diagnosticsEnabled) {
             DrawerMenuItem(
                 text = "Diagnóstico",

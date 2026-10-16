@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -70,8 +71,8 @@ internal fun GrowthShareBottomSheet(
         dragHandle = {
             Box(
                 modifier = Modifier
-                    .padding(top = 12.dp, bottom = 2.dp)
-                    .size(width = 44.dp, height = 5.dp)
+                    .padding(top = 8.dp, bottom = 2.dp)
+                    .size(width = 40.dp, height = 4.dp)
                     .background(CalcMotColors.TextMuted.copy(alpha = 0.55f), CircleShape)
             )
         }
@@ -96,13 +97,18 @@ internal fun GrowthShareSheetContent(
             .verticalScroll(rememberScrollState())
             .navigationBarsPadding()
             .padding(horizontal = 22.dp)
-            .padding(bottom = 20.dp),
+            .padding(bottom = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+        Box(
+            modifier = Modifier.fillMaxWidth().height(130.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            GrowthShareCommunityIllustration()
             IconButton(
-                modifier = Modifier.size(48.dp).testTag(UiTestTags.GROWTH_SHARE_PROMPT_CLOSE),
+                modifier = Modifier.align(Alignment.TopEnd)
+                    .size(48.dp).testTag(UiTestTags.GROWTH_SHARE_PROMPT_CLOSE),
                 onClick = onDismiss
             ) {
                 Icon(
@@ -113,7 +119,6 @@ internal fun GrowthShareSheetContent(
                 )
             }
         }
-        GrowthShareCommunityIllustration()
         val streakLabel = when {
             streakDays >= 2 -> "$streakDays dias seguidos"
             streakDays == 1 -> "1 dia de uso"
@@ -126,7 +131,7 @@ internal fun GrowthShareSheetContent(
                     BorderStroke(1.dp, CalcMotColors.Success.copy(alpha = 0.70f)),
                     RoundedCornerShape(100.dp)
                 )
-                .padding(horizontal = 15.dp, vertical = 8.dp)
+                .padding(horizontal = 14.dp, vertical = 6.dp)
                 .testTag(UiTestTags.GROWTH_SHARE_STREAK),
             contentAlignment = Alignment.Center
         ) {
@@ -140,36 +145,26 @@ internal fun GrowthShareSheetContent(
         Text(
             text = buildAnnotatedString {
                 append("Leve o ")
-                withStyle(SpanStyle(color = CalcMotColors.Success, fontStyle = FontStyle.Italic)) {
-                    append("CalcMot")
-                }
+                appendCalcMotWordmark()
                 append(" para seu grupo")
             },
             color = CalcMotColors.TextPrimary,
             textAlign = TextAlign.Center,
-            fontSize = 24.sp,
-            lineHeight = 29.sp,
+            fontSize = 22.sp,
+            lineHeight = 26.sp,
             fontWeight = FontWeight.Bold
         )
         Text(
-            text = when {
-                streakDays >= 2 ->
-                    "Você já usou o CalcMot por $streakDays dias seguidos. Compartilhe com um amigo ou no grupo de motoristas."
-                streakDays == 1 ->
-                    "O CalcMot já faz parte da sua rotina. Compartilhe com um amigo ou no grupo de motoristas."
-                else ->
-                    "Ajude outros motoristas a conhecer o CalcMot. Compartilhe com um amigo ou no grupo de motoristas."
-            },
+            text = "Compartilhe com seu grupo e ajude outros motoristas a avaliar ofertas.",
             color = CalcMotColors.TextSecondary,
             textAlign = TextAlign.Center,
             fontSize = 15.sp,
-            lineHeight = 22.sp
+            lineHeight = 20.sp
         )
         Button(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 5.dp)
-                .heightIn(min = 58.dp)
+                .heightIn(min = 54.dp)
                 .testTag(UiTestTags.GROWTH_SHARE_PROMPT_ACTION),
             onClick = onShare,
             colors = ButtonDefaults.buttonColors(
@@ -213,9 +208,7 @@ private fun GrowthShareCommunityIllustration() {
         painter = painterResource(id = R.drawable.growth_share_community_3d),
         contentDescription = null,
         modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 156.dp)
-            .size(width = 206.dp, height = 156.dp)
+            .size(130.dp)
             .testTag(UiTestTags.GROWTH_SHARE_ART),
         contentScale = ContentScale.Fit
     )
