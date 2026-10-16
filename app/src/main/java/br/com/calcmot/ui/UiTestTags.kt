@@ -128,6 +128,7 @@ object UiTestTags {
     const val GOAL_SEMAPHORE_PREVIEW = "goal_semaphore_preview"
     const val SECURITY_RECORDING_CONFIGURATION_SCREEN = "security_recording_configuration_screen"
     const val SECURITY_TOOLS_SCREEN = "security_tools_screen"
+    const val SECURITY_TOOLS_RECORDING_ITEM = "security_tools_recording_item"
     const val SECURITY_RECORDING_HUB_SCREEN = "security_recording_hub_screen"
     const val SECURITY_RECORDING_START = "security_recording_start"
     const val SECURITY_RECORDING_ACTIVE_SCREEN = "security_recording_active_screen"
