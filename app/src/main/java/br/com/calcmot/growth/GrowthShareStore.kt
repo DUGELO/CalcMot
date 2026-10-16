@@ -4,8 +4,6 @@ import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * One lightweight asynchronous write per successful local calendar day.
@@ -14,19 +12,18 @@ import java.util.concurrent.atomic.AtomicLong
 internal object GrowthShareStore {
     private const val PREFS = "calcmot_growth_share_v1"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val queuedDay = AtomicLong(-1L)
+    private val usageQueue = GrowthShareUsageQueue(scope)
 
     fun recordOverlayShown(context: Context) {
         val today = GrowthSharePolicy.localDay(System.currentTimeMillis())
-        if (queuedDay.getAndSet(today) == today) return
         val appContext = context.applicationContext
-        scope.launch {
-            runCatching {
-                synchronized(this@GrowthShareStore) {
-                    val current = read(appContext)
-                    val next = GrowthSharePolicy.onOverlayShown(current, today)
-                    if (next != current) save(appContext, next)
-                }
+        // Enqueue once per day; the IO worker preserves ordering across midnight.
+        // A failed disk write is retryable on the next displayed offer.
+        usageQueue.enqueue(today) {
+            synchronized(this@GrowthShareStore) {
+                val current = read(appContext)
+                val next = GrowthSharePolicy.onOverlayShown(current, today)
+                next == current || save(appContext, next, durable = true)
             }
         }
     }
@@ -77,14 +74,19 @@ internal object GrowthShareStore {
         )
     }
 
-    private fun save(context: Context, state: GrowthShareState) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+    private fun save(context: Context, state: GrowthShareState, durable: Boolean = false): Boolean {
+        val editor = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putLong("last_usage_day", state.lastUsageDay)
             .putInt("consecutive_days", state.consecutiveDays)
             .putLong("previous_prompt", state.previousPromptAt)
             .putLong("last_prompt", state.lastPromptAt)
             .putLong("quiet_until", state.quietUntil)
             .putInt("dismissals", state.dismissals)
-            .apply()
+        // Only called by the background worker for durable daily usage.
+        // Other UI-driven writes retain the existing nonblocking apply() behavior.
+        return if (durable) editor.commit() else {
+            editor.apply()
+            true
+        }
     }
 }
