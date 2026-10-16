@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import br.com.calcmot.securityrecording.domain.RecordingRuntimeSnapshot
 import br.com.calcmot.securityrecording.ui.components.*
 import br.com.calcmot.ui.UiTestTags

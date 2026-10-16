@@ -2,7 +2,6 @@ package br.com.calcmot.securityrecording.ui
 
 import android.Manifest
 import android.app.Activity
-import android.os.Build
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
