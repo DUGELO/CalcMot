@@ -103,9 +103,10 @@ fun CalcMotNavHost(
         if (permissionState.hasAccessibilityService) {
             if (!onboardingCompleted) onOnboardingCompleted()
             val currentRoute = currentBackStackEntry?.destination?.route
-            if (currentRoute == CalcMotRoute.ONBOARDING ||
-                (currentRoute == CalcMotRoute.PRIVACY && startDestination == CalcMotRoute.ONBOARDING)
-            ) {
+            // Accessibility activation may finish onboarding, but must never
+            // interrupt an explicitly opened Privacy screen. startDestination is
+            // remembered, so it can remain ONBOARDING after navigating to Home.
+            if (currentRoute == CalcMotRoute.ONBOARDING) {
                 navController.navigate(CalcMotRoute.HOME) {
                     popUpTo(CalcMotRoute.ONBOARDING) { inclusive = true }
                     launchSingleTop = true
