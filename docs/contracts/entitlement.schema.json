@@ -1,0 +1,1870 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CalcMot V1 — EntitlementSnapshot",
+  "$comment": "Contract version 1.0.0. Local documentary contract; not a deployed API. Cross-field time/payment invariants are defined in README and test-matrix.",
+  "$ref": "#/$defs/EntitlementSnapshot",
+  "$defs": {
+    "UtcInstant": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+    },
+    "OpaqueId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "SubscriptionState": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "PENDING",
+        "ACTIVE",
+        "CANCELED_WITH_ACCESS",
+        "GRACE",
+        "ON_HOLD",
+        "PAUSED",
+        "EXPIRED",
+        "REVOKED",
+        "UNKNOWN"
+      ]
+    },
+    "VerificationState": {
+      "type": "string",
+      "enum": [
+        "VERIFYING",
+        "VERIFIED",
+        "REJECTED"
+      ]
+    },
+    "BillingUiState": {
+      "type": "string",
+      "enum": [
+        "SETUP_REQUIRED",
+        "DEMO_READY",
+        "OFFER_LOADING",
+        "TRIAL_ELIGIBLE",
+        "PAID_ONLY",
+        "CHECKOUT_PENDING",
+        "VERIFYING",
+        "TRIAL_ACTIVE",
+        "PAID_ACTIVE",
+        "CANCELED_WITH_ACCESS",
+        "GRACE",
+        "ON_HOLD",
+        "PAUSED",
+        "EXPIRED",
+        "PURCHASE_RECOVERY",
+        "LEGACY_GRANDFATHERED"
+      ]
+    },
+    "Identity": {
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+        },
+        "identityLinked": {
+          "type": "boolean"
+        },
+        "linkedProviders": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "consentVersion": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "uid",
+        "createdAt",
+        "identityLinked",
+        "linkedProviders",
+        "consentVersion"
+      ],
+      "additionalProperties": false
+    },
+    "LegacyGrant": {
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "const": "GRANTED"
+        },
+        "policyCutoffUtc": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policyVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "legacyGrantedAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+        },
+        "legacyEvidenceType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceHash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "legacyCoreVersionBaseline": {
+          "type": "string",
+          "minLength": 1
+        },
+        "migrationVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "grantRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "decisionActor": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "uid",
+        "status",
+        "policyCutoffUtc",
+        "policyVersion",
+        "legacyGrantedAt",
+        "legacyEvidenceType",
+        "evidenceHash",
+        "legacyCoreVersionBaseline",
+        "migrationVersion",
+        "grantRevision",
+        "decisionActor"
+      ],
+      "additionalProperties": false
+    },
+    "LegacyClaim": {
+      "type": "object",
+      "properties": {
+        "claimId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uid": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "UNDER_REVIEW",
+            "GRANTED",
+            "REJECTED"
+          ]
+        },
+        "evidenceType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceHash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "openedAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+        },
+        "resolvedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reviewer": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "provisionalUntil": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policyVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "claimId",
+        "uid",
+        "state",
+        "evidenceType",
+        "evidenceHash",
+        "openedAt",
+        "resolvedAt",
+        "reviewer",
+        "provisionalUntil",
+        "policyVersion"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "UNDER_REVIEW"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "resolvedAt": {
+                "type": "null"
+              },
+              "reviewer": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "resolvedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+              },
+              "reviewer": {
+                "type": "string",
+                "minLength": 1
+              },
+              "provisionalUntil": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "LegacySnapshot": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "UNKNOWN",
+            "UNDER_REVIEW",
+            "GRANTED",
+            "REJECTED"
+          ]
+        },
+        "legacyGrantedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "legacyEvidenceType": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "legacyCoreVersionBaseline": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "migrationVersion": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "grantRevision": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "state",
+        "legacyGrantedAt",
+        "legacyEvidenceType",
+        "legacyCoreVersionBaseline",
+        "migrationVersion",
+        "grantRevision"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "GRANTED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "legacyGrantedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+              },
+              "legacyEvidenceType": {
+                "type": "string",
+                "minLength": 1
+              },
+              "legacyCoreVersionBaseline": {
+                "type": "string",
+                "minLength": 1
+              },
+              "migrationVersion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "grantRevision": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "PlaySnapshot": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/SubscriptionState"
+        },
+        "billingPhase": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "TRIAL",
+            "PAID_PERIOD",
+            "UNKNOWN"
+          ]
+        },
+        "validUntil": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checkedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "productId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "basePlanId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "state",
+        "billingPhase",
+        "validUntil",
+        "checkedAt",
+        "productId",
+        "basePlanId"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "ACTIVE",
+                  "CANCELED_WITH_ACCESS",
+                  "GRACE"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "validUntil": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+              },
+              "checkedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+              },
+              "productId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "basePlanId": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "NONE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "billingPhase": {
+                "const": "NONE"
+              },
+              "validUntil": {
+                "type": "null"
+              },
+              "productId": {
+                "type": "null"
+              },
+              "basePlanId": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "PromoSnapshot": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "ACTIVE",
+            "EXPIRED"
+          ]
+        },
+        "startAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validUntil": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "state",
+        "startAt",
+        "validUntil"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "ACTIVE",
+                  "EXPIRED"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "startAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+              },
+              "validUntil": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "NONE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "startAt": {
+                "type": "null"
+              },
+              "validUntil": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ReviewSnapshot": {
+      "type": "object",
+      "properties": {
+        "claimId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "provisionalUntil": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "claimId",
+        "provisionalUntil"
+      ],
+      "additionalProperties": false
+    },
+    "EntitlementSnapshot": {
+      "type": "object",
+      "properties": {
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "serverNow": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+        },
+        "checkedAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+        },
+        "subscriptionRequired": {
+          "type": "boolean"
+        },
+        "legacyCore": {
+          "type": "boolean"
+        },
+        "coreAllowed": {
+          "type": "boolean"
+        },
+        "proAllowed": {
+          "type": "boolean"
+        },
+        "proFeatureSet": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "PRO_INSIGHTS_WEEKLY"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "legacy": {
+          "$ref": "#/$defs/LegacySnapshot"
+        },
+        "play": {
+          "$ref": "#/$defs/PlaySnapshot"
+        },
+        "promo": {
+          "$ref": "#/$defs/PromoSnapshot"
+        },
+        "review": {
+          "$ref": "#/$defs/ReviewSnapshot"
+        },
+        "nextAction": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "LINK_ACCOUNT",
+            "LEGACY_CLAIM",
+            "RESTORE_PURCHASE",
+            "MANAGE_SUBSCRIPTION",
+            "CHOOSE_PLAN",
+            "RETRY",
+            "CONTACT_SUPPORT"
+          ]
+        }
+      },
+      "required": [
+        "contractVersion",
+        "revision",
+        "serverNow",
+        "checkedAt",
+        "subscriptionRequired",
+        "legacyCore",
+        "coreAllowed",
+        "proAllowed",
+        "proFeatureSet",
+        "legacy",
+        "play",
+        "promo",
+        "review",
+        "nextAction"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "legacy": {
+                "properties": {
+                  "state": {
+                    "const": "GRANTED"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "legacyCore": {
+                "const": true
+              },
+              "coreAllowed": {
+                "const": true
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "legacyCore": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "subscriptionRequired": {
+                "const": false
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "coreAllowed": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "proAllowed": {
+                "const": false
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "proFeatureSet": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "EntitlementCache": {
+      "type": "object",
+      "properties": {
+        "snapshot": {
+          "$ref": "#/$defs/EntitlementSnapshot"
+        },
+        "cachedAtElapsedRealtime": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "policyVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "snapshot",
+        "cachedAtElapsedRealtime",
+        "policyVersion"
+      ],
+      "additionalProperties": false
+    },
+    "SubscriptionProjection": {
+      "type": "object",
+      "properties": {
+        "subscriptionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uid": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tokenHash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "productId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "basePlanId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "$ref": "#/$defs/SubscriptionState"
+        },
+        "billingPhase": {
+          "type": "string",
+          "enum": [
+            "TRIAL",
+            "PAID_PERIOD",
+            "UNKNOWN"
+          ]
+        },
+        "expiry": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checkedAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+        },
+        "acknowledged": {
+          "type": "boolean"
+        },
+        "firstPaidAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "firstRenewalAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "linkedTokenHashes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "etag": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "uid",
+        "tokenHash",
+        "productId",
+        "basePlanId",
+        "state",
+        "billingPhase",
+        "expiry",
+        "checkedAt",
+        "acknowledged",
+        "firstPaidAt",
+        "firstRenewalAt",
+        "linkedTokenHashes",
+        "etag"
+      ],
+      "additionalProperties": false
+    },
+    "PurchaseEvent": {
+      "type": "object",
+      "properties": {
+        "purchaseEventId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "economicPurchaseKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uid": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subscriptionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "TRIAL_STARTED",
+            "FIRST_CHARGE",
+            "RENEWAL_CHARGE",
+            "REFUND",
+            "VOID"
+          ]
+        },
+        "verificationState": {
+          "type": "string",
+          "enum": [
+            "VERIFYING",
+            "VERIFIED",
+            "REJECTED"
+          ]
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": [
+            "UNKNOWN",
+            "PAID",
+            "VOIDED"
+          ]
+        },
+        "orderRefHash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "amountMinor": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verifiedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "firstRenewal": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "purchaseEventId",
+        "economicPurchaseKey",
+        "uid",
+        "subscriptionId",
+        "category",
+        "verificationState",
+        "paymentStatus",
+        "orderRefHash",
+        "amountMinor",
+        "currency",
+        "verifiedAt",
+        "firstRenewal"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "TRIAL_STARTED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "paymentStatus": {
+                "enum": [
+                  "UNKNOWN",
+                  "VOIDED"
+                ]
+              },
+              "firstRenewal": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "paymentStatus": {
+                "const": "PAID"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "verificationState": {
+                "const": "VERIFIED"
+              },
+              "orderRefHash": {
+                "type": "string",
+                "minLength": 1
+              },
+              "amountMinor": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              "verifiedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+              },
+              "category": {
+                "enum": [
+                  "FIRST_CHARGE",
+                  "RENEWAL_CHARGE"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "firstRenewal": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "category": {
+                "const": "RENEWAL_CHARGE"
+              },
+              "paymentStatus": {
+                "const": "PAID"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "CoreAnalysisReceipt": {
+      "type": "object",
+      "properties": {
+        "analysisId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "identityKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+        },
+        "localDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "timeZoneId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "appFamily": {
+          "type": "string",
+          "enum": [
+            "uber",
+            "99"
+          ]
+        },
+        "classification": {
+          "type": "string",
+          "enum": [
+            "good",
+            "medium",
+            "bad",
+            "excellent",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "analysisId",
+        "identityKey",
+        "occurredAt",
+        "localDate",
+        "timeZoneId",
+        "appFamily",
+        "classification"
+      ],
+      "additionalProperties": false
+    },
+    "AnalyticsParams": {
+      "type": "object",
+      "properties": {
+        "app_family": {
+          "type": "string",
+          "enum": [
+            "uber",
+            "99",
+            "unknown"
+          ]
+        },
+        "android_api": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "app_version_bucket": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]{1,36}$"
+        },
+        "reason": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,40}$"
+        },
+        "classification": {
+          "type": "string",
+          "enum": [
+            "good",
+            "medium",
+            "bad",
+            "excellent",
+            "unknown"
+          ]
+        },
+        "plan": {
+          "type": "string",
+          "enum": [
+            "MONTHLY",
+            "QUARTERLY",
+            "UNKNOWN"
+          ]
+        },
+        "source_kind": {
+          "type": "string",
+          "enum": [
+            "DRIVER",
+            "CREATOR",
+            "ORGANIC",
+            "UNKNOWN"
+          ]
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "APP_LINK",
+            "INSTALL_REFERRER",
+            "MANUAL_CODE",
+            "ORGANIC",
+            "UNKNOWN"
+          ]
+        },
+        "subscription_state": {
+          "$ref": "#/$defs/SubscriptionState"
+        },
+        "billing_phase": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "TRIAL",
+            "PAID_PERIOD",
+            "UNKNOWN"
+          ]
+        },
+        "reward_state": {
+          "type": "string",
+          "enum": [
+            "EARNED",
+            "APPLYING",
+            "NEEDS_RECONCILIATION",
+            "APPLIED",
+            "VOID",
+            "EXPIRED"
+          ]
+        },
+        "milestone": {
+          "type": "integer",
+          "enum": [
+            1,
+            3,
+            5
+          ]
+        },
+        "delta_days": {
+          "type": "integer",
+          "enum": [
+            7,
+            23,
+            30
+          ]
+        },
+        "prompt_kind": {
+          "type": "string",
+          "enum": [
+            "REFERRAL",
+            "REVIEW"
+          ]
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "AnalyticsEnvelope": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "first_open",
+            "setup_ready",
+            "core_demo_completed",
+            "core_analysis_completed",
+            "first_core_value",
+            "core_active_day",
+            "core_extraction_succeeded",
+            "core_extraction_failed",
+            "trial_started_verified",
+            "first_charge_verified",
+            "renewal_charge_verified",
+            "first_renewal_verified",
+            "refund_confirmed",
+            "subscription_state_changed",
+            "subscription_grace_entered",
+            "subscription_hold_entered",
+            "subscription_recovered",
+            "referral_prompt_eligible",
+            "referral_prompt_shown",
+            "referral_prompt_dismissed",
+            "referral_share_tap",
+            "share_sheet_opened",
+            "referral_link_clicked",
+            "attribution_locked",
+            "referred_first_core",
+            "referral_qualified",
+            "reward_applied",
+            "creator_first_paid_eligible",
+            "creator_first_renewal_eligible",
+            "review_flow_requested"
+          ]
+        },
+        "emitter": {
+          "type": "string",
+          "enum": [
+            "CLIENT",
+            "BACKEND"
+          ]
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$"
+        },
+        "dedupeKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "params": {
+          "$ref": "#/$defs/AnalyticsParams"
+        }
+      },
+      "required": [
+        "name",
+        "emitter",
+        "occurredAt",
+        "dedupeKey",
+        "params"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "first_open"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "CLIENT"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "setup_ready"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "CLIENT"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "core_demo_completed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "CLIENT"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "core_analysis_completed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "CLIENT"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "first_core_value"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "CLIENT"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "core_active_day"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "CLIENT"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "core_extraction_succeeded"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "CLIENT"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "core_extraction_failed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "CLIENT"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "trial_started_verified"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "first_charge_verified"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "renewal_charge_verified"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "first_renewal_verified"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "refund_confirmed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "subscription_state_changed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "subscription_grace_entered"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "subscription_hold_entered"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "subscription_recovered"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "referral_prompt_eligible"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "CLIENT"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "referral_prompt_shown"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "CLIENT"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "referral_prompt_dismissed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "CLIENT"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "referral_share_tap"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "CLIENT"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "share_sheet_opened"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "CLIENT"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "referral_link_clicked"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "attribution_locked"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "referred_first_core"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "referral_qualified"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "reward_applied"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "creator_first_paid_eligible"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "creator_first_renewal_eligible"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "BACKEND"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "const": "review_flow_requested"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "emitter": {
+                "const": "CLIENT"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

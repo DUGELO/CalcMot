@@ -1,0 +1,28 @@
+// PREPARATION ONLY: no routes, no public URLs, no commercial activation. PROD D1 not provisioned.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "45086fe60ce934025fcac45e65eb4b69",
+  "compatibility_date": "2026-07-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "observability": {
+    "enabled": false
+  },
+  "name": "calcmot-admin-gateway-prod",
+  "main": "src/admin/gateway.ts",
+  "vars": {
+    "FIREBASE_PROJECT_ID": "calcmot",
+    "ADMIN_ORIGIN": "https://calcmot.com.br",
+    "ADMIN_ENVIRONMENT": "PROD",
+    "ADMIN_MUTATIONS_ENABLED": "false",
+    "ADMIN_REQUESTS_PER_MINUTE": "120",
+    "ADMIN_MUTATIONS_PER_MINUTE": "10"
+  },
+  "services": [
+    {
+      "binding": "ADMIN",
+      "service": "calcmot-admin-private-prod"
+    }
+  ]
+}

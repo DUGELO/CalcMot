@@ -1,0 +1,18 @@
+{
+  "name": "calcmot-api", "private": true, "type": "module",
+  "scripts": {
+    "generate:validator": "node scripts/generate-validator.mjs && node scripts/generate-legacy-validator.mjs",
+    "predev": "npm run generate:validator",
+    "pretest": "npm run generate:validator",
+    "pretypecheck": "npm run generate:validator",
+    "precheck:bundle": "npm run generate:validator",
+    "dev": "wrangler dev --local --ip 127.0.0.1",
+    "migrate:local": "wrangler d1 migrations apply DB --local",
+    "review:local": "node scripts/legacy-review-local.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check:bundle": "wrangler deploy --dry-run --outdir dist"
+  },
+  "dependencies": { "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "jose": "^6.1.0" },
+  "devDependencies": { "@cloudflare/workers-types": "5.20261010.1", "@types/node": "^24.0.0", "typescript": "^5.9.0", "vitest": "^3.2.0", "wrangler": "4.149.0", "miniflare": "^4.0.0", "esbuild": "0.28.2" }
+}

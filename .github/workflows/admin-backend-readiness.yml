@@ -1,0 +1,42 @@
+name: Admin backend readiness
+
+on:
+  pull_request:
+    branches: [growth]
+    paths:
+      - '.github/workflows/admin-backend-readiness.yml'
+      - 'backend/**'
+      - 'docs/contracts/**'
+
+permissions:
+  contents: read
+
+jobs:
+  local-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      CI: 'true'
+      CALCMOT_REMOTE_DEV_TEST: '0'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Synthetic tests only (remote mutations disabled)
+        run: npm test -- --maxWorkers=1 --testTimeout=30000 --hookTimeout=90000
+      - name: Private Worker bundle only
+        run: npx wrangler deploy --config wrangler.admin-private.prod.example.jsonc --dry-run --outdir .tmp/ci-private
+      - name: Gateway bundle only
+        run: npx wrangler deploy --config wrangler.admin-gateway.prod.example.jsonc --dry-run --outdir .tmp/ci-gateway
