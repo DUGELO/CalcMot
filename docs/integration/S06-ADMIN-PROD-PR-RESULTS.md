@@ -15,7 +15,7 @@ A fundação backend S06/S07 e S01 ainda não estava na base remota growth. O PR
 - Os dois testes que gravam evidência S06/S07 dependiam da existência prévia de ../.tmp. Corrigido exclusivamente o setup de diretório em cada suíte; repetição integral passou. Nenhuma regra de concessão/cache/Core alterada.
 - Dois dry-runs Wrangler4.149.0 PASS: gateway44,01KiB, privado156,46KiB. São bundles locais, não um novo deploy ou medida CPU.
 - Manifesto versionado:29inputs e9migrations, SHA256 com normalização UTF8/LF, zero divergências contra o checkout limpo após gerar validadores. Não contém UID, token, secret ou snapshot de dados privados.
-- Backend não possui workflow GitHub de teste nesta base; estes resultados são locais e não são apresentados como um CI remoto inexistente. O Angular possui os checks remotos acima.
+- Atualização pré-cutover: backend agora possui CI remoto reproduzível, descrito abaixo. Os resultados locais anteriores continuam preservados como evidência separada.
 
 ## Leitura remota, sem mudanças
 
@@ -45,3 +45,15 @@ Bloqueio específico: falta um produtor de sessão Google/Firebase recente que e
 | Concessão comercial/mutações/Android real | HOLD separado; não faz parte de readonly/admin GET |
 
 Procedimento único: [S06-ADMIN-PROD-READINESS.md](S06-ADMIN-PROD-READINESS.md). O objetivo da janela é comprovar autenticação/CPU que não podem ser afirmadas antes de haver tráfego autorizado. Bootstrap e aparelho não são dependências técnicas de GET no banco vazio; não usar isso para liberar emissões. Se falhar, manter gatesfalse, restaurar par frontend/rotas conforme baseline autorizado e preservar ambos os bancos e grants.
+
+## Integração pré-cutover — 23/10/2026
+
+Check remoto implementado em .github/workflows/admin-backend-readiness.yml, apenas pull requests destinados a growth, sem gatilho de publicação, credenciais remotas ou permissões de escrita. Ubuntu24.04/Node24, npm ci, typecheck, suíte sintética e dois wrangler deploy --dry-run. CALCMOT_REMOTE_DEV_TEST=0 obrigatório.
+
+Execução [40014129716](https://github.com/DUGELO/CalcMot/actions/runs/40014129716), commit1bbe2c2: PASS;140testes aprovados/1remoto mutante ignorado, typecheck e ambos dry-runs aprovados. Privado156.46KiB/gzip31.70; gateway44.01KiB/gzip12.31. Nenhum Worker publicado. O follow-up documental não altera runtime nem migrations.
+
+Leitura remota reconfirmou versões PROD privado2913aabd-a653-433e-9863-d9ffa0103f64 e gateway1e18bfd2-c6a5-46c6-97c9-64d99ea0afed,100%,gatesfalse, gateway sem D1/binding ADMIN para privadoPROD; bancos distintos. PROD quick_checkOK/FK0/schema9/índices4 e oito categorias de negócio zeradas, inclusivepolíticas/grants. GrantDEV1/fingerprintinalterado; quatro páginas públicas200.
+
+Angular confirmou PR7/headff80f6b/checksSiteCI,Lighthouse,Cloudflareaprovados; default do códigoDEV e comandos npm run build → npx wrangler deploy preservados. A variável remota CALCMOT_ADMIN_ENVIRONMENT não foi reconfirmada nesta leitura: conferir seu valor/ausência antes da janela; não foi alterada para PROD.
+
+GO para revisão final dos PRs. HOLD de merge/rotas/publicação até autorização específica. Janela readonly preparada conforme READINESS: fixar os SHAs/versões e rollback pareado; reconfirmar configuração remota do build; coordenar seleçãoPROD e somente duas rotas exatas; manter gatesfalse; testar ownerGET200/PROD, anônimo401/comum403, banco vazio/público/SEO e CPU/cotas. CPU real ainda não medida nesta ordem: interromper se houver erro de autenticação/isolamento/roteamento, limite Free, P99>=8ms ou máximo observado>=10ms. Ausência de métricas significa HOLD, não zeroCPU. PolíticaPROD e concessões permanecem bloqueadas; USB/ADB não é requisito para GETreadonly. Nenhum merge, deploy, rota, IAM/claim, exclusão ou grant executado.
