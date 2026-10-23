@@ -14,6 +14,7 @@ import {build} from 'esbuild';
 // All identities, policies and rights are synthetic in an isolated persisted
 // LOCAL D1. Test keys never replace Google keys in a deployed Worker/console.
 mkdirSync('.tmp',{recursive:true});
+mkdirSync('../.tmp',{recursive:true});
 const state=mkdtempSync(path.resolve('.tmp/s07-d1-'));
 const runtime=()=>new Miniflare({modules:true,script:'export default {fetch(){return new Response("test")}}',
   compatibilityDate:'2026-07-01',cf:false,d1Databases:{DB:'s07-local-fixtures-only'},d1Persist:state});

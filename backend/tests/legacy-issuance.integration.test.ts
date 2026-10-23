@@ -15,6 +15,7 @@ import {operatorReadiness} from '../scripts/operator-readiness';
  */
 it('upgrades without changing old grants and recovers an issued source after restarting persisted D1',async()=>{
   const base = path.resolve('.tmp'); mkdirSync(base,{recursive:true});
+  mkdirSync(path.resolve('../.tmp'),{recursive:true});
   const state = mkdtempSync(path.join(base,'s06-issuance-e2e-'));
   const runtime = () => new Miniflare({modules:true,script:'export default {fetch(){return new Response("local test")}}',
     compatibilityDate:'2026-07-01',d1Databases:{DB:'s06-issuance-fixtures-only'},d1Persist:state});
