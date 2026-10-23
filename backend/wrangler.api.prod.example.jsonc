@@ -1,0 +1,31 @@
+// PREPARATION ONLY: no routes, no public URLs, no commercial activation. PROD D1 not provisioned.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "45086fe60ce934025fcac45e65eb4b69",
+  "compatibility_date": "2026-07-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "observability": {
+    "enabled": false
+  },
+  "name": "calcmot-api-prod",
+  "main": "src/index.ts",
+  "vars": {
+    "FIREBASE_PROJECT_ID": "calcmot",
+    "ABUSE_PROTECTION": "enforced",
+    "ABUSE_REQUESTS_PER_MINUTE": "120",
+    "ABUSE_READS_PER_UID_PER_MINUTE": "30",
+    "ENTITLEMENT_READ_ENABLED": "false",
+    "LEGACY_CLAIMS_ENABLED": "false",
+    "ENTITLEMENT_PROJECTION_ENABLED": "true"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "calcmot-identity-prod",
+      "database_id": "REPLACE_WITH_VERIFIED_PROD_D1_ID",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

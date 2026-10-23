@@ -1,0 +1,2 @@
+# Local-only settings. No private key or Firebase Admin credential is required.
+FIREBASE_PROJECT_ID=calcmot

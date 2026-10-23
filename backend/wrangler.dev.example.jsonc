@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "calcmot-api-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  "workers_dev": true,
+  // Technical DEV test limits only; production thresholds/owner require an explicit decision.
+  "vars": { "FIREBASE_PROJECT_ID": "calcmot", "ABUSE_PROTECTION": "enforced",
+    "ABUSE_REQUESTS_PER_MINUTE": "120", "ABUSE_READS_PER_UID_PER_MINUTE": "30",
+    "ENTITLEMENT_READ_ENABLED": "true" },
+  // Fill only after confirming Workers Free/D1 Free. No production domains/routes.
+  "d1_databases": [{ "binding": "DB", "database_name": "calcmot-identity-dev",
+    "database_id": "REPLACE_WITH_VERIFIED_FREE_DEV_D1_ID", "migrations_dir": "migrations" }]
+}
