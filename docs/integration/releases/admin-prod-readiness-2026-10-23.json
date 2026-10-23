@@ -169,5 +169,70 @@
     "policyRegistered": false,
     "commercialMutationsEnabled": false,
     "publicCutoverExecuted": false
-  }
+  },
+  "review": {
+    "backendPr": "https://github.com/DUGELO/CalcMot/pull/4",
+    "backendCodeCommit": "09d83bbd9fc032790a21abedb4c467294b5c28ba",
+    "frontendPr": "https://github.com/DUGELO/calcmot-site/pull/7",
+    "frontendHead": "ff80f6b0d1ab2869b799ca0487b6365989b02fe9",
+    "localTestsPassed": 140,
+    "remoteMutationTestSkipped": 1,
+    "merged": false
+  },
+  "remoteReadOnlyVerification": {
+    "verifiedAt": "2026-10-23T19:31:59.624Z",
+    "readOnly": true,
+    "workers": [
+      {
+        "name": "calcmot-admin-private-prod",
+        "activeVersion": "2913aabd-a653-433e-9863-d9ffa0103f64",
+        "percentage": 100,
+        "mutationsEnabled": false,
+        "ownerSecretPresent": true,
+        "databaseId": "d0232771-b6e7-49a1-ae9f-05267fbdf3a1",
+        "service": null
+      },
+      {
+        "name": "calcmot-admin-gateway-prod",
+        "activeVersion": "1e18bfd2-c6a5-46c6-97c9-64d99ea0afed",
+        "percentage": 100,
+        "mutationsEnabled": false,
+        "ownerSecretPresent": true,
+        "databaseId": null,
+        "service": "calcmot-admin-private-prod"
+      }
+    ],
+    "distinctDatabases": true
+  },
+  "frozenContractsBaseline": "226fe22f507c6f696f401e017d34d38b894a15bb",
+  "frozenContracts": [
+    {
+      "path": "docs/contracts/README.md",
+      "gitBlob": "c10d480ee8bf98be73faf51f7c37b5add38b894a"
+    },
+    {
+      "path": "docs/contracts/analytics-events.md",
+      "gitBlob": "0025f5b79f1398b0c19dcad0c43929d7a04b4d9f"
+    },
+    {
+      "path": "docs/contracts/api.openapi.yaml",
+      "gitBlob": "e8c287049eb76698cede73d71307564b38ed5df9"
+    },
+    {
+      "path": "docs/contracts/billing-state-matrix.md",
+      "gitBlob": "761b4aabbd38d99eb26a889969136dbf0a2c4a7e"
+    },
+    {
+      "path": "docs/contracts/entitlement.schema.json",
+      "gitBlob": "699817a8018cb13cd307d9ac2fac7203a78fa1f1"
+    },
+    {
+      "path": "docs/contracts/referral.schema.json",
+      "gitBlob": "ad9d52460af79f3aa5259c8ee63edc6854952496"
+    },
+    {
+      "path": "docs/contracts/test-matrix.md",
+      "gitBlob": "58a4882a908779a0fea17d751f52baa206770303"
+    }
+  ]
 }

@@ -18,6 +18,10 @@ Leitura remota desta ordem confirmou DB PROD distinto, gateway sem D1 e binding 
 
 ## PRs e revisão
 
+**PRs entregues:** [backend#4](https://github.com/DUGELO/CalcMot/pull/4), base growth, e [Angular#7](https://github.com/DUGELO/calcmot-site/pull/7), base main. Nenhum merge autorizado ou realizado. Backend validado em extração limpa do commit09d83bb; npm ci/typecheck,140testesPASS e1teste remoto mutante desativado. Dry-run dos dois WorkersPASS e29hashes de inputs +9migrations do manifesto conferidos sem divergência. As duas falhas iniciais eram somente criação de diretório de evidência nos testes; corrigidas, suíte integral repetida e aprovada. Não houve mudança do serviço por causa disso.
+
+Angular head ff80f6b: QA, testes/build/SEO, navegador/mobile/GA4, Lighthouse e preview Cloudflare aprovados. Runner de testes fixado em Ubuntu24.04 para compatibilidade Chromium/Playwright; comandos e gatilho de deploy preservados. Não houve publicação da configuração PROD. Estado final detalhado em [S06-ADMIN-PROD-PR-RESULTS.md](S06-ADMIN-PROD-PR-RESULTS.md).
+
 - Backend: PR próprio para growth, topic codex/admin-prod-readiness. O workspace principal continua growth. Como as fontes S06/S07 ainda estavam locais, o PR inclui a fundação backend necessária e o conteúdo S01 original sem modificações, para não depender de arquivos ausentes num checkout limpo. Nenhum arquivo Android modificado é incluído. A URL/head exatos constam no registro final e no PR.
 - Angular: topic codex/admin-environments no repositório do site. Env default/staging DEV, production PROD somente consulta, contrato1.3 coordenado e compatibilidade explícita DEV1.2. Não escolher ambiente pelo hostname/storage/query ou seguir automaticamente o ambiente recebido.
 - Conferir ambos os diffs, commits exatos, checks e artefatos. Os PRs não são autorização de merge. O comando remoto de produção permanece npm run build → npx wrangler deploy. Mudança do runner de testes, se necessária ao Chromium, não muda o comando/gatilho de deploy Cloudflare e deve estar explícita no diff Angular.
