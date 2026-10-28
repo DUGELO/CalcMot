@@ -31,6 +31,7 @@ internal object CalcMotRoute {
     const val HOME = "home"
     const val GOAL = "goal"
     const val SETTINGS = "settings"
+    const val ACCOUNT = "account"
     const val OVERLAY_POSITION = "overlay-position"
     const val OVERLAY_THEME = "overlay-theme"
     const val HELP = "help"
@@ -176,9 +177,14 @@ fun CalcMotNavHost(
                 onOpenOverlayTheme = { navigate(CalcMotRoute.OVERLAY_THEME) },
                 onOpenPrivacy = { navigate(CalcMotRoute.PRIVACY) },
                 onOpenHelp = { navigate(CalcMotRoute.HELP) },
+                onOpenAccount = { navigate(CalcMotRoute.ACCOUNT) },
                 diagnosticsEnabled = diagnosticsEnabled,
                 onOpenDiagnostics = { navigate(CalcMotRoute.DIAGNOSTICS) }
             )
+        }
+
+        composable(CalcMotRoute.ACCOUNT) {
+            br.com.calcmot.account.AccountRoute(onBack = { navController.popBackStack() })
         }
 
         composable(CalcMotRoute.OVERLAY_POSITION) {

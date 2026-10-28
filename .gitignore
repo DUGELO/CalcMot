@@ -33,5 +33,6 @@ captures/
 *.aab
 .gradle-user/
 .kotlin/
+/app/src/identityDev/google-services.json
 *.tmp-*.png
 *.mp4

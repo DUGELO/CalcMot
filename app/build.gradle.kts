@@ -40,9 +40,11 @@ android {
         applicationId = "br.com.calcmot"
         minSdk = 24
         targetSdk = 36
-        versionCode = 10
-        versionName = "3.3"
+        versionCode = 11
+        versionName = "3.4"
         buildConfigField("String", "CLARITY_PROJECT_ID", "\"$clarityProjectId\"")
+        buildConfigField("String", "ACCOUNT_API_BASE_URL", "\"\"")
+        buildConfigField("boolean", "LEGACY_INTAKE_ENABLED", "false")
 
         if (buildsAppBundle) {
             ndk {
@@ -82,6 +84,29 @@ android {
                 "proguard-rules.pro"
             )
         }
+        create("identityDev") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".identitydev"
+            matchingFallbacks += listOf("debug")
+            val workerUrl = providers.gradleProperty("calcmot.identityDevWorkerUrl").orElse("").get().trim()
+            require(workerUrl.isEmpty() || workerUrl.matches(Regex("https://calcmot-api-dev\\.[a-z0-9-]+\\.workers\\.dev/?"))) {
+                "identityDev requires a verified development Worker URL, never a production API."
+            }
+            buildConfigField("String", "IDENTITY_DEV_WORKER_URL", "\"$workerUrl\"")
+            buildConfigField("String", "ACCOUNT_API_BASE_URL", "\"$workerUrl\"")
+            val intakeEnabled = providers.gradleProperty("calcmot.identityDevLegacyIntake").orNull == "true"
+            require(!intakeEnabled || workerUrl.isNotEmpty()) { "DEV intake requires an explicit DEV Worker URL" }
+            buildConfigField("boolean", "LEGACY_INTAKE_ENABLED", intakeEnabled.toString())
+        }
+    }
+    sourceSets.getByName("identityDev") {
+        java.srcDir("src/debug/java")
+        kotlin.directories += "src/debug/java"
+        res.srcDir("src/debug/res")
+    }
+    // Explicit opt-in for device tests on the isolated package; default instrumentation is unchanged.
+    if (providers.gradleProperty("calcmot.identityDevInstrumentation").orNull == "true") {
+        testBuildType = "identityDev"
     }
 
     splits {
@@ -123,6 +148,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.11.2")
     implementation("androidx.lifecycle:lifecycle-service:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.room:room-runtime:2.8.4")
     implementation("androidx.room:room-ktx:2.8.4")
     ksp("androidx.room:room-compiler:2.8.4")
@@ -134,13 +160,24 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.androidx.compose.material3)
+    // Account avatar only; no image requests in offer processing.
+    implementation("io.coil-kt.coil3:coil-compose:3.3.0")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
 
     // Firebase versions remain aligned through the BoM; use main modules, not deprecated KTX artifacts.
     implementation(platform("com.google.firebase:firebase-bom:34.17.0"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-crashlytics")
+    implementation("com.google.firebase:firebase-auth")
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
+    // Strict S01 JSON decoding on Android and JVM; no remote configuration service.
+    implementation("com.google.code.gson:gson:2.11.0")
 
     testImplementation(libs.junit)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
     androidTestImplementation("androidx.room:room-testing:2.8.4")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -1,6 +1,11 @@
 package br.com.calcmot.telemetry
 
 object AnalyticsEvents {
+    const val CORE_ANALYSIS_COMPLETED = "core_analysis_completed"
+    const val FIRST_CORE_VALUE = "first_core_value"
+    const val CORE_ACTIVE_DAY = "core_active_day"
+
+    internal val coreEvents = setOf(CORE_ANALYSIS_COMPLETED, FIRST_CORE_VALUE, CORE_ACTIVE_DAY)
     const val PLATFORM_SELECTED = "platform_selected"
     const val ACCESSIBILITY_STATUS_CHECKED = "accessibility_status_checked"
     const val OVERLAY_PERMISSION_STATUS_CHECKED = "overlay_permission_status_checked"
@@ -18,6 +23,9 @@ object AnalyticsEvents {
     const val PAYWALL_VIEWED = "paywall_viewed"
 
     internal val allowed = setOf(
+        CORE_ANALYSIS_COMPLETED,
+        FIRST_CORE_VALUE,
+        CORE_ACTIVE_DAY,
         PLATFORM_SELECTED,
         ACCESSIBILITY_STATUS_CHECKED,
         OVERLAY_PERMISSION_STATUS_CHECKED,

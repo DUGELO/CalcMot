@@ -115,7 +115,12 @@ internal object SafeTelemetryPolicy {
 
     fun sanitizeEvent(event: String, params: Map<String, String>): SafeEvent? {
         if (event !in AnalyticsEvents.allowed) return null
-        return SafeEvent(event, sanitizeParams(params))
+        // Canonical Core usage has a narrower envelope than the diagnostic events.
+        // In particular, even approved fare buckets and device tags are not exported.
+        val permitted = if (event in AnalyticsEvents.coreEvents) params.filterKeys {
+            it == AnalyticsParams.APP_FAMILY || it == AnalyticsParams.CLASSIFICATION
+        } else params
+        return SafeEvent(event, sanitizeParams(permitted))
     }
 
     fun sanitizeParams(params: Map<String, String>): Map<String, String> {
@@ -127,6 +132,7 @@ internal object SafeTelemetryPolicy {
     fun safeReason(value: String): String = value.takeIf(reasons::contains) ?: "unknown"
 
     private fun isSafeValue(key: String, value: String): Boolean = when (key) {
+        AnalyticsParams.APP_FAMILY -> value == "uber" || value == "99"
         AnalyticsParams.PLATFORM -> value in platforms
         AnalyticsParams.SOURCE -> value in sources
         AnalyticsParams.REASON -> value in reasons

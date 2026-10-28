@@ -1,5 +1,7 @@
 # CalcMot Admin PROD — publicação somente leitura
 
+> Histórico de 27/10. Em 28/10 o proprietário autorizou operações reais, a política foi registrada e ambos Workers foram ativados. Estado vigente: [ativação operacional](S06-ADMIN-PROD-ACTIVATION.md). A restrição readonly abaixo foi substituída; os fatos históricos foram preservados.
+
 Data: 27/10/2026. Este registro complementa o histórico em S06-ADMIN-PROD-CUTOVER-RESULTS.md; o rollback anterior não representa o ambiente atualmente publicado.
 
 ## Decisão vigente

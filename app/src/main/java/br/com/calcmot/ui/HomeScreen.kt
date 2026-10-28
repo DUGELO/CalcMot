@@ -803,6 +803,7 @@ internal fun SettingsScreen(
     onOpenOverlayTheme: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onOpenHelp: () -> Unit,
+    onOpenAccount: (() -> Unit)? = null,
     diagnosticsEnabled: Boolean = false,
     onOpenDiagnostics: () -> Unit = {}
 ) {
@@ -868,6 +869,16 @@ internal fun SettingsScreen(
                     subtitle = "Escolha o estilo visual do semáforo",
                     value = overlayTheme.label,
                     onClick = onOpenOverlayTheme
+                )
+            }
+
+            if (onOpenAccount != null) SettingsSection(title = "Conta") {
+                SettingsActionRow(
+                    icon = Icons.Outlined.Security,
+                    title = "Conta e acesso",
+                    subtitle = "Login opcional e recuperação de acesso",
+                    onClick = onOpenAccount,
+                    modifier = Modifier.testTag("settings_account")
                 )
             }
 

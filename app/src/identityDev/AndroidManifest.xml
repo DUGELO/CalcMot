@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Isolated dev package: no Core bootstrap, telemetry, or offer entry point. -->
+    <application android:name="android.app.Application" android:label="CalcMot Auth DEV"
+        tools:replace="android:name,android:label">
+        <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
+        <meta-data android:name="firebase_crashlytics_collection_enabled" android:value="false" />
+        <activity android:name="br.com.calcmot.MainActivity" android:enabled="false"
+            tools:replace="android:enabled" />
+        <activity android:name="br.com.calcmot.debug.AccountDevActivity" android:exported="false"
+            android:theme="@style/Theme.CalcMot" />
+        <activity android:name="br.com.calcmot.debug.AccountUiTestActivity" android:exported="false"
+            android:theme="@style/Theme.CalcMot" />
+        <activity android:name="br.com.calcmot.debug.IdentityProbeActivity"
+            android:exported="true" android:label="CalcMot Auth DEV" android:theme="@style/Theme.CalcMot">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -1,0 +1,18 @@
+--- a/app/src/main/java/br/com/calcmot/account/AccountViewModel.kt
++++ b/app/src/main/java/br/com/calcmot/account/AccountViewModel.kt
+@@ -93,8 +93,14 @@
+             is IdentityResult.Failure -> if (sameOwner(beforeUid, generation)) publish(notice = result.reason.toNotice())
+             is IdentityResult.Success -> {
+                 identity.refreshSession()
++                publish() // Account for the current owner even before the Flow collector resumes.
++                val generationMatches = if (beforeUid == null) {
++                    // A first login may introduce its own null -> UID transition, but not
++                    // additional observed owners/logout cycles while it was suspended.
++                    sessionGeneration == generation || sessionGeneration == generation + 1
++                } else sameOwner(beforeUid, generation)
+                 if (identity.session.value?.uid != result.session.uid ||
+-                    (beforeUid != null && !sameOwner(beforeUid, generation))) {
++                    !generationMatches) {
+                     publish(); return@perform
+                 }
+                 if (repository == null) { publish(notice = AccountNotice.CONFIGURATION); return@perform }

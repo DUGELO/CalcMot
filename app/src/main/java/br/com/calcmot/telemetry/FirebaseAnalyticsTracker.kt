@@ -14,7 +14,7 @@ class FirebaseAnalyticsTracker(context: Context) : AnalyticsTracker {
     private val lastSentAt = ConcurrentHashMap<String, Long>()
 
     override fun track(event: String, params: Map<String, String>) {
-        val enriched = params + environmentParams()
+        val enriched = if (event in AnalyticsEvents.coreEvents) params else params + environmentParams()
         val safeEvent = SafeTelemetryPolicy.sanitizeEvent(event, enriched) ?: return
         if (shouldThrottle(safeEvent)) return
 
@@ -22,7 +22,7 @@ class FirebaseAnalyticsTracker(context: Context) : AnalyticsTracker {
             safeEvent.params.forEach { (key, value) -> putString(key, value) }
         }
         runCatching { analytics.logEvent(safeEvent.name, bundle) }
-        ClarityIntegration.track(safeEvent.name, safeEvent.params)
+        runCatching { ClarityIntegration.track(safeEvent.name, safeEvent.params) }
     }
 
     private fun shouldThrottle(event: SafeTelemetryPolicy.SafeEvent): Boolean {

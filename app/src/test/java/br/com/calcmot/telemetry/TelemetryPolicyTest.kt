@@ -81,6 +81,9 @@ class TelemetryPolicyTest {
     fun `event whitelist contains exactly the approved product events`() {
         assertEquals(
             setOf(
+                "core_analysis_completed",
+                "first_core_value",
+                "core_active_day",
                 "platform_selected",
                 "accessibility_status_checked",
                 "overlay_permission_status_checked",

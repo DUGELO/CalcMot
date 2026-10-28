@@ -1,0 +1,930 @@
+--- /dev/null
++++ b/app/src/main/java/br/com/calcmot/account/AccountContent.kt
+@@ -0,0 +1,185 @@
++package br.com.calcmot.account
++
++import androidx.compose.foundation.Image
++import androidx.compose.foundation.clickable
++import androidx.compose.foundation.layout.*
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.material.icons.Icons
++import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
++import androidx.compose.material.icons.automirrored.outlined.Logout
++import androidx.compose.material.icons.automirrored.outlined.HelpOutline
++import androidx.compose.material.icons.outlined.*
++import androidx.compose.material3.*
++import androidx.compose.runtime.Composable
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.graphics.vector.ImageVector
++import androidx.compose.ui.platform.testTag
++import androidx.compose.ui.res.painterResource
++import androidx.compose.ui.semantics.Role
++import androidx.compose.ui.semantics.heading
++import androidx.compose.ui.semantics.semantics
++import androidx.compose.ui.text.SpanStyle
++import androidx.compose.ui.text.buildAnnotatedString
++import androidx.compose.ui.text.font.FontStyle
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.text.style.TextAlign
++import androidx.compose.ui.text.withStyle
++import androidx.compose.ui.unit.dp
++import br.com.calcmot.R
++import br.com.calcmot.entitlement.EntitlementStatus
++import br.com.calcmot.ui.design.tokens.CalcMotColors
++import br.com.calcmot.ui.design.tokens.CalcMotShape
++import br.com.calcmot.ui.design.tokens.CalcMotSpacing as Space
++
++/** UI composition slot; Google remains the only provider wired by AccountRoute. */
++internal typealias AccountSignInContent = @Composable (Boolean, () -> Unit) -> Unit
++
++@Composable internal fun AccountEntry(state: AccountState, signIn: AccountSignInContent,
++    onLogin: () -> Unit, onContinue: () -> Unit, onSupport: () -> Unit) {
++    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
++        verticalArrangement = Arrangement.spacedBy(Space.Md)) {
++        Image(painterResource(R.drawable.calcmot_logo_hero), null, Modifier.size(72.dp))
++        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.Xs)) {
++            Text("Minha conta", style = MaterialTheme.typography.displayMedium, modifier = Modifier.semantics { heading() })
++            AccountWordmark(large = true)
++        }
++        Text("Entre com Google para acessar sua conta no CalcMot.", style = MaterialTheme.typography.bodyLarge,
++            textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant,
++            modifier = Modifier.widthIn(max = 300.dp))
++    }
++    Column(verticalArrangement = Arrangement.spacedBy(Space.Xs)) {
++        signIn(!state.busy && state.authAvailable, onLogin)
++        AccountQuietAction("Continuar sem conta", onContinue, "account_continue")
++    }
++    AccountQuietAction("Ajuda e suporte", onSupport, "account_support")
++}
++
++@Composable internal fun AccountProfile(state: AccountState) {
++    Column(Modifier.accountPrivate(), verticalArrangement = Arrangement.spacedBy(Space.Lg)) {
++        AccountWordmark()
++        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.Lg)) {
++            GoogleAccountAvatar(state.profilePhoto)
++            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.Xs)) {
++                Text(state.displayName?.takeIf(String::isNotBlank) ?: if ("google.com" in state.linkedProviders) "Sua conta Google" else "Sua conta",
++                    style = MaterialTheme.typography.headlineLarge, modifier = Modifier.semantics { heading() })
++                state.email?.takeIf(String::isNotBlank)?.let { Text(it, style = MaterialTheme.typography.bodyLarge,
++                    color = MaterialTheme.colorScheme.onSurfaceVariant) }
++            }
++        }
++        AccountConnectionStatus(state)
++    }
++}
++
++@Composable internal fun AccountConnectionStatus(state: AccountState) {
++    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.Sm)) {
++        Icon(Icons.Outlined.AccountCircle, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
++        Text(accountSessionLabel(state.linkedProviders),
++            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
++    }
++}
++
++@Composable internal fun AccountActions(actions: List<AccountAction>, onAction: (AccountActionId) -> Unit) {
++    Column(verticalArrangement = Arrangement.spacedBy(Space.Xl)) {
++        actions.groupBy { it.section }.forEach { (section, entries) ->
++            Column(verticalArrangement = Arrangement.spacedBy(if (section == AccountActionSection.SESSION) Space.Md else 0.dp)) {
++                if (section == AccountActionSection.SESSION) HorizontalDivider(color = MaterialTheme.colorScheme.outline)
++                entries.forEachIndexed { index, action ->
++                    val (icon, tag) = when (action.id) {
++                        AccountActionId.ACCESS -> Icons.Outlined.PersonOutline to "account_details"
++                        AccountActionId.SUPPORT -> Icons.AutoMirrored.Outlined.HelpOutline to "account_support"
++                        AccountActionId.SIGN_OUT -> Icons.AutoMirrored.Outlined.Logout to "account_logout"
++                    }
++                    if (index > 0) HorizontalDivider(Modifier.padding(horizontal = Space.Lg), color = MaterialTheme.colorScheme.outline)
++                    AccountTaskRow(icon, action.title, action.description, { onAction(action.id) }, tag,
++                        action.enabled, chevron = action.id != AccountActionId.SIGN_OUT)
++                }
++            }
++        }
++    }
++}
++
++@Composable internal fun AccountTaskRow(icon: ImageVector, title: String, description: String?,
++    onClick: () -> Unit, tag: String, enabled: Boolean = true, chevron: Boolean = true) {
++    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag(tag)
++        .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(horizontal = Space.Lg, vertical = Space.Md),
++        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.Md)) {
++        Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
++        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.Xs)) {
++            Text(title, style = MaterialTheme.typography.titleMedium)
++            if (description != null) Text(description, style = MaterialTheme.typography.bodySmall,
++                color = MaterialTheme.colorScheme.onSurfaceVariant)
++        }
++        if (chevron) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
++    }
++}
++
++@Composable internal fun AccountAccess(state: AccountState, signIn: AccountSignInContent, onLogin: () -> Unit,
++    onRefresh: () -> Unit, onRecovery: () -> Unit, onSupport: () -> Unit,
++    detailsExpanded: Boolean, onToggleDetails: () -> Unit) {
++    val access = accessPresentation(state)
++    if (state.signedIn) AccountConnectionStatus(state)
++    Column(verticalArrangement = Arrangement.spacedBy(Space.Md)) {
++        Text("Seu acesso no CalcMot", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.semantics { heading() })
++        Surface(shape = RoundedCornerShape(CalcMotShape.Md), color = MaterialTheme.colorScheme.surface) {
++            Column(Modifier.padding(Space.Lg), verticalArrangement = Arrangement.spacedBy(Space.Md)) {
++                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.Md)) {
++                    Icon(when (access.kind) {
++                        AccessKind.LEGACY -> Icons.Outlined.VerifiedUser
++                        AccessKind.AWAITING -> Icons.Outlined.HourglassEmpty
++                        AccessKind.NO_CONFIRMED_GRANT -> Icons.Outlined.Info
++                        AccessKind.REVIEW -> Icons.Outlined.PendingActions
++                        else -> Icons.Outlined.Info
++                    }, null, Modifier.size(24.dp), tint = if (access.kind == AccessKind.LEGACY)
++                        CalcMotColors.Success else MaterialTheme.colorScheme.onSurfaceVariant)
++                    Text(access.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
++                }
++                Text(if (access.kind == AccessKind.LEGACY) "As funcionalidades gratuitas até a versão 3.5 estão preservadas." else access.description,
++                    style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
++                if (access.kind == AccessKind.LEGACY) {
++                    Text("Este direito não depende de assinatura.", style = MaterialTheme.typography.bodyMedium,
++                        color = MaterialTheme.colorScheme.onSurfaceVariant)
++                    TextButton(onClick = onToggleDetails, modifier = Modifier.heightIn(min = 48.dp).testTag("account_legacy_details")) {
++                        Text(if (detailsExpanded) "Ocultar detalhes" else "Detalhes do acesso gratuito")
++                    }
++                    if (detailsExpanded) LegacyRightDetails()
++                }
++                if (!state.signedIn || state.access.status in setOf(EntitlementStatus.UNAUTHORIZED, EntitlementStatus.SESSION_EXPIRED))
++                    signIn(!state.busy && state.authAvailable, onLogin)
++                else TextButton(onClick = onRefresh, enabled = !state.busy, contentPadding = PaddingValues(horizontal = 0.dp),
++                    modifier = Modifier.heightIn(min = 48.dp).testTag("account_refresh")) {
++                    Icon(Icons.Outlined.Refresh, null, Modifier.size(20.dp)); Spacer(Modifier.width(Space.Sm))
++                    Text(when (access.kind) {
++                        AccessKind.UNAVAILABLE -> "Tentar novamente"
++                        AccessKind.AWAITING -> "Consultar acesso"
++                        else -> "Atualizar status"
++                    })
++                }
++            }
++        }
++    }
++    AccountTaskRow(Icons.AutoMirrored.Outlined.HelpOutline, "Ajuda e suporte", null, onSupport, "account_support")
++    if (access.kind != AccessKind.LEGACY) AccountQuietAction(
++        if (state.request != null || state.access.claimId != null) "Ver minha solicitação" else "Já usava o CalcMot antes? Saiba mais",
++        onRecovery, "account_recovery", small = true)
++}
++
++@Composable internal fun LegacyRightDetails() {
++    Text("O direito permanente preserva as funcionalidades que eram gratuitas até a versão 3.5. Recursos posteriores não estão incluídos automaticamente.",
++        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
++}
++
++@Composable internal fun AccountQuietAction(text: String, onClick: () -> Unit, tag: String, small: Boolean = false) {
++    TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag(tag),
++        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
++        Text(text, style = if (small) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.labelLarge)
++    }
++}
++
++@Composable private fun AccountWordmark(large: Boolean = false) {
++    Text(buildAnnotatedString {
++        withStyle(SpanStyle(color = CalcMotColors.TextPrimary)) { append("Calc") }
++        withStyle(SpanStyle(color = CalcMotColors.Success)) { append("Mot") }
++    }, style = if (large) MaterialTheme.typography.displayMedium else MaterialTheme.typography.titleLarge,
++        fontStyle = FontStyle.Italic, fontWeight = FontWeight.Black)
++}
+--- /dev/null
++++ b/app/src/main/java/br/com/calcmot/account/AccountPresentation.kt
+@@ -0,0 +1,46 @@
++package br.com.calcmot.account
++
++import br.com.calcmot.entitlement.EntitlementStatus
++
++internal enum class AccessKind { LEGACY, TEMPORARY, REVIEW, NO_CONFIRMED_GRANT, UNAVAILABLE, AWAITING, SIGNED_OUT }
++internal data class AccessPresentation(val kind: AccessKind, val title: String, val description: String)
++
++/** Presentation of S08's evaluated state. Never computes or grants entitlement. */
++internal fun accessPresentation(state: AccountState): AccessPresentation = when {
++    !state.signedIn -> AccessPresentation(AccessKind.SIGNED_OUT, "Entre para consultar", "O CalcMot continua disponível sem login.")
++    state.access.legacyCore -> AccessPresentation(AccessKind.LEGACY, "Acesso gratuito permanente", "Seu direito ao Core legado está confirmado.")
++    state.access.proAllowed -> AccessPresentation(AccessKind.TEMPORARY, "Acesso adicional confirmado", "Recursos adicionais disponíveis no período validado.")
++    state.access.status in setOf(EntitlementStatus.OFFLINE, EntitlementStatus.BACKEND_UNAVAILABLE,
++        EntitlementStatus.UNAUTHORIZED, EntitlementStatus.SESSION_EXPIRED, EntitlementStatus.INCONSISTENT,
++        EntitlementStatus.STORAGE_UNAVAILABLE) -> AccessPresentation(AccessKind.UNAVAILABLE,
++        "Não conseguimos consultar agora", when (state.access.status) {
++            EntitlementStatus.OFFLINE -> "Tente novamente quando houver conexão. O Core atual continua disponível."
++            EntitlementStatus.UNAUTHORIZED, EntitlementStatus.SESSION_EXPIRED -> "Confirme sua conta Google para consultar o acesso."
++            else -> if ("google.com" in state.linkedProviders) "Sua conta Google continua conectada. Tente novamente mais tarde."
++                else "Sua conta continua conectada. Tente novamente mais tarde."
++        })
++    (state.request?.state ?: state.access.legacyState) == "UNDER_REVIEW" -> AccessPresentation(AccessKind.REVIEW,
++        "Solicitação em análise", "Seu pedido está sendo revisado.")
++    state.access.status == EntitlementStatus.READY && state.access.revision != null -> AccessPresentation(
++        AccessKind.NO_CONFIRMED_GRANT, "Acesso nesta conta", "Não há um direito antigo confirmado nesta conta. Você pode continuar usando as funções gratuitas atuais.")
++    else -> AccessPresentation(AccessKind.AWAITING, "Acesso ainda não verificado", "Consulte seu acesso para obter uma confirmação.")
++}
++
++internal enum class AccountActionId { ACCESS, SUPPORT, SIGN_OUT }
++internal enum class AccountActionSection { INFORMATION, SESSION }
++internal data class AccountAction(val id: AccountActionId, val title: String,
++    val description: String? = null, val section: AccountActionSection = AccountActionSection.INFORMATION,
++    val enabled: Boolean = true)
++
++/** Ordered account tasks only. Add/reorder entries here; no provider or entitlement decisions. */
++internal fun accountActions(state: AccountState): List<AccountAction> = if (!state.signedIn) emptyList() else listOf(
++    AccountAction(AccountActionId.ACCESS, "Consultar meu acesso"),
++    AccountAction(AccountActionId.SUPPORT, "Ajuda e suporte"),
++    AccountAction(AccountActionId.SIGN_OUT, "Sair da conta", "Para usar outra conta Google",
++        AccountActionSection.SESSION, enabled = !state.busy))
++
++internal fun accountSessionLabel(providers: Set<String>): String = when {
++    "google.com" in providers -> "Conta Google conectada"
++    providers.isNotEmpty() -> "Conta conectada"
++    else -> "Identidade ainda não vinculada"
++}
+--- /dev/null
++++ b/app/src/main/java/br/com/calcmot/account/AccountRoute.kt
+@@ -0,0 +1,61 @@
++package br.com.calcmot.account
++
++import android.app.Application
++import androidx.compose.foundation.text.selection.SelectionContainer
++import androidx.compose.material3.AlertDialog
++import androidx.compose.material3.Text
++import androidx.compose.material3.TextButton
++import androidx.compose.runtime.*
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.platform.LocalUriHandler
++import androidx.lifecycle.ViewModel
++import androidx.lifecycle.ViewModelProvider
++import androidx.lifecycle.compose.collectAsStateWithLifecycle
++import androidx.lifecycle.viewmodel.compose.viewModel
++import br.com.calcmot.BuildConfig
++import br.com.calcmot.entitlement.AndroidEntitlements
++import br.com.calcmot.identity.GoogleIdentityClient
++import br.com.calcmot.ui.CALCMOT_SUPPORT_EMAIL
++import br.com.calcmot.ui.theme.findActivity
++import kotlinx.coroutines.launch
++
++/** Created only by voluntary account navigation, never by Application or offer services. */
++@Composable internal fun AccountRoute(onBack: () -> Unit) {
++    val context = LocalContext.current
++    val activity = context.findActivity()
++    val scope = rememberCoroutineScope()
++    val uri = LocalUriHandler.current
++    var supportUnavailable by remember { mutableStateOf(false) }
++    val openSupport: () -> Unit = {
++        try { uri.openUri("mailto:$CALCMOT_SUPPORT_EMAIL") }
++        catch (_: Exception) { supportUnavailable = true }
++    }
++    if (supportUnavailable) AlertDialog(onDismissRequest = { supportUnavailable = false },
++        title = { Text("Contato de suporte") },
++        text = { SelectionContainer { Text("Não foi possível abrir um aplicativo de email. Você pode entrar em contato por $CALCMOT_SUPPORT_EMAIL.") } },
++        confirmButton = { TextButton(onClick = { supportUnavailable = false }) { Text("Entendi") } })
++    if (activity == null) { Text("Abra a conta no aplicativo CalcMot."); return }
++    val client = remember(activity) { runCatching { GoogleIdentityClient.create(activity) }.getOrNull() }
++    if (client == null) {
++        AccountScreen(AccountState(notice = AccountNotice.CONFIGURATION, authAvailable = false), onBack, {}, {}, {}, {}, openSupport)
++        return
++    }
++    val application = context.applicationContext as Application
++    val factory = remember(client) { object : ViewModelProvider.Factory {
++        @Suppress("UNCHECKED_CAST")
++        override fun <T : ViewModel> create(modelClass: Class<T>): T {
++            require(modelClass == AccountViewModel::class.java)
++            val access = if (BuildConfig.ACCOUNT_API_BASE_URL.isBlank()) null else
++                AndroidEntitlements.createDefault(application, BuildConfig.ACCOUNT_API_BASE_URL)
++            return AccountViewModel(client.identity, { client.signOut() }, access?.repository,
++                UnavailableLegacyRequests, close = { access?.close() }) as T
++        }
++    } }
++    val model: AccountViewModel = viewModel(factory = factory)
++    LaunchedEffect(model) { model.open() }
++    val state by model.state.collectAsStateWithLifecycle()
++    AccountScreen(state, onBack,
++        { scope.launch { model.login { client.signIn(activity) } } }, { scope.launch { model.refresh() } },
++        { scope.launch { model.requestRecognition() } }, { scope.launch { model.logout() } },
++        openSupport)
++}
+--- /dev/null
++++ b/app/src/main/java/br/com/calcmot/account/AccountScreen.kt
+@@ -0,0 +1,244 @@
++package br.com.calcmot.account
++
++import android.os.Build
++import androidx.activity.compose.BackHandler
++import androidx.compose.foundation.Image
++import androidx.compose.foundation.layout.*
++import androidx.compose.foundation.rememberScrollState
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.foundation.text.selection.SelectionContainer
++import androidx.compose.foundation.verticalScroll
++import androidx.compose.material.icons.Icons
++import androidx.compose.material.icons.automirrored.filled.ArrowBack
++import androidx.compose.material.icons.outlined.*
++import androidx.compose.material3.*
++import androidx.compose.runtime.*
++import androidx.compose.runtime.saveable.rememberSaveable
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.platform.LocalClipboardManager
++import androidx.compose.ui.platform.testTag
++import androidx.compose.ui.res.painterResource
++import androidx.compose.ui.semantics.*
++import androidx.compose.ui.text.AnnotatedString
++import androidx.compose.ui.text.font.Font
++import androidx.compose.ui.text.font.FontFamily
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.text.style.TextOverflow
++import androidx.compose.ui.tooling.preview.Preview
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
++import br.com.calcmot.R
++import br.com.calcmot.entitlement.*
++import br.com.calcmot.ui.design.theme.CalcMotTheme
++import br.com.calcmot.ui.design.tokens.CalcMotShape
++import br.com.calcmot.ui.design.tokens.CalcMotSpacing as Spacing
++import kotlinx.coroutines.launch
++import com.microsoft.clarity.modifiers.clarityMask
++
++internal enum class AccountPage { ACCOUNT, ACCESS, RECOVERY }
++
++@OptIn(ExperimentalMaterial3Api::class)
++@Composable
++internal fun AccountScreen(state: AccountState, onBack: () -> Unit, onLogin: () -> Unit,
++    onRefresh: () -> Unit, onRequest: () -> Unit, onLogout: () -> Unit, onSupport: () -> Unit,
++    initialPage: AccountPage = AccountPage.ACCOUNT, testLabel: String? = null,
++    signInContent: AccountSignInContent = { enabled, action -> GoogleAccountButton(enabled, action) }) {
++    var pages by rememberSaveable(state.sessionGeneration) { mutableStateOf(listOf(initialPage.name)) }
++    val page = AccountPage.valueOf(pages.last())
++    var confirmLogout by remember(state.sessionGeneration) { mutableStateOf(false) }
++    var detailsExpanded by rememberSaveable(state.sessionGeneration) { mutableStateOf(false) }
++    val snackbar = remember(state.sessionGeneration) { SnackbarHostState() }
++    val scroll = key(state.sessionGeneration, page) { rememberScrollState() }
++    val scope = rememberCoroutineScope()
++    val clipboard = LocalClipboardManager.current
++    val access = accessPresentation(state)
++    val claim = if (!state.signedIn) null else state.request ?: state.access.claimId?.let { LegacyRequestView(it, state.access.legacyState) }
++    fun open(destination: AccountPage) { pages = pages + destination.name }
++    fun back() {
++        if (pages.size > 1) pages = pages.dropLast(1)
++        else if (page != AccountPage.ACCOUNT) pages = listOf(AccountPage.ACCOUNT.name)
++        else onBack()
++    }
++    BackHandler(page != AccountPage.ACCOUNT) { back() }
++    Scaffold(containerColor = MaterialTheme.colorScheme.background, contentWindowInsets = WindowInsets.safeDrawing,
++        topBar = { TopAppBar(title = { Text(when (page) {
++            AccountPage.ACCOUNT -> "Conta"
++            AccountPage.ACCESS -> "Meu acesso"
++            AccountPage.RECOVERY -> if (claim == null) "Recuperação" else "Sua solicitação"
++        }, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { IconButton(onClick = { back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar") } },
++            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
++        snackbarHost = { SnackbarHost(snackbar) }) { padding ->
++        Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).verticalScroll(scroll)
++            .padding(horizontal = Spacing.ScreenHorizontal).padding(top = if (page == AccountPage.RECOVERY) Spacing.Lg else Spacing.Xl, bottom = Spacing.Xl).testTag("account_screen"),
++            verticalArrangement = Arrangement.spacedBy(if (page == AccountPage.RECOVERY) Spacing.Lg else Spacing.Xl)) {
++            if (state.busy || state.access.status == EntitlementStatus.REFRESHING)
++                LinearProgressIndicator(Modifier.fillMaxWidth().semantics { contentDescription = "Consultando sua conta" })
++            when (page) {
++                AccountPage.ACCOUNT -> {
++                    if (!state.signedIn) AccountEntry(state, signInContent, onLogin, onBack, onSupport)
++                    else {
++                        AccountProfile(state)
++                        AccountActions(accountActions(state)) { action -> when (action) {
++                            AccountActionId.ACCESS -> open(AccountPage.ACCESS)
++                            AccountActionId.SUPPORT -> onSupport()
++                            AccountActionId.SIGN_OUT -> confirmLogout = true
++                        } }
++                        AccountQuietAction("Voltar ao CalcMot", onBack, "account_continue")
++                    }
++                    // Account authentication and access verification are separate concerns.
++                    if (state.notice != AccountNotice.NONE && (!state.signedIn || state.notice != AccountNotice.CONFIGURATION))
++                        AccountFeedback(state, includeCoreReminder = false)
++                }
++                AccountPage.ACCESS -> {
++                    AccountAccess(state, signInContent, onLogin, onRefresh, { open(AccountPage.RECOVERY) },
++                        onSupport, detailsExpanded, { detailsExpanded = !detailsExpanded })
++                    if (state.notice != AccountNotice.NONE) AccountFeedback(state, includeCoreReminder = false)
++                }
++                AccountPage.RECOVERY -> {
++                    if (access.kind == AccessKind.LEGACY) {
++                        Text("Acesso gratuito permanente", style = MaterialTheme.typography.headlineSmall)
++                        LegacyRightDetails()
++                        AccountQuietAction("Ajuda e suporte", onSupport, "account_support")
++                    } else if (claim == null) {
++                        Text("Recuperar acesso gratuito", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
++                        RecoveryBlock("Quem pode solicitar") {
++                            Text("Quem usou o CalcMot até a versão 3.5 pode pedir o reconhecimento do acesso gratuito permanente.", style = MaterialTheme.typography.bodyMedium)
++                        }
++                        RecoveryBlock("Como funciona") {
++                            Text("A análise é individual e vinculada à sua conta Google. O login não comprova uso antigo nem garante o direito.",
++                                style = MaterialTheme.typography.bodyMedium)
++                        }
++                        RecoveryBlock("Próximo passo") {
++                            when {
++                                !state.linked -> {
++                                    Text("Entre com Google para vincular seu pedido.", style = MaterialTheme.typography.bodyMedium)
++                                    signInContent(!state.busy && state.authAvailable, onLogin)
++                                }
++                                state.recoveryAvailable -> {
++                                    Text("O pedido será analisado antes da confirmação do direito.", style = MaterialTheme.typography.bodyMedium)
++                                    Button(onClick = onRequest, enabled = !state.busy,
++                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("account_request")) { Text("Solicitar análise") }
++                                }
++                                else -> {
++                                    Text("O envio pelo app ainda não está disponível.", style = MaterialTheme.typography.bodyMedium,
++                                        modifier = Modifier.testTag("account_intake_unavailable"))
++                                    Button(onClick = onSupport, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("account_support")) { Text("Falar com suporte") }
++                                }
++                            }
++                        }
++                    } else {
++                        Text(reviewTitle(claim, state), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
++                        Text(when {
++                            state.access.legacyCore -> "Seu direito está confirmado. Você pode continuar usando o Core legado."
++                            claim.state == "UNDER_REVIEW" -> "Seu pedido está sendo revisado. Nenhum acesso provisório foi ativado."
++                            claim.state == "GRANTED" -> "A análise foi concluída. Atualize o status para confirmar a emissão e recuperar o acesso nesta conta."
++                            claim.state == "REJECTED" -> "Entre em contato com o suporte se precisar pedir uma revisão do caso."
++                            else -> "Atualize o status para consultar o andamento disponível."
++                        }, style = MaterialTheme.typography.bodyLarge)
++                        SelectionContainer { Text("Protocolo: ${claim.claimId}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.accountPrivate().testTag("account_protocol")) }
++                        OutlinedButton(onClick = {
++                            clipboard.setText(AnnotatedString(claim.claimId)); scope.launch { snackbar.showSnackbar("Protocolo copiado") }
++                        }, modifier = Modifier.heightIn(min = 48.dp).testTag("account_copy_protocol")) {
++                            Icon(Icons.Outlined.ContentCopy, null, Modifier.size(20.dp)); Spacer(Modifier.width(Spacing.Sm)); Text("Copiar protocolo")
++                        }
++                        Button(onClick = onRefresh, enabled = !state.busy,
++                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("account_refresh")) { Text("Consultar andamento") }
++                        TextButton(onClick = onSupport, modifier = Modifier.heightIn(min = 48.dp)) { Text("Ajuda com minha solicitação") }
++                    }
++                    // Without a protocol, a previous access query is not a failed recovery request.
++                    if (claim != null || state.notice != AccountNotice.NONE)
++                        AccountFeedback(state, includeCoreReminder = false)
++                    Text("Você pode continuar usando o Core atual.", style = MaterialTheme.typography.bodyMedium,
++                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("account_core_reminder"))
++                }
++            }
++            if (testLabel != null) Text(testLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
++        }
++    }
++    if (confirmLogout) AlertDialog(onDismissRequest = { confirmLogout = false }, title = { Text("Sair desta conta?") },
++        text = { Text("Para usar outra conta, saia primeiro. Seus direitos continuam vinculados à identidade atual. Sair não exclui sua conta nem bloqueia o Core atual.") },
++        confirmButton = { TextButton(onClick = { confirmLogout = false; pages = listOf(AccountPage.ACCOUNT.name); onLogout() }) { Text("Sair") } },
++        dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text("Cancelar") } })
++}
++
++/** Only account profile/protocol. No SDK defaults or production pipeline change. */
++internal fun Modifier.accountPrivate(): Modifier = if (Build.VERSION.SDK_INT >= 29) clarityMask() else this
++
++@Composable private fun RecoveryBlock(title: String, content: @Composable ColumnScope.() -> Unit) {
++    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
++        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
++            modifier = Modifier.semantics { heading() })
++        content()
++    }
++}
++
++@Composable private fun GoogleAccountButton(enabled: Boolean, onClick: () -> Unit) {
++    // Official unmodified neutral icon asset and Google Sans, scoped to Google's brand button.
++    Button(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(CalcMotShape.Xl),
++        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF2F2F2), contentColor = Color(0xFF1F1F1F)),
++        contentPadding = PaddingValues(start = 2.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
++        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("account_login")) {
++        Image(painterResource(R.drawable.google_signin_neutral_icon), null, Modifier.size(40.dp))
++        Text("Continuar com Google", fontFamily = FontFamily(Font(R.font.google_sans_medium, FontWeight.Medium)),
++            fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp)
++    }
++}
++
++internal fun reviewTitle(claim: LegacyRequestView, state: AccountState): String = when {
++    state.access.legacyCore && state.signedIn -> "Direito concedido"
++    claim.state == "UNDER_REVIEW" -> "Solicitação em análise"
++    claim.state == "GRANTED" -> "Aguardando confirmação do acesso"
++    claim.state == "REJECTED" -> "Solicitação não aprovada"
++    else -> "Andamento a confirmar"
++}
++
++@Composable private fun AccountFeedback(state: AccountState, includeCoreReminder: Boolean = true) {
++    accountMessage(state, includeCoreReminder)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
++        modifier = Modifier.testTag("account_message").semantics { liveRegion = LiveRegionMode.Polite }) }
++}
++
++internal fun accountMessage(state: AccountState, includeCoreReminder: Boolean = true): String? = when (state.notice) {
++    AccountNotice.CANCELED -> if (includeCoreReminder) "Login cancelado. Você pode continuar usando o CalcMot." else "Login cancelado."
++    AccountNotice.OFFLINE -> "Sem conexão. Tente novamente quando a internet voltar."
++    AccountNotice.SESSION_EXPIRED, AccountNotice.UNAUTHORIZED -> "Confirme sua conta Google para consultar novamente."
++    AccountNotice.COLLISION -> "Essa conta Google não corresponde à sessão atual. Nenhum direito foi transferido. Saia para usar outra conta."
++    AccountNotice.CONFIGURATION -> "A consulta de acesso ainda não está disponível nesta versão." + coreReminder(includeCoreReminder)
++    AccountNotice.UNAVAILABLE -> "Não foi possível concluir agora. Tente novamente ou procure o suporte."
++    AccountNotice.LOGGED_OUT -> "Você saiu desta conta." + coreReminder(includeCoreReminder)
++    AccountNotice.REVIEW_UNAVAILABLE -> "A solicitação de análise ainda não está disponível no aplicativo. Fale com o suporte para apresentar seu caso."
++    AccountNotice.REVIEW_RECEIVED -> "O estado da solicitação foi recebido. A confirmação do acesso é consultada separadamente."
++    AccountNotice.NONE -> when (state.access.status) {
++        EntitlementStatus.OFFLINE -> if (includeCoreReminder) "Sem conexão. Direitos antigos já confirmados permanecem preservados." else "Sem conexão. Tente novamente quando a internet voltar."
++        EntitlementStatus.UNAUTHORIZED, EntitlementStatus.SESSION_EXPIRED -> if (state.signedIn) "Confirme sua conta Google para consultar novamente." else null
++        EntitlementStatus.BACKEND_UNAVAILABLE -> "O serviço de acesso está indisponível. Tente novamente mais tarde." + coreReminder(includeCoreReminder)
++        EntitlementStatus.INCONSISTENT, EntitlementStatus.STORAGE_UNAVAILABLE -> "Não foi possível confirmar os dados de acesso. Tente consultar novamente." + coreReminder(includeCoreReminder)
++        else -> null
++    }
++}
++
++private fun coreReminder(include: Boolean): String = if (include) " O Core atual continua disponível." else ""
++
++@Preview(name = "Conta sem login", showBackground = true, widthDp = 360, heightDp = 800)
++@Composable private fun AccountPreview() = CalcMotTheme { AccountScreen(AccountState(), {}, {}, {}, {}, {}, {}) }
++@Preview(name = "Conta fonte ampliada", showBackground = true, widthDp = 320, heightDp = 640, fontScale = 1.5f)
++@Composable private fun AccountLargeFontPreview() = CalcMotTheme { AccountScreen(AccountState(signedIn = true, linked = true), {}, {}, {}, {}, {}, {}) }
++
++@Preview(name = "Conta — indisponível", showBackground = true, widthDp = 360, heightDp = 800)
++@Composable private fun RefinedAccountPreview() = CalcMotTheme {
++    AccountScreen(AccountState(signedIn = true, linked = true, displayName = "Motorista de teste",
++        email = "motorista@example.test", access = EntitlementState(status = EntitlementStatus.BACKEND_UNAVAILABLE)),
++        {}, {}, {}, {}, {}, {}, testLabel = "PREVIEW — DADOS SINTÉTICOS")
++}
++@Preview(name = "Meu acesso — indisponível", showBackground = true, widthDp = 360, heightDp = 800)
++@Preview(name = "Meu acesso — fonte ampliada", showBackground = true, widthDp = 320, heightDp = 640, fontScale = 1.5f)
++@Composable private fun RefinedAccessPreview() = CalcMotTheme {
++    AccountScreen(AccountState(signedIn = true, linked = true, access = EntitlementState(status = EntitlementStatus.BACKEND_UNAVAILABLE)),
++        {}, {}, {}, {}, {}, {}, initialPage = AccountPage.ACCESS, testLabel = "PREVIEW — DADOS SINTÉTICOS")
++}
++@Preview(name = "Recuperação — suporte", showBackground = true, widthDp = 360, heightDp = 800)
++@Preview(name = "Recuperação — fonte ampliada", showBackground = true, widthDp = 320, heightDp = 640, fontScale = 1.5f)
++@Composable private fun RefinedRecoveryPreview() = CalcMotTheme {
++    AccountScreen(AccountState(signedIn = true, linked = true), {}, {}, {}, {}, {}, {},
++        initialPage = AccountPage.RECOVERY, testLabel = "PREVIEW — DADOS SINTÉTICOS")
++}
+--- /dev/null
++++ b/app/src/main/java/br/com/calcmot/account/AccountViewModel.kt
+@@ -0,0 +1,135 @@
++package br.com.calcmot.account
++
++import br.com.calcmot.entitlement.*
++import br.com.calcmot.identity.*
++import androidx.lifecycle.ViewModel
++import androidx.lifecycle.viewModelScope
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.CoroutineScope
++import kotlinx.coroutines.flow.*
++import kotlinx.coroutines.launch
++import kotlinx.coroutines.sync.Mutex
++
++internal data class LegacyRequestView(val claimId: String, val state: String)
++internal interface LegacyRequests {
++    val available: Boolean
++    suspend fun submit(): LegacyRequestView
++}
++internal enum class AccountNotice { NONE, CANCELED, OFFLINE, SESSION_EXPIRED, UNAUTHORIZED,
++    UNAVAILABLE, CONFIGURATION, COLLISION, LOGGED_OUT, REVIEW_UNAVAILABLE, REVIEW_RECEIVED }
++internal data class AccountState(val signedIn: Boolean = false, val linked: Boolean = false,
++    val busy: Boolean = false, val notice: AccountNotice = AccountNotice.NONE,
++    val access: EntitlementState = EntitlementState(), val request: LegacyRequestView? = null,
++    val consultationAvailable: Boolean = false, val authAvailable: Boolean = true,
++    val displayName: String? = null, val email: String? = null, val recoveryAvailable: Boolean = false,
++    val profilePhoto: AccountProfilePhoto? = null, val sessionGeneration: Long = 0,
++    val linkedProviders: Set<String> = emptySet())
++
++/** Account-scoped presentation only. Never grants rights, merges UIDs, stops Core or opens billing. */
++@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
++internal class AccountViewModel(private val identity: IdentityCoordinator,
++    private val signOut: suspend () -> Unit, private val repository: EntitlementRepository?,
++    private val requests: LegacyRequests, private val close: () -> Unit = {},
++    providedScope: CoroutineScope? = null) : ViewModel() {
++    private val scope = providedScope ?: viewModelScope
++    override fun onCleared() { close(); super.onCleared() }
++    private val mutable = MutableStateFlow(AccountState())
++    val state: StateFlow<AccountState> = mutable.asStateFlow()
++    private val operation = Mutex()
++    private var currentUid = identity.session.value?.uid
++    private var sessionGeneration = 0L
++    private var request: LegacyRequestView? = null
++    init {
++        scope.launch {
++            // Flow's switchMap: a new session cancels the previous rights observation.
++            // In-flight operations still require ownership/generation guards below.
++            identity.session.flatMapLatest {
++                repository?.state ?: flowOf(EntitlementState())
++            }.buffer(0).collect {
++                identity.refreshSession()
++                publish()
++            }
++        }
++        publish()
++    }
++    private fun publish(busy: Boolean = mutable.value.busy, notice: AccountNotice = mutable.value.notice) {
++        val session = identity.session.value
++        val changedOwner = currentUid != session?.uid
++        if (changedOwner) { currentUid = session?.uid; request = null; sessionGeneration++ }
++        val access = repository?.current()?.takeIf { it.owner?.uid == session?.uid && session != null }
++            ?: EntitlementState()
++        mutable.value = AccountState(session != null, session?.identityLinked == true, busy,
++            if (changedOwner) AccountNotice.NONE else notice,
++            access, request.takeIf { currentUid == session?.uid && session != null }, repository != null,
++            displayName = session?.displayName, email = session?.email, recoveryAvailable = requests.available,
++            profilePhoto = session?.let { accountProfilePhoto(it.uid, it.googlePhotoUrl) }, sessionGeneration = sessionGeneration,
++            linkedProviders = session?.linkedProviders?.toSet().orEmpty())
++    }
++    private suspend fun perform(block: suspend () -> Unit) {
++        if (!operation.tryLock()) return
++        publish(busy = true, notice = AccountNotice.NONE)
++        val uid = identity.session.value?.uid
++        val generation = sessionGeneration
++        try { block() }
++        catch (cancel: CancellationException) { throw cancel }
++        catch (e: IdentityOperationException) { if (sameOwner(uid, generation)) publish(notice = e.reason.toNotice()) }
++        catch (_: java.io.IOException) { if (sameOwner(uid, generation)) publish(notice = AccountNotice.OFFLINE) }
++        catch (_: Exception) { if (sameOwner(uid, generation)) publish(notice = AccountNotice.UNAVAILABLE) }
++        finally { publish(busy = false); operation.unlock() }
++    }
++    private fun sameOwner(uid: String?, generation: Long) =
++        identity.session.value?.uid == uid && sessionGeneration == generation
++    suspend fun open() = refresh()
++    suspend fun refresh() = perform {
++        identity.refreshSession()
++        if (identity.session.value == null) return@perform
++        if (repository == null) { publish(notice = AccountNotice.CONFIGURATION); return@perform }
++        repository.restore(); repository.refresh(); publish()
++    }
++    suspend fun login(signIn: suspend () -> IdentityResult) = perform {
++        val beforeUid = identity.session.value?.uid
++        val generation = sessionGeneration
++        when (val result = signIn()) {
++            is IdentityResult.Failure -> if (sameOwner(beforeUid, generation)) publish(notice = result.reason.toNotice())
++            is IdentityResult.Success -> {
++                identity.refreshSession()
++                if (identity.session.value?.uid != result.session.uid ||
++                    (beforeUid != null && !sameOwner(beforeUid, generation))) {
++                    publish(); return@perform
++                }
++                if (repository == null) { publish(notice = AccountNotice.CONFIGURATION); return@perform }
++                repository?.restore(); repository?.refresh(); publish()
++            }
++        }
++    }
++    suspend fun logout() = perform {
++        // Local Auth signOut happens before credential-provider cleanup; no benefits transfer.
++        try { signOut() } finally {
++            identity.refreshSession(); repository?.identityChanged()
++            request = null
++            publish() // Invalidate the previous session's local UI context before feedback.
++            publish(notice = if (identity.session.value == null) AccountNotice.LOGGED_OUT else AccountNotice.UNAVAILABLE)
++        }
++    }
++    suspend fun requestRecognition() = perform {
++        val before = identity.session.value?.takeIf { it.identityLinked }
++            ?: run { publish(notice = AccountNotice.SESSION_EXPIRED); return@perform }
++        if (!requests.available) { publish(notice = AccountNotice.REVIEW_UNAVAILABLE); return@perform }
++        val generation = sessionGeneration
++        val view = requests.submit()
++        identity.refreshSession()
++        if (!sameOwner(before.uid, generation)) { publish(); return@perform }
++        currentUid = before.uid; request = view
++        // GRANTED on a claim is NOT shown as a recovered entitlement until S07 confirms it.
++        repository?.refresh()
++        if (sameOwner(before.uid, generation)) publish(notice = AccountNotice.REVIEW_RECEIVED) else publish()
++    }
++    private fun IdentityFailure.toNotice() = when (this) {
++        IdentityFailure.CANCELED -> AccountNotice.CANCELED
++        IdentityFailure.OFFLINE -> AccountNotice.OFFLINE
++        IdentityFailure.SESSION_EXPIRED -> AccountNotice.SESSION_EXPIRED
++        IdentityFailure.COLLISION -> AccountNotice.COLLISION
++        IdentityFailure.CONFIGURATION -> AccountNotice.CONFIGURATION
++        IdentityFailure.UNAVAILABLE -> AccountNotice.UNAVAILABLE
++    }
++}
+--- /dev/null
++++ b/app/src/main/java/br/com/calcmot/account/GoogleAccountAvatar.kt
+@@ -0,0 +1,56 @@
++package br.com.calcmot.account
++
++import androidx.compose.foundation.layout.*
++import androidx.compose.foundation.shape.CircleShape
++import androidx.compose.material.icons.Icons
++import androidx.compose.material.icons.outlined.Person
++import androidx.compose.material3.*
++import androidx.compose.runtime.*
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.draw.clip
++import androidx.compose.ui.layout.ContentScale
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.platform.testTag
++import androidx.compose.ui.unit.dp
++import coil3.ImageLoader
++import coil3.SingletonImageLoader
++import coil3.compose.AsyncImage
++import coil3.request.CachePolicy
++import coil3.request.ImageRequest
++import java.net.URI
++
++/** UI-only metadata, never an identity credential or entitlement source. Not persisted. */
++internal data class AccountProfilePhoto(val owner: String, val url: String)
++
++internal fun accountProfilePhoto(owner: String, url: String?): AccountProfilePhoto? {
++    if (owner.isBlank() || url.isNullOrBlank()) return null
++    val uri = runCatching { URI(url) }.getOrNull() ?: return null
++    if (uri.scheme != "https" || uri.host.isNullOrBlank() || uri.rawUserInfo != null ||
++        uri.fragment != null || uri.port !in listOf(-1, 443)) return null
++    return AccountProfilePhoto(owner, url)
++}
++
++@Composable internal fun GoogleAccountAvatar(photo: AccountProfilePhoto?,
++    imageLoader: ImageLoader = SingletonImageLoader.get(LocalContext.current)) {
++    val context = LocalContext.current
++    Surface(modifier = Modifier.size(52.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surface) {
++        // Dispose the previous painter immediately, even when two identities share a URL.
++        key(photo?.owner, photo?.url) {
++            var loaded by remember { mutableStateOf(false) }
++            val request = remember(photo, context) { photo?.let {
++                ImageRequest.Builder(context).data(it.url)
++                    .diskCachePolicy(CachePolicy.DISABLED).memoryCachePolicy(CachePolicy.DISABLED).build()
++            } }
++            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
++                if (!loaded) Icon(Icons.Outlined.Person, null,
++                    Modifier.size(28.dp).testTag("account_avatar_fallback"), tint = MaterialTheme.colorScheme.onSurfaceVariant)
++                if (request != null) AsyncImage(model = request, imageLoader = imageLoader,
++                    contentDescription = null, contentScale = ContentScale.Crop,
++                    modifier = Modifier.fillMaxSize().clip(CircleShape)
++                        .then(if (loaded) Modifier.testTag("account_avatar_photo") else Modifier),
++                    onLoading = { loaded = false }, onSuccess = { loaded = true }, onError = { loaded = false })
++            }
++        }
++    }
++}
+--- /dev/null
++++ b/app/src/main/java/br/com/calcmot/account/LegacyClaimContract.kt
+@@ -0,0 +1,46 @@
++package br.com.calcmot.account
++
++import br.com.calcmot.entitlement.EntitlementCodec
++import com.google.gson.JsonParser
++import com.google.gson.Strictness
++import com.google.gson.stream.JsonReader
++import com.google.gson.stream.JsonToken
++import java.io.StringReader
++
++/** S01 intake preparation only. A declaration never grants legacy; no user-selected UID. */
++internal object LegacyClaimContract {
++    const val path = "/v1/legacy/claim"
++    const val method = "POST"
++    const val body = "{\"evidenceType\":\"USER_DECLARATION\",\"evidenceHash\":null}"
++    fun headers(idempotencyKey: String): Map<String, String> {
++        require(idempotencyKey.isNotBlank() && '\r' !in idempotencyKey && '\n' !in idempotencyKey)
++        return mapOf("Content-Type" to "application/json", "Idempotency-Key" to idempotencyKey)
++    }
++    fun decodeView(json: String): LegacyRequestView {
++        require(json.toByteArray().size <= 4096)
++        val reader = JsonReader(StringReader(json)).apply { strictness = Strictness.STRICT }
++        val root = JsonParser.parseReader(reader).asJsonObject
++        require(reader.peek() == JsonToken.END_DOCUMENT)
++        require(root.keySet() == setOf("claimId", "state", "openedAt", "resolvedAt", "provisionalUntil", "revision", "serverNow"))
++        fun string(key: String): String {
++            val v = root.get(key); require(v.isJsonPrimitive && v.asJsonPrimitive.isString && v.asString.isNotBlank())
++            return v.asString
++        }
++        val state = string("state"); require(state in setOf("UNDER_REVIEW", "GRANTED", "REJECTED"))
++        val now = EntitlementCodec.utc(string("serverNow"))
++        val opened = EntitlementCodec.utc(string("openedAt")); require(opened <= now)
++        val revision = root.get("revision")
++        require(revision.isJsonPrimitive && revision.asJsonPrimitive.isNumber &&
++            revision.toString().matches(Regex("(?:0|[1-9][0-9]*)")) && revision.asLong in 0..9007199254740991L)
++        if (state == "UNDER_REVIEW") require(root.get("resolvedAt").isJsonNull)
++        else { require(EntitlementCodec.utc(string("resolvedAt")) in opened..now); require(root.get("provisionalUntil").isJsonNull) }
++        if (!root.get("provisionalUntil").isJsonNull) EntitlementCodec.utc(string("provisionalUntil"))
++        return LegacyRequestView(string("claimId"), state)
++    }
++}
++
++/** No deployment/retention approval for operational S06 intake. No background POST is issued. */
++internal object UnavailableLegacyRequests : LegacyRequests {
++    override val available = false
++    override suspend fun submit(): LegacyRequestView = error("Legacy intake not enabled")
++}
+--- a/app/src/main/java/br/com/calcmot/ui/CalcMotNavigation.kt
++++ b/app/src/main/java/br/com/calcmot/ui/CalcMotNavigation.kt
+@@ -31,6 +31,7 @@
+     const val HOME = "home"
+     const val GOAL = "goal"
+     const val SETTINGS = "settings"
++    const val ACCOUNT = "account"
+     const val OVERLAY_POSITION = "overlay-position"
+     const val OVERLAY_THEME = "overlay-theme"
+     const val HELP = "help"
+@@ -176,9 +177,14 @@
+                 onOpenOverlayTheme = { navigate(CalcMotRoute.OVERLAY_THEME) },
+                 onOpenPrivacy = { navigate(CalcMotRoute.PRIVACY) },
+                 onOpenHelp = { navigate(CalcMotRoute.HELP) },
++                onOpenAccount = { navigate(CalcMotRoute.ACCOUNT) },
+                 diagnosticsEnabled = diagnosticsEnabled,
+                 onOpenDiagnostics = { navigate(CalcMotRoute.DIAGNOSTICS) }
+             )
++        }
++
++        composable(CalcMotRoute.ACCOUNT) {
++            br.com.calcmot.account.AccountRoute(onBack = { navController.popBackStack() })
+         }
+ 
+         composable(CalcMotRoute.OVERLAY_POSITION) {
+--- a/app/src/main/java/br/com/calcmot/ui/HomeScreen.kt
++++ b/app/src/main/java/br/com/calcmot/ui/HomeScreen.kt
+@@ -803,6 +803,7 @@
+     onOpenOverlayTheme: () -> Unit,
+     onOpenPrivacy: () -> Unit,
+     onOpenHelp: () -> Unit,
++    onOpenAccount: (() -> Unit)? = null,
+     diagnosticsEnabled: Boolean = false,
+     onOpenDiagnostics: () -> Unit = {}
+ ) {
+@@ -868,6 +869,16 @@
+                     subtitle = "Escolha o estilo visual do semáforo",
+                     value = overlayTheme.label,
+                     onClick = onOpenOverlayTheme
++                )
++            }
++
++            if (onOpenAccount != null) SettingsSection(title = "Conta") {
++                SettingsActionRow(
++                    icon = Icons.Outlined.Security,
++                    title = "Conta e acesso",
++                    subtitle = "Login opcional e recuperação de acesso",
++                    onClick = onOpenAccount,
++                    modifier = Modifier.testTag("settings_account")
+                 )
+             }
+ 
+--- a/app/src/main/java/br/com/calcmot/identity/IdentitySession.kt
++++ b/app/src/main/java/br/com/calcmot/identity/IdentitySession.kt
+@@ -1,7 +1,8 @@
+ package br.com.calcmot.identity
+ 
+ /** Private identity only: never an entitlement, legacy proof, or Play payer. */
+-data class IdentitySession(val uid: String, val linkedProviders: Set<String>) {
++data class IdentitySession(val uid: String, val linkedProviders: Set<String>,
++    val displayName: String? = null, val email: String? = null, val googlePhotoUrl: String? = null) {
+     val identityLinked: Boolean get() = linkedProviders.isNotEmpty()
+ }
+ 
+@@ -21,4 +22,5 @@
+     suspend fun link(uid: String, googleIdToken: String): IdentitySession
+     suspend fun reauthenticate(uid: String, googleIdToken: String): IdentitySession
+     suspend fun firebaseIdToken(forceRefresh: Boolean): String
++    fun signOut() { throw IdentityOperationException(IdentityFailure.CONFIGURATION) }
+ }
+--- a/app/src/main/java/br/com/calcmot/identity/FirebaseIdentityAuth.kt
++++ b/app/src/main/java/br/com/calcmot/identity/FirebaseIdentityAuth.kt
+@@ -12,6 +12,7 @@
+ import kotlinx.coroutines.tasks.await
+ 
+ internal class FirebaseIdentityAuth(private val auth: FirebaseAuth) : IdentityAuthPort {
++    override fun signOut() { auth.signOut() }
+     override fun currentSession(): IdentitySession? = auth.currentUser?.toSession()
+ 
+     override suspend fun signIn(googleIdToken: String): IdentitySession = operation {
+@@ -44,7 +45,8 @@
+         ?: throw IdentityOperationException(IdentityFailure.COLLISION)
+ 
+     private fun FirebaseUser.toSession() = IdentitySession(uid,
+-        providerData.map { it.providerId }.filter { it != "firebase" }.toSet())
++        providerData.map { it.providerId }.filter { it != "firebase" }.toSet(), displayName, email,
++        providerData.firstOrNull { it.providerId == GoogleAuthProvider.PROVIDER_ID }?.photoUrl?.toString())
+ 
+     private suspend fun <T> operation(block: suspend () -> T): T = try { block() }
+     catch (cancel: CancellationException) { throw cancel }
+--- a/app/src/main/java/br/com/calcmot/identity/IdentityCoordinator.kt
++++ b/app/src/main/java/br/com/calcmot/identity/IdentityCoordinator.kt
+@@ -39,4 +39,10 @@
+         auth.firebaseIdToken(forceRefresh)
+ 
+     fun refreshSession() { mutableSession.value = auth.currentSession() }
++
++    suspend fun signOut() = mutex.withLock {
++        auth.signOut()
++        mutableSession.value = auth.currentSession()
++        if (mutableSession.value != null) throw IdentityOperationException(IdentityFailure.UNAVAILABLE)
++    }
+ }
+--- a/app/src/main/java/br/com/calcmot/identity/GoogleIdentityClient.kt
++++ b/app/src/main/java/br/com/calcmot/identity/GoogleIdentityClient.kt
+@@ -5,6 +5,7 @@
+ import androidx.credentials.CredentialManager
+ import androidx.credentials.CustomCredential
+ import androidx.credentials.GetCredentialRequest
++import androidx.credentials.ClearCredentialStateRequest
+ import androidx.credentials.exceptions.GetCredentialCancellationException
+ import androidx.credentials.exceptions.GetCredentialException
+ import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+@@ -18,6 +19,13 @@
+     val identity: IdentityCoordinator,
+     private val webClientId: String
+ ) {
++    suspend fun signOut() {
++        identity.signOut()
++        // SDK logout is authoritative locally even if credential-provider cleanup is unavailable.
++        try { credentials.clearCredentialState(ClearCredentialStateRequest()) }
++        catch (cancel: CancellationException) { throw cancel }
++        catch (_: Exception) { }
++    }
+     suspend fun signIn(activity: Activity): IdentityResult {
+         if (webClientId.isBlank()) return IdentityResult.Failure(IdentityFailure.CONFIGURATION)
+         return try {
+@@ -47,7 +55,7 @@
+             // Generated only by a real OAuth-enabled google-services.json. No placeholder credentials.
+             val resource = activity.resources.getIdentifier("default_web_client_id", "string", activity.packageName)
+             val clientId = if (resource == 0) "" else activity.getString(resource)
+-            return GoogleIdentityClient(CredentialManager.create(activity),
++            return GoogleIdentityClient(CredentialManager.create(activity.applicationContext),
+                 IdentityCoordinator(FirebaseIdentityAuth(FirebaseAuth.getInstance())), clientId)
+         }
+     }
