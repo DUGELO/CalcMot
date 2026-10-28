@@ -316,3 +316,29 @@ it('runs a separate staged PROD workerd binding and empty D1 without copying DEV
   const direct=await(await prodMf.getWorker('prod-private')).fetch(req('/session').url);
   expect(direct.status).toBe(403);expect(direct.headers.get('X-CalcMot-Environment')).toBe('PROD');
 });
+it('explicit PROD activation retains reauthentication, approval separation and idempotent issuance in local D1 only',async()=>{
+  const prod:AdminEnv={...env,DB:prodDb,ADMIN_ENVIRONMENT:'PROD',ADMIN_MUTATIONS_ENABLED:'true'};
+  const localReview=new LegacyReviewService(prod),operator=identity(ownerUid,project,true);
+  await localReview.authorizePolicy(operator);
+  const applicant=identity('synthetic-prod-activation-only');
+  const claim=await localReview.open(applicant,{evidenceType:'USER_DECLARATION',evidenceHash:null},key());
+  const path='/claims/'+claim.claimId;
+  const invoke=async(suffix:string,method='GET',input?:unknown,headers:Record<string,string>={},bearer=ownerToken)=>
+    handleAdmin(req(suffix,method,input,{'X-CalcMot-Expected-Environment':'PROD','X-CalcMot-Target-Environment':'PROD',...headers},bearer),
+      prod,keys,new AdminRateGuard());
+  expect(await(await invoke('/session')).json()).toMatchObject({environment:'PROD',mutationsEnabled:true});
+  const stale=await token(ownerUid,true,{age:301});
+  expect((await invoke(path+'/evidence','POST',{}, {},stale)).status).toBe(403);
+  for(const [revision,category]of [[0,'SUPPORT_RECORD'],[1,'INSTALL_CONTEXT']]as const)
+    expect((await invoke(path+'/evidence','POST',{kind:'AUXILIARY',category,originKey:key(),reference:'synthetic:activation'},
+      {'If-Match':`"${revision}"`})).status).toBe(200);
+  const evidence=await(await invoke(path+'/evidence')).json() as any;
+  const approved=await invoke(path+'/decisions','POST',decision('APPROVE',evidence.items.map((e:any)=>e.evidenceId)),{'If-Match':'"2"'});
+  expect(approved.status).toBe(200);const approval=await approved.json() as any;
+  expect((await(await invoke(path)).json() as any).grant).toBeNull();
+  const input={approvalEventId:approval.decision.eventId,confirmation:{claimId:claim.claimId,permanentCoreOnly:true}};
+  const headers={'If-Match':'"3"','Idempotency-Key':key()};
+  expect(await(await invoke(path+'/issuance','POST',input,headers)).json()).toMatchObject({view:{state:'GRANTED'},idempotent:false});
+  expect(await(await invoke(path+'/issuance','POST',input,headers)).json()).toMatchObject({idempotent:true});
+  expect(await prodDb.prepare('SELECT count(*) AS n FROM legacy_grants').first()).toEqual({n:1});
+});

@@ -1,5 +1,6 @@
 import {it,expect} from 'vitest';
 import {spawnSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
 // @ts-expect-error Offline operator script intentionally has no production runtime dependency.
 import {loadExample,validateProduction,validateDatabaseId,DEV_DATABASE_ID,routes} from '../scripts/prepare-admin-prod.mjs';
 it('keeps prepared PROD isolated and commercially inactive',()=>{
@@ -30,4 +31,18 @@ it('checks policy bootstrap offline and refuses arbitrary operation modes',()=>{
   expect(JSON.parse(checked.stdout)).toEqual({offline:true,applied:false,policyOnly:true,grantsWritten:0});
   const invalid=spawnSync(process.execPath,['scripts/bootstrap-admin-prod-policy.mjs','--grant'],{encoding:'utf8',windowsHide:true});
   expect(invalid.status).toBe(1);expect(JSON.parse(invalid.stderr)).toEqual({code:'MODE_REQUIRED',applied:false});
+});
+it('operational configs enable only approved PROD admin capabilities and preserve isolation',()=>{
+  const load=(name:string)=>JSON.parse(readFileSync(name,'utf8').replace(/^\/\/.*$/mg,''));
+  const gateway=load('wrangler.admin-gateway.prod.jsonc'),worker=load('wrangler.admin-private.prod.jsonc');
+  for(const item of [gateway,worker]){
+    expect(item.vars.ADMIN_ENVIRONMENT).toBe('PROD');expect(item.vars.ADMIN_MUTATIONS_ENABLED).toBe('true');
+    expect(item.workers_dev).toBe(false);expect(item.preview_urls).toBe(false);
+    expect(item.vars.LEGACY_OWNER_UID).toBeUndefined();
+  }
+  expect(gateway.d1_databases).toBeUndefined();
+  expect(gateway.services).toEqual([{binding:'ADMIN',service:'calcmot-admin-private-prod'}]);
+  expect(gateway.routes).toEqual(routes);expect(worker.routes).toEqual([]);
+  expect(worker.d1_databases).toEqual([{binding:'DB',database_name:'calcmot-identity-prod',
+    database_id:'d0232771-b6e7-49a1-ae9f-05267fbdf3a1',migrations_dir:'migrations'}]);
 });
