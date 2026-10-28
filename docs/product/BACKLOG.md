@@ -258,6 +258,8 @@ E03
 
 ### S10 — Registrar análise lógica e dia ativo sem duplicação
 
+- **Status 2026-10-28: PARTIAL, emissão não ativada.** Consumidor local persistente, união explícita, fila assíncrona e envelope canônico implementados; a origem atual não distingue ID lógico de renovação TTL/ofertas iguais. Sem heurística nova nem mudança do Core. Associação S04, confiança temporal e retenção específica continuam bloqueios de ativação. [Implementação, diagnósticos e validações](S10-CORE-USAGE.md). Não iniciar outras stories por consequência desta entrega.
+
 - **Tipo / requisito:** fundação; DATA-001, NFR-002/007, §§2/16; ST-01.
 - **Objetivo:** distinguir uso real de frames/parse repetidos e sustentar CAD/ativação.
 - **Descrição técnica:** observar conclusão lógica existente, com `analysisId` efêmero e dedupe local; persistir conjunto de dias/primeiro valor sem conteúdo de oferta. Usar identidade S04 e regra de timezone/linking S01; estender allowlist/sanitização existente. Emitir `core_analysis_completed`, primeiro valor e dia ativo conforme dicionário congelado, não derivar de `offer_parsed` bruto.

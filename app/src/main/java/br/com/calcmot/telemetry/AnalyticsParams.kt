@@ -1,6 +1,7 @@
 package br.com.calcmot.telemetry
 
 object AnalyticsParams {
+    const val APP_FAMILY = "app_family"
     const val PLATFORM = "platform"
     const val SOURCE = "source"
     const val REASON = "reason"
@@ -20,6 +21,7 @@ object AnalyticsParams {
     const val VALUE_PER_HOUR_BUCKET = "value_per_hour_bucket"
 
     internal val allowed = setOf(
+        APP_FAMILY,
         PLATFORM,
         SOURCE,
         REASON,

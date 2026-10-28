@@ -1,5 +1,7 @@
 # Execution Plan — CalcMot Growth & Monetization V1
 
+**S10 — 2026-10-28:** PARTIAL, produtor não instalado no Core. Dedupe/recibos locais, eventos sanitizados e consumidor assíncrono implementados; conclusão depende de identidade lógica verificável na origem, associação S04, confiança temporal e retenção específica. [Relatório S10](S10-CORE-USAGE.md). Nenhuma S11–S16 iniciada. Esta nota atualiza somente S10; notas anteriores permanecem históricas.
+
 **Estado vigente — 2026-10-19:** [piloto operacional OQ-07/S06/S09 concluído](S06-S09-DEV-OPERATIONAL-RESULTS.md). S06 DONE DEV controlado; conta/recuperação S09 DONE no piloto, **S09 geral PARTIAL / rollout HOLD**. Google real → protocolo → operador privado → decisão assistida sintética autorizada → grant único → entitlement 200 sem Premium → V3 → logout/relogin → reinstalação DEV comprovados. Segundo titular isolado, caso rejeitado, nenhuma história verificada fabricada. OQ-07 do piloto aprovada e operações de privacidade testadas em D1 local sintético. Próximo passo não é repetir implementação nem iniciar S10 automaticamente: produção continua sem autorização e capacidade/privacidade de rollout têm limites registrados. Esta atualização prevalece sobre estados históricos abaixo; V3 aprovada e Core preservado.
 
 Data: 2026-10-09. Fonte: PRD v5 integral, identificado por hash no [BACKLOG.md](BACKLOG.md). Checkout analisado: `growth` em `9d78bd76b3a373f139a8360a6e527fa35e7ec0fa`. Escopo desta entrega: planejamento; **nenhuma implementação ou ativação externa**.
