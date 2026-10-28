@@ -1,7 +1,5 @@
 # Política de Privacidade do CalcMot
 
-> Revisão de 5 de outubro de 2026: esta política ainda precisa de aprovação para a gravação de segurança e de reconciliação com Firebase/OCR. O contrato de dados implementado e a proposta de texto estão em [camera-data-release-review.md](camera/camera-data-release-review.md). Não publicar esta versão como política validada da câmera.
-
 Última atualização: 27 de maio de 2026.
 
 O CalcMot é um assistente para motoristas de aplicativo. Ele lê cards de oferta visíveis no app de motorista para calcular métricas como R$/km, R$/h e tempo total estimado.

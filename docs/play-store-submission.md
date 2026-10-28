@@ -18,8 +18,6 @@ A vertical de gravação não importa telemetria nem envia áudio, vídeo, dura�
 
 Conferir também [Clarity e monetização](clarity-integration.md): captura visual/interações, painel, política publicada e consentimento aplicável.
 
-Consultar [revisão de dados e release da câmera](camera/camera-data-release-review.md). LEGAL-01, DEVICE-01, DESIGN-01, ENGINE-01 e RELEASE-01 continuam abertos até evidência/aprovação correspondente. Estes documentos não autorizam publicação.
-
 ## Accessibility API Declaration
 
 Uso declarado: o CalcMot lê cards de oferta visíveis no app de motorista para calcular métricas úteis ao motorista em tempo real.
