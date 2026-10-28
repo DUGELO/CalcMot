@@ -35,7 +35,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: Private policy handoff security (synthetic only)
-        run: node --test scripts/prod-policy-session.test.mjs
+        run: node --test scripts/prod-policy-session.node-check.mjs
       - name: Synthetic tests only (remote mutations disabled)
         run: npm test -- --maxWorkers=1 --testTimeout=30000 --hookTimeout=90000
       - name: Private Worker bundle only
