@@ -4,6 +4,6 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-07-01",
   "workers_dev": false,
-  "vars": { "FIREBASE_PROJECT_ID": "calcmot" },
+  "vars": { "FIREBASE_PROJECT_ID": "calcmot", "LEGACY_CLAIMS_ENABLED": "true", "ENTITLEMENT_PROJECTION_ENABLED": "true" },
   "d1_databases": [{ "binding": "DB", "database_name": "calcmot-local", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }]
 }

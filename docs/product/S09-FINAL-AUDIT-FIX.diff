@@ -1,0 +1,42 @@
+--- a/app/src/main/java/br/com/calcmot/account/AccountViewModel.kt
++++ b/app/src/main/java/br/com/calcmot/account/AccountViewModel.kt
+@@ -26,6 +26,7 @@
+     val linkedProviders: Set<String> = emptySet())
+ 
+ /** Account-scoped presentation only. Never grants rights, merges UIDs, stops Core or opens billing. */
++@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+ internal class AccountViewModel(private val identity: IdentityCoordinator,
+     private val signOut: suspend () -> Unit, private val repository: EntitlementRepository?,
+     private val requests: LegacyRequests, private val close: () -> Unit = {},
+@@ -39,11 +40,16 @@
+     private var sessionGeneration = 0L
+     private var request: LegacyRequestView? = null
+     init {
+-        scope.launch { identity.session.collect { publish() } }
+-        repository?.let { scope.launch { it.state.collect {
+-            identity.refreshSession()
+-            publish()
+-        } } }
++        scope.launch {
++            // Flow's switchMap: a new session cancels the previous rights observation.
++            // In-flight operations still require ownership/generation guards below.
++            identity.session.flatMapLatest {
++                repository?.state ?: flowOf(EntitlementState())
++            }.buffer(0).collect {
++                identity.refreshSession()
++                publish()
++            }
++        }
+         publish()
+     }
+     private fun publish(busy: Boolean = mutable.value.busy, notice: AccountNotice = mutable.value.notice) {
+@@ -87,7 +93,8 @@
+             is IdentityResult.Failure -> if (sameOwner(beforeUid, generation)) publish(notice = result.reason.toNotice())
+             is IdentityResult.Success -> {
+                 identity.refreshSession()
+-                if (identity.session.value?.uid != result.session.uid) {
++                if (identity.session.value?.uid != result.session.uid ||
++                    (beforeUid != null && !sameOwner(beforeUid, generation))) {
+                     publish(); return@perform
+                 }
+                 if (repository == null) { publish(notice = AccountNotice.CONFIGURATION); return@perform }

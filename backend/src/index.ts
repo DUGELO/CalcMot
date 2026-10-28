@@ -2,8 +2,12 @@ import validSnapshot from './generated/entitlement-validator.js';
 import { InvalidSession, verifySession } from './auth';
 import type { JWTVerifyGetKey } from 'jose';
 import { AbuseGuard, type AbuseConfig } from './abuse';
+import { LegacyReviewService, ReviewError } from './legacy-review';
+import { readEntitlement } from './entitlement';
 
-export interface Env extends AbuseConfig { DB: D1Database; FIREBASE_PROJECT_ID: string }
+export interface Env extends AbuseConfig {
+  DB: D1Database; FIREBASE_PROJECT_ID: string; LEGACY_CLAIMS_ENABLED?: string; ENTITLEMENT_PROJECTION_ENABLED?:string;
+}
 const abuse = new AbuseGuard();
 export interface StoredSnapshot {
   revision: number; checkedAt: string; subscriptionRequired: boolean;
@@ -32,6 +36,38 @@ export async function handleRequest(request: Request, env: Env, keys?: JWTVerify
     if (!abuse.request(env, now.getTime())) return error('RETRY_LATER', 503, true);
     const session = await verifySession(request, env.FIREBASE_PROJECT_ID, keys, now);
     const url = new URL(request.url);
+    if (url.pathname === '/v1/legacy/claim') {
+      if (request.method !== 'POST') return error('FORBIDDEN', 403);
+      if (env.LEGACY_CLAIMS_ENABLED !== 'true') return error('RETRY_LATER', 503, true);
+      if (!abuse.read(env, env.FIREBASE_PROJECT_ID, session.uid, now.getTime()))
+        return error('RATE_LIMITED', 429, true);
+      // Bound the actual stream, including a body without Content-Length.
+      const reader = request.body?.getReader();
+      if (!reader) return error('INVALID_REQUEST', 400);
+      const chunks: Uint8Array[] = []; let size = 0;
+      for (;;) {
+        const part = await reader.read(); if (part.done) break;
+        size += part.value.byteLength;
+        if (size > 4096) { await reader.cancel(); return error('INVALID_REQUEST', 400); }
+        chunks.push(part.value);
+      }
+      const bytes = new Uint8Array(size); let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      let input;
+      try { input = JSON.parse(new TextDecoder('utf-8', {fatal:true}).decode(bytes)); }
+      catch { return error('INVALID_REQUEST', 400); }
+      try {
+        const view = await new LegacyReviewService(env).open(session, input, request.headers.get('Idempotency-Key') ?? '', now);
+        return response(view, 200, requestId);
+      } catch (cause) {
+        if (cause instanceof ReviewError) {
+          if (cause.code === 'INVALID_REQUEST') return error('INVALID_REQUEST', 400);
+          if (cause.code === 'CONFLICT') return error('INVALID_REQUEST', 409);
+          if (cause.code === 'FORBIDDEN') return error('FORBIDDEN', 403);
+        }
+        throw cause;
+      }
+    }
     // All unimplemented privileged operations fail closed; no financial/admin stubs.
     if (url.pathname.startsWith('/admin/') || url.pathname.startsWith('/internal/'))
       return error('FORBIDDEN', 403);
@@ -39,6 +75,8 @@ export async function handleRequest(request: Request, env: Env, keys?: JWTVerify
     if (request.method !== 'GET') return error('FORBIDDEN', 403);
     if (!abuse.read(env, env.FIREBASE_PROJECT_ID, session.uid, now.getTime()))
       return error('RETRY_LATER', 503, true);
+    if(env.ENTITLEMENT_PROJECTION_ENABLED==='true')
+      return response(await readEntitlement(env.DB,env.FIREBASE_PROJECT_ID,session),200,requestId);
     // GET has no owner parameters: unknown query fields never override the token UID.
     // Keep this route's frozen 200/401/503 responses rather than inventing a 400 contract.
     const row = await env.DB.prepare(

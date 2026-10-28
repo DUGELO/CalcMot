@@ -1,5 +1,9 @@
 # ADR-001 — Identidade Firebase Spark e API Workers Free + D1
 
+## Continuação S07 — 2026-10-14
+
+Implementada [projeção local read-only](S07-ENTITLEMENT-PROJECTION.md): GET combina fontes privadas numa SELECT consistente; não escreve snapshot, concede benefício ou chama Play. Migration 0007 mantém revisão persistida na mesma transação das fontes, sem job/fila/cron. `entitlement_snapshots` continua entrada privada para demais fontes; o read model S01 é normalizado em memória. Configuração apenas local `ENTITLEMENT_PROJECTION_ENABLED=true`; remote/prod intactos. DONE local comprovado em D1/workerd, não GO operacional/CPU edge. OQ-07 permanece proposta. As notas de ausência de projeção abaixo descrevem as entregas anteriores S02/S04.
+
 Data: 2026-10-10. Status: **arquitetura aprovada pelo usuário nesta execução**. Escopo S02/S04; nenhum deploy aprovado. Fontes: PRD §§3.2/9/10/11, contratos S01 v1.0.0 e auditoria S03.
 
 O usuário aprovou Google Sign-In com Firebase Auth/Credential Manager, Workers TypeScript e D1, mantendo Spark/Workers Free e custo R$0. As referências a Firestore/Functions no backlog/PRD passam a ter implementação física D1/Worker neste escopo autorizado. A autoridade e os schemas wire permanecem iguais; nenhum contrato congelado foi editado.
@@ -34,3 +38,15 @@ Guard em memória por isolate limita tentativas antes de JWT e leituras por iden
 Nova versão DEV 106407db, N=2: P50 1,943ms, P90/P99 14,163ms, zero erros de CPU/runtime. Não declarar margem estável a partir da mediana; documentação permite excessos infrequentes, mas a cauda exige perfil/amostragem antes de abrir ambiente. Nenhum upgrade ou divisão antecipada de serviços. [CPU oficial](https://developers.cloudflare.com/workers/platform/limits/#cpu-time).
 
 SHA-1 Play cadastrado no Firebase principal mediante confirmação específica; configuração candidata e recursos oficiais gerados em saída temporária, sem substituir JSON original ou publicar release. Login de artefato assinado pela Play permanece teste adicional. A arquitetura permite desenvolvimento isolado de grant legado S05, mantendo autoridade server-side; concessões dependem de política/evidência OQ-02 e não podem nascer da ausência de snapshot. S05 não foi implementada.
+
+### Formalização posterior — OQ-02/S05
+
+O proprietário aprovou elegibilidade por uso até 3.5/versionCode 12 inclusive,
+com Core dessa versão permanentemente gratuito. Google apenas vincula/recupera;
+cadastro durante migração e versão atual não substituem prova de uso histórico.
+[Política e inventário](OQ-02-LEGACY-POLICY.md), [fundação S05 PARTIAL](S05-LEGACY-FOUNDATION.md).
+Guardas locais adicionadas sem alterar contratos wire ou criar concessões reais:
+regra explícita <=12 e fonte histórica privada verificada, preservando registros
+anteriores. `policyCutoffUtc` nulo nesta preparação, sem cutoff de calendário
+alternativo. Processo de comprovação/revisão e integração real continuam pendentes;
+nenhuma infraestrutura ou recurso externo novo, deploy ou push nesta execução.

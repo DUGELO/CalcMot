@@ -6,6 +6,34 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class IdentityCoordinatorTest {
+    @Test fun sourceRevisionSurvivesConflatedIdentityChanges() = runTest {
+        val auth = FakeAuth(IdentitySession("a", setOf("google.com")))
+        val coordinator = IdentityCoordinator(auth)
+        val checkpoint = coordinator.checkpoint()
+        auth.current = IdentitySession("b", setOf("google.com")); coordinator.refreshSession()
+        auth.current = IdentitySession("a", setOf("google.com")); coordinator.refreshSession()
+        assertEquals(checkpoint + 2, coordinator.revision.value)
+        assertEquals(IdentityResult.Failure(IdentityFailure.COLLISION),
+            coordinator.acceptGoogleCredential("old-picker-result", checkpoint))
+        assertTrue(auth.calls.isEmpty())
+    }
+    @Test fun successfulFirstLoginHasExactOperationCorrelationAndLogoutInvalidatesIt() = runTest {
+        val auth = FakeAuth(); val coordinator = IdentityCoordinator(auth)
+        val started = coordinator.checkpoint()
+        val result = coordinator.acceptGoogleCredential("google", started) as IdentityResult.Success
+        assertEquals(IdentityLoginStamp(0, 1), result.operation)
+        coordinator.signOut()
+        coordinator.acceptGoogleCredential("google")
+        assertEquals(3L, coordinator.revision.value)
+        assertNotEquals(result.operation!!.completedAtRevision, coordinator.revision.value)
+    }
+    @Test fun refreshOfProfileOrSameOwnerDoesNotInvalidateAnOperation() {
+        val auth = FakeAuth(IdentitySession("a", setOf("google.com")))
+        val coordinator = IdentityCoordinator(auth)
+        auth.current = auth.current!!.copy(displayName = "Test profile")
+        coordinator.refreshSession()
+        assertEquals(0L, coordinator.revision.value)
+    }
     private class FakeAuth(var current: IdentitySession? = null) : IdentityAuthPort {
         var calls = mutableListOf<String>()
         var failure: IdentityFailure? = null
@@ -24,6 +52,7 @@ class IdentityCoordinatorTest {
             failure?.let { throw IdentityOperationException(it) }
             return "firebase-id-token"
         }
+        override fun signOut() { calls.add("signOut"); current = null }
     }
     @Test fun optionalIdentityDoesNotStartNetworkOrAnonymousLogin() {
         val auth = FakeAuth(); val coordinator = IdentityCoordinator(auth)
@@ -32,7 +61,8 @@ class IdentityCoordinatorTest {
     @Test fun anonymousLinkKeepsUid() = runTest {
         val auth = FakeAuth(IdentitySession("original", emptySet()))
         val coordinator = IdentityCoordinator(auth)
-        assertEquals(IdentityResult.Success(IdentitySession("original", setOf("google.com"))), coordinator.acceptGoogleCredential("google"))
+        assertEquals(IdentitySession("original", setOf("google.com")),
+            (coordinator.acceptGoogleCredential("google") as IdentityResult.Success).session)
         assertEquals(listOf("link"), auth.calls)
     }
     @Test fun existingGoogleSessionReauthenticatesWithoutSwitchingUid() = runTest {
@@ -46,7 +76,7 @@ class IdentityCoordinatorTest {
         assertEquals("recoverable", coordinator.session.value?.uid); assertEquals(listOf("signIn"), auth.calls)
     }
     @Test fun collisionOfflineAndExpirationPreserveCurrentIdentity() = runTest {
-        for (failure in listOf(IdentityFailure.COLLISION, IdentityFailure.OFFLINE, IdentityFailure.SESSION_EXPIRED)) {
+        for (failure in listOf(IdentityFailure.CANCELED, IdentityFailure.COLLISION, IdentityFailure.OFFLINE, IdentityFailure.SESSION_EXPIRED)) {
             val before = IdentitySession("original", emptySet()); val auth = FakeAuth(before).also {it.failure=failure}
             val coordinator = IdentityCoordinator(auth)
             assertEquals(IdentityResult.Failure(failure), coordinator.acceptGoogleCredential("google"))
@@ -69,5 +99,19 @@ class IdentityCoordinatorTest {
         val auth = FakeAuth().also {it.cancel=true}
         try { IdentityCoordinator(auth).acceptGoogleCredential("google"); fail("Expected cancellation") }
         catch (_: CancellationException) { assertNull(auth.current) }
+    }
+    @Test fun explicitLogoutClearsOnlyLocalIdentityThroughExistingAuthPort() = runTest {
+        val auth = FakeAuth(IdentitySession("original", setOf("google.com"), "Motorista", "driver@example.test"))
+        val coordinator = IdentityCoordinator(auth)
+        coordinator.signOut()
+        assertNull(coordinator.session.value); assertNull(auth.current)
+        assertEquals(listOf("signOut"), auth.calls)
+    }
+    @Test fun profileMetadataDoesNotChangeLinkingOrUidOwnership() = runTest {
+        val auth = FakeAuth(IdentitySession("original", emptySet(), "Motorista", "driver@example.test"))
+        val coordinator = IdentityCoordinator(auth)
+        assertTrue(coordinator.acceptGoogleCredential("google") is IdentityResult.Success)
+        assertEquals("original", coordinator.session.value?.uid)
+        assertEquals(listOf("link"), auth.calls)
     }
 }

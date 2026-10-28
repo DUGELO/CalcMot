@@ -51,6 +51,9 @@ class IdentityProbeActivity : ComponentActivity() {
                     Column(Modifier.windowInsetsPadding(WindowInsets.safeDrawing).verticalScroll(rememberScrollState()).padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("S02/S04 — teste DEV", style = MaterialTheme.typography.headlineSmall)
+                        OutlinedButton(onClick = {
+                            startActivity(android.content.Intent(this@IdentityProbeActivity, AccountDevActivity::class.java))
+                        }) { Text("Conta e recuperação — S09") }
                         Text("Pacote isolado. Não é a tela de conta do produto.")
                         Text(if (session == null) "Sem sessão" else
                             "Sessão: ${if (session!!.identityLinked) "vinculada" else "não vinculada"}; prova local ${proof(session!!.uid)}")

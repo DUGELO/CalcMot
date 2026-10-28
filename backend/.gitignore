@@ -6,5 +6,6 @@ dist/
 coverage/
 .npm-cache/
 src/generated/entitlement-validator.js
+src/generated/legacy-validator.js
 wrangler.dev.jsonc
 

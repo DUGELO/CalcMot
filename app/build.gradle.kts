@@ -43,6 +43,8 @@ android {
         versionCode = 11
         versionName = "3.4"
         buildConfigField("String", "CLARITY_PROJECT_ID", "\"$clarityProjectId\"")
+        buildConfigField("String", "ACCOUNT_API_BASE_URL", "\"\"")
+        buildConfigField("boolean", "LEGACY_INTAKE_ENABLED", "false")
 
         if (buildsAppBundle) {
             ndk {
@@ -91,12 +93,20 @@ android {
                 "identityDev requires a verified development Worker URL, never a production API."
             }
             buildConfigField("String", "IDENTITY_DEV_WORKER_URL", "\"$workerUrl\"")
+            buildConfigField("String", "ACCOUNT_API_BASE_URL", "\"$workerUrl\"")
+            val intakeEnabled = providers.gradleProperty("calcmot.identityDevLegacyIntake").orNull == "true"
+            require(!intakeEnabled || workerUrl.isNotEmpty()) { "DEV intake requires an explicit DEV Worker URL" }
+            buildConfigField("boolean", "LEGACY_INTAKE_ENABLED", intakeEnabled.toString())
         }
     }
     sourceSets.getByName("identityDev") {
         java.srcDir("src/debug/java")
         kotlin.directories += "src/debug/java"
         res.srcDir("src/debug/res")
+    }
+    // Explicit opt-in for device tests on the isolated package; default instrumentation is unchanged.
+    if (providers.gradleProperty("calcmot.identityDevInstrumentation").orNull == "true") {
+        testBuildType = "identityDev"
     }
 
     splits {
@@ -138,6 +148,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.11.2")
     implementation("androidx.lifecycle:lifecycle-service:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.room:room-runtime:2.8.4")
     implementation("androidx.room:room-ktx:2.8.4")
     ksp("androidx.room:room-compiler:2.8.4")
@@ -149,6 +160,9 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation("androidx.compose.material:material-icons-extended")
     implementation(libs.androidx.compose.material3)
+    // Account avatar only; no image requests in offer processing.
+    implementation("io.coil-kt.coil3:coil-compose:3.3.0")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
 
     // Firebase versions remain aligned through the BoM; use main modules, not deprecated KTX artifacts.
     implementation(platform("com.google.firebase:firebase-bom:34.17.0"))
@@ -159,6 +173,8 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
+    // Strict S01 JSON decoding on Android and JVM; no remote configuration service.
+    implementation("com.google.code.gson:gson:2.11.0")
 
     testImplementation(libs.junit)
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")

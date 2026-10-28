@@ -1,0 +1,24 @@
+// Operational PROD configuration. Publish versions without changing existing routes.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "calcmot-admin-gateway-prod",
+  "account_id": "45086fe60ce934025fcac45e65eb4b69",
+  "main": "src/admin/gateway.ts",
+  "compatibility_date": "2026-07-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {"pattern":"https://calcmot.com.br/api/admin/v1","zone_name":"calcmot.com.br"},
+    {"pattern":"https://calcmot.com.br/api/admin/v1/*","zone_name":"calcmot.com.br"}
+  ],
+  "observability": {"enabled": false},
+  "vars": {
+    "FIREBASE_PROJECT_ID": "calcmot",
+    "ADMIN_ORIGIN": "https://calcmot.com.br",
+    "ADMIN_ENVIRONMENT": "PROD",
+    "ADMIN_MUTATIONS_ENABLED": "true",
+    "ADMIN_REQUESTS_PER_MINUTE": "120",
+    "ADMIN_MUTATIONS_PER_MINUTE": "10"
+  },
+  "services": [{"binding":"ADMIN","service":"calcmot-admin-private-prod"}]
+}

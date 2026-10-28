@@ -12,9 +12,21 @@ class IdentityCoordinator(private val auth: IdentityAuthPort) {
     private val mutex = Mutex()
     private val mutableSession = MutableStateFlow(auth.currentSession())
     val session: StateFlow<IdentitySession?> = mutableSession.asStateFlow()
+    private val mutableRevision = MutableStateFlow(0L)
+    val revision: StateFlow<Long> = mutableRevision.asStateFlow()
 
-    suspend fun acceptGoogleCredential(idToken: String): IdentityResult = mutex.withLock {
+    /** Advances at the source, even when collectors conflate A -> B -> A. */
+    @Synchronized private fun publish(next: IdentitySession?, invalidateOperation: Boolean = false) {
+        if (invalidateOperation || mutableSession.value?.uid != next?.uid) mutableRevision.value++
+        mutableSession.value = next
+    }
+
+    fun checkpoint(): Long { refreshSession(); return revision.value }
+
+    suspend fun acceptGoogleCredential(idToken: String, expectedRevision: Long = checkpoint()): IdentityResult = mutex.withLock {
         if (idToken.isBlank()) return@withLock IdentityResult.Failure(IdentityFailure.CONFIGURATION)
+        refreshSession()
+        if (revision.value != expectedRevision) return@withLock IdentityResult.Failure(IdentityFailure.COLLISION)
         val before = auth.currentSession()
         try {
             val result = when {
@@ -23,11 +35,13 @@ class IdentityCoordinator(private val auth: IdentityAuthPort) {
                 else -> auth.link(before.uid, idToken)
             }
             // A linked session must keep ownership; benefits cannot follow a credential collision.
-            if (before != null && before.uid != result.uid) {
+            if (revision.value != expectedRevision ||
+                (before != null && before.uid != result.uid) || auth.currentSession()?.uid != result.uid) {
+                refreshSession()
                 return@withLock IdentityResult.Failure(IdentityFailure.COLLISION)
             }
-            mutableSession.value = result
-            IdentityResult.Success(result)
+            publish(result, invalidateOperation = true)
+            IdentityResult.Success(result, IdentityLoginStamp(expectedRevision, revision.value))
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (failure: IdentityOperationException) {
@@ -38,5 +52,11 @@ class IdentityCoordinator(private val auth: IdentityAuthPort) {
     suspend fun firebaseIdToken(forceRefresh: Boolean = false): String =
         auth.firebaseIdToken(forceRefresh)
 
-    fun refreshSession() { mutableSession.value = auth.currentSession() }
+    fun refreshSession() { publish(auth.currentSession()) }
+
+    suspend fun signOut() = mutex.withLock {
+        auth.signOut()
+        publish(auth.currentSession(), invalidateOperation = true)
+        if (mutableSession.value != null) throw IdentityOperationException(IdentityFailure.UNAVAILABLE)
+    }
 }

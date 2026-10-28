@@ -8,6 +8,10 @@
         <meta-data android:name="firebase_crashlytics_collection_enabled" android:value="false" />
         <activity android:name="br.com.calcmot.MainActivity" android:enabled="false"
             tools:replace="android:enabled" />
+        <activity android:name="br.com.calcmot.debug.AccountDevActivity" android:exported="false"
+            android:theme="@style/Theme.CalcMot" />
+        <activity android:name="br.com.calcmot.debug.AccountUiTestActivity" android:exported="false"
+            android:theme="@style/Theme.CalcMot" />
         <activity android:name="br.com.calcmot.debug.IdentityProbeActivity"
             android:exported="true" android:label="CalcMot Auth DEV" android:theme="@style/Theme.CalcMot">
             <intent-filter>

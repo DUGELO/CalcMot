@@ -1,0 +1,15 @@
+# Read-only; use the already authorized dashboard/API channel. No token is stored here.
+# Quantiles are not maxima. Confirm units in current schema/dashboard before converting to ms.
+query AdminCpu($accountTag: string, $start: string, $end: string, $scriptName: string) {
+  viewer {
+    accounts(filter: {accountTag: $accountTag}) {
+      workersInvocationsAdaptive(limit: 100, filter: {
+        scriptName: $scriptName, datetime_geq: $start, datetime_leq: $end
+      }) {
+        dimensions { datetime scriptName status }
+        quantiles { cpuTimeP50 cpuTimeP99 }
+        sum { requests errors subrequests }
+      }
+    }
+  }
+}

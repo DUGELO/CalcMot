@@ -135,7 +135,9 @@ class ReleaseReadinessTest {
                 "br/com/calcmot/telemetry/FirebaseAnalyticsTracker.kt",
                 "br/com/calcmot/telemetry/FirebaseCrashReporter.kt",
                 "br/com/calcmot/identity/FirebaseIdentityAuth.kt",
-                "br/com/calcmot/identity/GoogleIdentityClient.kt"
+                "br/com/calcmot/identity/GoogleIdentityClient.kt",
+                // S08 environment/lifecycle adapter; never an offer-processing dependency.
+                "br/com/calcmot/entitlement/AndroidEntitlements.kt"
             ),
             directFirebaseFiles
         )

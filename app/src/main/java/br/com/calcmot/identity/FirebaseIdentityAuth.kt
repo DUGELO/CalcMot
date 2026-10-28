@@ -12,6 +12,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 
 internal class FirebaseIdentityAuth(private val auth: FirebaseAuth) : IdentityAuthPort {
+    override fun signOut() { auth.signOut() }
     override fun currentSession(): IdentitySession? = auth.currentUser?.toSession()
 
     override suspend fun signIn(googleIdToken: String): IdentitySession = operation {
@@ -44,7 +45,8 @@ internal class FirebaseIdentityAuth(private val auth: FirebaseAuth) : IdentityAu
         ?: throw IdentityOperationException(IdentityFailure.COLLISION)
 
     private fun FirebaseUser.toSession() = IdentitySession(uid,
-        providerData.map { it.providerId }.filter { it != "firebase" }.toSet())
+        providerData.map { it.providerId }.filter { it != "firebase" }.toSet(), displayName, email,
+        providerData.firstOrNull { it.providerId == GoogleAuthProvider.PROVIDER_ID }?.photoUrl?.toString())
 
     private suspend fun <T> operation(block: suspend () -> T): T = try { block() }
     catch (cancel: CancellationException) { throw cancel }
